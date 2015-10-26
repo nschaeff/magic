@@ -217,19 +217,23 @@ FFLAGS_NOCHECK = $(filter-out $(FFLAG_CHECK_ALL),$(FFLAGS))
 
 OUT     = magic.exe
 SOURCES:= $(wildcard *.f90)
-RED_SOURCES = $(filter-out fft% algebra% hdf5Helpers% mpimod%,$(SOURCES))
+RED_SOURCES = $(filter-out fft% algebra% cosine_transform_odd% hdf5Helpers% mpimod%,$(SOURCES))
 RED_SOURCES += fft_fac.o
 
 ifeq ($(USE_FFTLIB),JW)
-	RED_SOURCES += fft.f90
+	RED_SOURCES += fft.f90 cosine_transform_odd.f90
 	FFT_OBJS += fft.o
+	COSTF_ODD_OBJS += cosine_transform_odd.o
 else ifeq ($(USE_FFTLIB),MKL)
-	RED_SOURCES += fft_mkl.f90
+	RED_SOURCES += fft_mkl.f90 cosine_transform_odd_mkl.f90
+	#RED_SOURCES += fft_mkl.f90 cosine_transform_odd.f90
 	FFT_OBJS += fft_mkl.o
+	COSTF_ODD_OBJS += cosine_transform_odd_mkl.o
+	#COSTF_ODD_OBJS += cosine_transform_odd.o
 endif
 
 ifeq ($(USE_MKL),yes)
-	RED_SOURCES += algebra_mkl.f90
+	RED_SOURCES += algebra_mkl.f90 
 	LAPACK_OBJS += algebra_mkl.o
 else
 	RED_SOURCES += algebra.f90
@@ -280,7 +284,7 @@ useful.o              : logic.o output_data.o parallel.o precision_mod.o\
 out_TO.o              : truncation.o horizontal.o num_param.o\
                         phys_param.o radial.o logic.o blocking.o\
                         constants.o output_data.o TO.o legendre_grid_to_spec.o\
-                        cosine_transform_odd.o chebInt.o plms.o TO_helpers.o\
+                        $(COSTF_ODD_OBJS) chebInt.o plms.o TO_helpers.o\
                         char_manip.o integration.o useful.o
 TO_helpers.o          : truncation.o blocking.o horizontal.o precision_mod.o\
                         constants.o
@@ -312,13 +316,13 @@ endif
 updateS.o             : truncation.o blocking.o horizontal.o\
                         phys_param.o radial.o logic.o output_data.o\
                         init_fields.o constants.o mat.o \
-                        $(LAPACK_OBJS) cosine_transform_odd.o\
+                        $(LAPACK_OBJS) $(COSTF_ODD_OBJS)\
                         radial_derivatives.o LMLoop_data.o
 power.o               : truncation.o blocking.o horizontal.o\
                         phys_param.o num_param.o radial.o logic.o\
                         output_data.o outRot.o integration.o useful.o
-integration.o         : cosine_transform_odd.o precision_mod.o constants.o
-outPV3.o              : truncation.o horizontal.o cosine_transform_odd.o\
+integration.o         : $(COSTF_ODD_OBJS) precision_mod.o constants.o
+outPV3.o              : truncation.o horizontal.o $(COSTF_ODD_OBJS)\
                         phys_param.o radial.o logic.o blocking.o\
                         output_data.o plms.o TO_helpers.o\
                         constants.o $(FFT_OBJS) 
@@ -373,7 +377,7 @@ LMLoop_data.o         : parallel.o blocking.o logic.o
 Bext.o                : precision_mod.o
 legendre_spec_to_grid.o: truncation.o blocking.o horizontal.o logic.o\
                          constants.o legendre_helpers.o
-radial_derivatives.o  : cosine_transform_odd.o constants.o precision_mod.o
+radial_derivatives.o  : $(COSTF_ODD_OBJS) constants.o precision_mod.o
 legendre_helpers.o    : truncation.o num_param.o radial.o horizontal.o\
                         logic.o constants.o blocking.o Grenoble.o\
                         fields.o TO.o
@@ -404,13 +408,13 @@ out_RMS.o             : truncation.o parallel.o blocking.o num_param.o\
                         RMS_helpers.o integration.o communications.o\
                         horizontal.o dtB.o
 RMS.o                 : truncation.o constants.o precision_mod.o\
-                        chebyshev_polynoms.o cosine_transform_odd.o\
+                        chebyshev_polynoms.o $(COSTF_ODD_OBJS)\
                         output_data.o radial_derivatives.o radial.o
 updateWP.o            : truncation.o blocking.o num_param.o\
                         phys_param.o radial.o horizontal.o logic.o\
-                        mat.o RMS.o cosine_transform_odd.o radial_derivatives.o\
+                        mat.o RMS.o $(COSTF_ODD_OBJS) radial_derivatives.o\
                         RMS_helpers.o LMLoop_data.o
-chebInt.o             : chebyshev_polynoms.o cosine_transform_odd.o radial_derivatives.o
+chebInt.o             : chebyshev_polynoms.o $(COSTF_ODD_OBJS) radial_derivatives.o
 get_td.o              : truncation.o blocking.o horizontal.o\
                         phys_param.o num_param.o radial.o logic.o\
                         RMS.o RMS_helpers.o legendre_helpers.o fields.o\
@@ -426,22 +430,22 @@ nl_special_calc.o     : truncation.o blocking.o horizontal.o\
                         radial.o legendre_grid_to_spec.o radial_data.o\
                         phys_param.o constants.o
 outOmega.o            : truncation.o blocking.o logic.o\
-                        output_data.o radial.o cosine_transform_odd.o plms.o
+                        output_data.o radial.o $(COSTF_ODD_OBJS) plms.o
 store_pot.o           : truncation.o radial.o output_data.o phys_param.o\
-                        logic.o cosine_transform_odd.o LMLoop_data.o\
+                        logic.o $(COSTF_ODD_OBJS) LMLoop_data.o\
                         parallel.o communications.o
 fft_fac.o             : constants.o precision_mod.o
 cosine_transform_even.o: truncation.o fft_fac.o constants.o useful.o
-cosine_transform_odd.o : truncation.o fft_fac.o constants.o useful.o
+$(COSTF_ODD_OBJS)     : truncation.o fft_fac.o constants.o useful.o
 readCheckPoints.o     : truncation.o blocking.o phys_param.o\
                         init_fields.o constants.o radial.o\
-                        logic.o cosine_transform_odd.o
-radial_derivatives_even.o : cosine_transform_odd.o precision_mod.o constants.o\
+                        logic.o $(COSTF_ODD_OBJS)
+radial_derivatives_even.o : $(COSTF_ODD_OBJS) precision_mod.o constants.o\
                         cosine_transform_even.o
 updateZ.o             : truncation.o blocking.o phys_param.o\
                         num_param.o constants.o radial.o horizontal.o\
                         logic.o init_fields.o mat.o RMS.o TO.o\
-                        $(LAPACK_OBJS) cosine_transform_odd.o\
+                        $(LAPACK_OBJS) $(COSTF_ODD_OBJS)\
                         radial_derivatives.o outRot.o RMS_helpers.o \
                         LMLoop_data.o communications.o
 out_graph_file.o      : truncation.o horizontal.o phys_param.o parallel.o\
@@ -464,11 +468,11 @@ updateB.o             : truncation.o blocking.o horizontal.o\
                         phys_param.o num_param.o init_fields.o\
                         logic.o radial.o Bext.o constants.o mat.o\
                         RMS.o $(LAPACK_OBJS) radial_derivatives.o\
-                        cosine_transform_odd.o radial_derivatives_even.o\
+                        $(COSTF_ODD_OBJS) radial_derivatives_even.o\
                         RMS_helpers.o LMLoop_data.o
 Egeos.o               : truncation.o phys_param.o num_param.o\
                         horizontal.o radial.o blocking.o constants.o\
-                        output_data.o logic.o cosine_transform_odd.o chebInt.o\
+                        output_data.o logic.o $(COSTF_ODD_OBJS) chebInt.o\
                         plms.o $(FFT_OBJS) LMLoop_data.o communications.o
 preCalculations.o     : truncation.o phys_param.o num_param.o constants.o\
                         radial.o horizontal.o init_fields.o\
@@ -489,7 +493,7 @@ blocking.o            : truncation.o LMmapping.o logic.o parallel.o\
 num_param.o           : truncation.o precision_mod.o
 radial.o              : truncation.o radial_data.o mat.o $(LAPACK_OBJS)\
                         num_param.o phys_param.o logic.o precision_mod.o\
-                        output_data.o cosine_transform_odd.o\
+                        output_data.o $(COSTF_ODD_OBJS)\
                         chebyshev_polynoms.o radial_derivatives.o\
 			cosine_transform_even.o
 output_data.o         : logic.o parallel.o char_manip.o precision_mod.o
@@ -499,7 +503,7 @@ RMS.o	              : truncation.o blocking.o
 Grenoble.o            : truncation.o
 init_fields.o         : truncation.o blocking.o radial.o horizontal.o\
                         constants.o logic.o $(FFT_OBJS) legendre_grid_to_spec.o\
-                        useful.o phys_param.o LMLoop_data.o cosine_transform_odd.o
+                        useful.o phys_param.o LMLoop_data.o $(COSTF_ODD_OBJS)
 movie.o               : truncation.o parallel.o radial_data.o\
                         output_data.o logic.o radial.o\
                         horizontal.o char_manip.o useful.o
