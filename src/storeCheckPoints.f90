@@ -5,16 +5,16 @@ module storeCheckPoints
    !
 
    use precision_mod
-   use parallel_mod, only: rank
+   use parallel_mod, only: rank, coord_r
    use communications, only: gt_OC, gt_IC, gather_all_from_lo_to_rank0
    use truncation, only: n_r_max,n_r_ic_max,minc,nalias,n_theta_max,n_phi_tot, &
        &                 lm_max,lm_maxMag,n_r_maxMag,n_r_ic_maxMag,l_max,      &
        &                 fd_stretch, fd_ratio
-   use radial_functions, only: rscheme_oc
+   use radial_functions, only: rscheme_oc, alph1, alph2
    use physical_parameters, only: ra, pr, prmag, radratio, ek, sigma_ratio, &
        &                          raxi, sc
    use LMLoop_data, only: llm,ulm, llmMag, ulmMag
-   use num_param, only: tScale, alph1, alph2
+   use num_param, only: tScale
    use fieldsLast, only: d_omega_ma_dtLast,d_omega_ic_dtLast, &
        &                 lorentz_torque_maLast,lorentz_torque_icLast
    use init_fields, only: inform,omega_ic1,omegaOsz_ic1,tOmega_ic1, &
@@ -126,13 +126,13 @@ contains
       end if
 
       !-- Memory allocation of global arrays to write outputs
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          allocate( work(lm_max,n_r_max) )
       else
          allocate( work(1,1) )
       end if
 
-      !-- Gather fields on rank 0 and write
+      !-- Gather fields on coord_r 0 and write
 
       !-- Poloidal flow
       call gather_all_from_lo_to_rank0(gt_OC,w,work)

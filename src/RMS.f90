@@ -17,13 +17,14 @@ module RMS
        &                 lm_max_dtB, fd_ratio, fd_stretch
    use physical_parameters, only: ra, ek, pr, prmag, radratio
    use radial_data, only: nRstop, nRstart
-   use radial_functions, only: rscheme_oc, r, r_cmb, r_icb
+   use radial_functions, only: rscheme_oc, r, r_cmb, r_icb, alph1, alph2
    use logic, only: l_save_out, l_heat, l_conv_nl, l_mag_LF, l_conv, &
        &            l_corr, l_mag, l_finite_diff, l_newmap
-   use num_param, only: tScale, alph1, alph2
+   use num_param, only: tScale
    use horizontal_data, only: phi, theta_ord
    use constants, only: zero, one, half, four, third, vol_oc, pi
    use integration, only: rInt_R
+   use chebyshev_polynoms_mod, only: cheb_grid
    use radial_der, only: get_dr, get_drNS
    use output_data, only: rDea, rCut, tag, runid
    use cosine_transform_odd
@@ -415,7 +416,7 @@ contains
       real(cp) :: Rms(n_r_max),Dif2hInt(n_r_max),dtV2hInt(n_r_max)
     
       complex(cp) :: workA(llm:ulm,n_r_max)
-      integer :: recvcounts(0:n_procs-1),displs(0:n_procs-1)
+      integer :: recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
       real(cp) :: global_sum(l_max+1,n_r_max)
       integer :: irank,sendcount
       character(len=80) :: fileName
@@ -439,8 +440,8 @@ contains
       end do
 #ifdef WITH_MPI
       call MPI_Reduce(DifPol2hInt(:,:,1),global_sum,n_r_max*(l_max+1), &
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
-      if ( rank == 0 ) DifPol2hInt(:,:,1)=global_sum
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      if ( coord_r == 0 ) DifPol2hInt(:,:,1)=global_sum
 #endif
 
       !-- Flow changes
@@ -459,11 +460,11 @@ contains
       end do
 #ifdef WITH_MPI
       call MPI_Reduce(dtVPol2hInt(:,:,1),global_sum,n_r_max*(l_max+1), &
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
-      if ( rank == 0 ) dtVPol2hInt(:,:,1)=global_sum
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      if ( coord_r == 0 ) dtVPol2hInt(:,:,1)=global_sum
 #endif
 
-      ! First gather all needed arrays on rank 0
+      ! First gather all needed arrays on coord_r 0
       ! some more arrays to gather for the dtVrms routine
       ! we need some more fields for the dtBrms routine
 #ifdef WITH_MPI
@@ -471,45 +472,45 @@ contains
       ! The following fields are only 1D and R distributed.
       sendcount  = (nRstop-nRstart+1)*(l_max+1)
       recvcounts = nR_per_rank*(l_max+1)
-      recvcounts(n_procs-1) = nR_on_last_rank*(l_max+1)
-      do irank=0,n_procs-1
+      recvcounts(n_procs_r-1) = nR_on_last_rank*(l_max+1)
+      do irank=0,n_procs_r-1
          displs(irank) = irank*nR_per_rank*(l_max+1)
       end do
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & Cor2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & Cor2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & Adv2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & Adv2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & LF2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & LF2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & Buo2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & Buo2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & Pre2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & Pre2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & Geo2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & Geo2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & Mag2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & Mag2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & Arc2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & Arc2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & CIA2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & CIA2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & CLF2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & CLF2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
-           & PLF2hInt,recvcounts,displs,MPI_DEF_REAL,MPI_COMM_WORLD,ierr)
+           & PLF2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
     
       ! The following fields are LM distributed and have to be gathered:
       ! dtVPolLMr, DifPolLMr
     
       call MPI_Reduce(dtVTor2hInt(:,:,1),global_sum,n_r_max*(l_max+1), &
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
-      if ( rank == 0 ) dtVTor2hInt(:,:,1)=global_sum
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      if ( coord_r == 0 ) dtVTor2hInt(:,:,1)=global_sum
       call MPI_Reduce(DifTor2hInt(:,:,1),global_sum,n_r_max*(l_max+1), &
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
-      if ( rank == 0 ) DifTor2hInt(:,:,1)=global_sum
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      if ( coord_r == 0 ) DifTor2hInt(:,:,1)=global_sum
 #endif
     
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
     
          !write(*,"(A,ES22.14)") "dtVPol2hInt = ",SUM(dtVPol2hInt)
          nRMS_sets=nRMS_sets+1
@@ -730,7 +731,7 @@ contains
             open(newunit=n_dtvrms_file, file=dtvrms_file, &
             &    form='formatted', status='unknown', position='append')
          end if
-         write(n_dtvrms_file,'(1P,ES20.12,7ES16.8,6ES14.6)')&
+         if (rank == 0) write(n_dtvrms_file,'(1P,ES20.12,7ES16.8,6ES14.6)')&
          &    time, dtV_Rms, CorRms, LFRms, AdvRms, DifRms, &
          &    BuoRms, PreRms, GeoRms/(CorRms+PreRms),       &
          &    MagRms/(CorRms+PreRms+LFRms),                 &
@@ -777,7 +778,7 @@ contains
          open(newunit=fileHandle,file=fileName,form='formatted', &
          &    status='unknown')
          do l=0,l_max
-            write(fileHandle,'(1P,I4,26ES16.8)') l+1,                        &
+            if (rank == 0) write(fileHandle,'(1P,I4,26ES16.8)') l+1,         &
             &     dtVRmsL_TA(l),CorRmsL_TA(l),LFRmsL_TA(l),AdvRmsL_TA(l),    &
             &     DifRmsL_TA(l),BuoRmsL_TA(l),PreRmsL_TA(l),GeoRmsL_TA(l),   &
             &     MagRmsL_TA(l),ArcRmsL_TA(l),CLFRmsL_TA(l),PLFRmsL_TA(l),   &
@@ -901,13 +902,13 @@ contains
 
 #ifdef WITH_MPI
       call MPI_Reduce(dtBP, dtBP_global, n_r_max, MPI_DEF_REAL, MPI_SUM, &
-           &          0, MPI_COMM_WORLD, ierr)
+           &          0, comm_r, ierr)
       call MPI_Reduce(dtBT, dtBT_global, n_r_max, MPI_DEF_REAL, MPI_SUM, &
-           &          0, MPI_COMM_WORLD, ierr)
+           &          0, comm_r, ierr)
       call MPI_Reduce(dtBPAs, dtBPAs_global, n_r_max, MPI_DEF_REAL, MPI_SUM, &
-           &          0, MPI_COMM_WORLD, ierr)
+           &          0, comm_r, ierr)
       call MPI_Reduce(dtBTAs, dtBTAs_global, n_r_max, MPI_DEF_REAL, MPI_SUM, &
-           &          0, MPI_COMM_WORLD, ierr)
+           &          0, comm_r, ierr)
 #else
       dtBP_global(:)  =dtBP(:)
       dtBT_global(:)  =dtBT(:)
@@ -915,7 +916,7 @@ contains
       dtBTAs_global(:)=dtBTAs(:)
 #endif
     
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
 
          dtBPolRms  =rInt_R(dtBP_global,r,rscheme_oc)
          dtBPolAsRms=rInt_R(dtBPAs_global,r,rscheme_oc)
@@ -1063,7 +1064,7 @@ contains
             open(newunit=n_dtbrms_file, file=dtbrms_file,  &
             &    form='formatted', status='unknown', position='append')
          end if
-         write(n_dtbrms_file,'(1P,ES20.12,10ES16.8)')            &
+         if (rank == 0) write(n_dtbrms_file,'(1P,ES20.12,10ES16.8)') &
               time, dtBPolRms, dtBTorRms, PdynRms, TdynRms,      &
               PdifRms, TdifRms, TomeRms/TdynRms,                 &
               TomeAsRms/TdynRms,  DdynRms,DdynAsRms

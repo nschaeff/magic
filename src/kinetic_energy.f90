@@ -174,21 +174,21 @@ contains
       ! reduce over the ranks
 #ifdef WITH_MPI
       call MPI_Reduce(e_p_r,    e_p_r_global,     n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_r,    e_t_r_global,     n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_p_as_r, e_p_as_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_as_r, e_t_as_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_p_es_r, e_p_es_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_es_r, e_t_es_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_p_eas_r,e_p_eas_r_global, n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_eas_r,e_t_eas_r_global, n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
       e_p_r_global    =e_p_r
       e_t_r_global    =e_t_r
@@ -200,7 +200,7 @@ contains
       e_t_eas_r_global=e_t_eas_r
 #endif
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !do nR=1,n_r_max
          !   write(*,"(4X,A,I4,ES22.14)") "e_p_r_global: ",nR,e_p_r_global(nR)
          !end do
@@ -231,14 +231,14 @@ contains
             end do
          end if
          if ( l_write ) then
-            if ( l_save_out ) then
+            if ( l_save_out .and. (rank == 0) ) then
                open(newunit=n_e_kin_file, file=e_kin_file, status='unknown', &
                &    position='append')
             end if
-            write(n_e_kin_file,'(1P,ES20.12,8ES16.8)')    &
+            if (rank == 0) write(n_e_kin_file,'(1P,ES20.12,8ES16.8)')    &
             &     time*tScale, e_p, e_t, e_p_as,e_t_as,   & ! 1,2,3,4,5
             &     e_p_es, e_t_es, e_p_eas,e_t_eas           ! 6,7,8,9
-            if ( l_save_out ) close(n_e_kin_file)
+            if ( l_save_out .and. (rank == 0) ) close(n_e_kin_file)
          end if
 
          ! NOTE: n_e_sets=0 prevents averaging
@@ -271,7 +271,7 @@ contains
             open(newunit=fileHandle, file=filename, status='unknown')
             do nR=1,n_r_max
                surf=four*pi*r(nR)**2
-               write(fileHandle,'(ES20.10,8ES15.7)') r(nR),         &
+               if (rank ==0) write(fileHandle,'(ES20.10,8ES15.7)') r(nR),         &
                     &               fac*e_pA(nR)/timetot,           &
                     &               fac*e_p_asA(nR)/timetot,        &
                     &               fac*e_tA(nR)/timetot,           &
@@ -289,13 +289,13 @@ contains
       ! broadcast the output arguments of the function to have them on all ranks
       ! e_p,e_t,e_p_as,e_t_as
 #ifdef WITH_MPI
-      call MPI_Bcast(e_p,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(e_t,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(e_p_as,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(e_t_as,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
+      call MPI_Bcast(e_p,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(e_t,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(e_p_as,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(e_t_as,1,MPI_DEF_REAL,0,comm_r,ierr)
 
       if ( present(ekinR) ) then
-         call MPI_Bcast(ekinR,n_r_max,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
+         call MPI_Bcast(ekinR,n_r_max,MPI_DEF_REAL,0,comm_r,ierr)
       end if
 #endif
 
@@ -389,17 +389,17 @@ contains
       ! reduce over the ranks
 #ifdef WITH_MPI
       call MPI_Reduce(e_p_r,    e_p_r_global,     n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_r,    e_t_r_global,     n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_p_as_r, e_p_as_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_as_r, e_t_as_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_lr_c, e_lr_c_global,  n_r_max*l_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_lr, e_lr_global,  n_r_max*l_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
       e_p_r_global   =e_p_r
       e_t_r_global   =e_t_r
@@ -409,7 +409,7 @@ contains
       e_lr_global    =e_lr
 #endif
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !-- Radial Integrals:
          e_p   =rInt_R(e_p_r_global,   r,rscheme_oc)
          e_t   =rInt_R(e_t_r_global,   r,rscheme_oc)
@@ -508,14 +508,16 @@ contains
          end if
 
          !-- Output
-         if ( l_save_out ) then
-            open(newunit=n_u_square_file, file=u_square_file,  &
-            &    status='unknown',position='append')
+         if ( rank == 0 ) then
+            if ( l_save_out ) then
+                open(newunit=n_u_square_file, file=u_square_file,  &
+                &    status='unknown',position='append')
+            end if
+            write(n_u_square_file,'(1P,ES20.12,10ES16.8)')   &
+            &     time*tScale, e_p, e_t, e_p_as, e_t_as,     & ! 1,2,3, 4,5
+            &     Ro, Rm, Rol, dl, RolC, dlc                   ! 6,7,8,9,10,11
+            if ( l_save_out .and. (rank == 0) ) close(n_u_square_file)
          end if
-         write(n_u_square_file,'(1P,ES20.12,10ES16.8)')   &
-         &     time*tScale, e_p, e_t, e_p_as, e_t_as,     & ! 1,2,3, 4,5
-         &     Ro, Rm, Rol, dl, RolC, dlc                   ! 6,7,8,9,10,11
-         if ( l_save_out ) close(n_u_square_file)
       end if
 
    end subroutine get_u_square

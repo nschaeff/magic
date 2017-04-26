@@ -113,7 +113,7 @@ contains
       character(len=72) :: string
 
       if ( l_mag ) then
-         if ( rank == 0 ) then 
+         if ( coord_r == 0 ) then 
             allocate( bICB(lm_max) )
             bytes_allocated = bytes_allocated+lm_max*SIZEOF_DEF_COMPLEX
          else
@@ -426,13 +426,13 @@ contains
       if ( l_log ) then
          nLogs=nLogs+1
          timeNormLog=timeNormLog+timePassedLog
-  
+
          !----- Write torques and rotation rates:
          PERFON('out_rot')
          call write_rot( time,dt,eKinIC,eKinMA,w_LMloc,z_LMloc,dz_LMloc,b_LMloc,  &
               &          omega_ic,omega_ma,lorentz_torque_ic,lorentz_torque_ma)
          PERFOFF
-         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  write_rot  on rank ",rank
+         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  write_rot  on coord_r ",coord_r
   
          PERFON('out_ekin')
          n_e_sets=n_e_sets+1
@@ -441,8 +441,8 @@ contains
               &         e_kin_t_as,ekinR)
          e_kin=e_kin_p+e_kin_t
          e_kin_nas=e_kin-e_kin_p_as-e_kin_t_as
-         if ( DEBUG_OUTPUT ) write(*,"(A,I6)") "Written  e_kin  on rank ",rank
-  
+         if ( DEBUG_OUTPUT ) write(*,"(A,I6)") "Written  e_kin  on coord_r ",coord_r
+         
          call get_e_mag(time,.true.,l_stop_time,n_e_sets,b_LMloc,db_LMloc, &
               &         aj_LMloc,b_ic_LMloc,db_ic_LMloc,aj_ic_LMloc,       &
               &         e_mag_p,e_mag_t,e_mag_p_as,e_mag_t_as,e_mag_p_ic,  &
@@ -451,7 +451,8 @@ contains
          e_mag   =e_mag_p+e_mag_t
          e_mag_ic=e_mag_p_ic+e_mag_t_ic
          PERFOFF
-         if ( DEBUG_OUTPUT ) write(*,"(A,I6)") "Written  e_mag  on rank ",rank
+         if ( DEBUG_OUTPUT ) write(*,"(A,I6)") "Written  e_mag  on coord_r ",coord_r
+         
 
          !----- Calculate distribution of energies on all m's
          if ( l_energy_modes ) then  
@@ -460,7 +461,7 @@ contains
                  &             db_LMloc,aj_LMloc)
             PERFOFF
             if ( DEBUG_OUTPUT ) &
-               & write(*,"(A,I6)") "Written  amplitude  on rank ",rank
+               & write(*,"(A,I6)") "Written  amplitude  on coord_r ",coord_r
          endif
   
          !---- Surface zonal velocity at the equator
@@ -475,11 +476,12 @@ contains
             end do
 #ifdef WITH_MPI
             call MPI_AllReduce(MPI_IN_PLACE, ReEquat, 1, MPI_DEF_REAL, MPI_SUM, &
-                 &             MPI_COMM_WORLD, ierr)
+                 &             comm_r, ierr)
 #endif
          else
             ReEquat=0.0_cp
          end if
+         
   
          if ( l_average ) then
             PERFON('out_aver')
@@ -499,13 +501,13 @@ contains
                  &              p_LMloc,s_LMloc,xi_LMloc,b_LMloc,aj_LMloc,     &
                  &              b_ic_LMloc,aj_ic_LMloc)
             PERFOFF
-            if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  averages  on rank ",rank
+            if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  averages  on coord_r ",coord_r
          end if
-  
+         
          if ( l_power ) then
   
             PERFON('out_pwr')
-            if ( rank == 0 ) then
+            if ( coord_r == 0 ) then
                if ( nLogs > 1 ) then
                   if ( l_save_out ) then
                      open(newunit=n_dtE_file, file=dtE_file, &
@@ -515,7 +517,7 @@ contains
                   eTot   =e_kin+e_mag+e_mag_ic+e_mag_os+eKinIC+eKinMA
                   dtE    =(eTot-eTotOld)/timePassedLog
                   dtEint =dtEint+timePassedLog*(eTot-eTotOld)
-                  write(n_dtE_file,'(ES20.12,3ES16.6)') time,dtE,         &
+                  if (rank == 0) write(n_dtE_file,'(ES20.12,3ES16.6)') time,dtE,         &
                        &                    dtEint/timeNormLog,dtE/eTot
                   if ( l_save_out ) close(n_dtE_file)
                else
@@ -532,14 +534,14 @@ contains
                  &          ddb_ic_LMloc,aj_ic_LMloc,dj_ic_LMloc,viscLMr,    &
                  &          visDiss,ohmDiss)
             PERFOFF
-            if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  power  on rank ",rank
+            if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  power  on coord_r ",coord_r
          end if
   
          !----- If anelastic additional u**2 outputs
          if ( l_anel ) then
             call get_u_square(time,w_LMloc,dw_LMloc,z_LMloc,RolRu2, &
                  &            dlVRu2,dlVRu2c)
-            if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  u_square  on rank ",rank
+            if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  u_square  on coord_r ",coord_r
          else
             RolRu2  = 0.0_cp
             dlVRu2  = 0.0_cp
@@ -558,7 +560,7 @@ contains
               &      uhLMr,duhLMr,gradsLMr,fconvLMr,fkinLMr,fviscLMr,    &
               &      fpoynLMr,fresLMr,RmR)
 
-         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  outPar  on rank ",rank
+         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  outPar  on coord_r ",coord_r
   
          if ( l_heat .or. l_chemical_conv ) then
             call outHeat(timeScaled,timePassedLog,timeNormLog,l_stop_time, &
@@ -592,7 +594,7 @@ contains
          call spectrum(time,n_spec,w_LMloc,dw_LMloc,z_LMloc,b_LMloc,  &
               &        db_LMloc,aj_LMloc,b_ic_LMloc,db_ic_LMloc,aj_ic_LMloc)
          call spectrum_temp(time,n_spec,s_LMloc,ds_LMloc)
-         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  spectrum  on rank ",rank
+         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  spectrum  on coord_r ",coord_r
       end if
   
       if ( lTOCalc ) then
@@ -611,7 +613,7 @@ contains
          !------ Note: time averaging, time differencing done by IDL routine!
   
          if ( lVerbose ) write(*,*) '! outTO finished !'
-         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  TO  on rank ",rank
+         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  TO  on coord_r ",coord_r
       end if
   
       !--- Get radial derivatives and add dt dtB terms:
@@ -638,7 +640,7 @@ contains
             if ( l_mag ) call dtBrms(time)
             timePassedRMS=0.0_cp
          end if
-         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  dtV/Brms  on rank ",rank
+         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  dtV/Brms  on coord_r ",coord_r
       end if
   
       !--- Store poloidal magnetic coeffs at cmb
@@ -731,7 +733,7 @@ contains
       ! ===================================================
       !      GATHERING for output
       ! ===================================================
-      ! We have all fields in LMloc space. Thus we gather the whole fields on rank 0.
+      ! We have all fields in LMloc space. Thus we gather the whole fields on coord_r 0.
   
       l_PVout = l_PV .and. l_log
   
@@ -751,7 +753,7 @@ contains
          end if
   
          ! for writing a restart file, we also need the d?dtLast arrays, 
-         ! which first have to be gathered on rank 0
+         ! which first have to be gathered on coord_r 0
          PERFOFF
   
       end if
@@ -759,7 +761,7 @@ contains
       !--- Movie output and various supplementary things:
       if ( l_frame ) then
          ! The frames array for the movies is distributed over the ranks
-         ! and has to be gathered on rank 0 for output.
+         ! and has to be gathered on coord_r 0 for output.
   
          ! Each movie uses some consecutive frames in the frames array. They
          ! start at n_movie_field_start(1,n_movie) 
@@ -788,9 +790,9 @@ contains
       end if
   
       ! =======================================================================
-      ! ======= compute output on rank 0 ==============
+      ! ======= compute output on coord_r 0 ==============
       ! =======================================================================
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          PERFON('out_out')
   
          !----- Plot out inner core magnetic field, outer core
@@ -870,7 +872,7 @@ contains
                open(newunit=n_par_file, file=par_file, status='unknown', &
                &    position='append')
             end if
-            write(n_par_file,'(ES20.12,18ES16.8)')  &
+            if (rank == 0) write(n_par_file,'(ES20.12,18ES16.8)')  &
                  &                   time,          &! 1) time
                  &                     Rm,          &! 2) (magnetic) Reynolds number 
                  &                     El,          &! 3) Elsasser number
@@ -941,7 +943,7 @@ contains
   
                !--- Write end-energies including energy density:
                !    plus info on movie frames in to STDOUT and log-file
-               write(*,'(1p,/,A,/,A,/,A,4ES16.6,/,A,4ES16.6,/,A,4ES16.6)')  &
+               if (rank == 0) write(*,'(1p,/,A,/,A,/,A,4ES16.6,/,A,4ES16.6,/,A,4ES16.6)')  &
                & " ! Energies at end of time integration:",                 &
                & " !  (total,poloidal,toroidal,total density)",             &
                & " !  Kinetic energies:",e_kin,e_kin_p,e_kin_t,e_kin/vol_oc,&
@@ -949,7 +951,7 @@ contains
                & " !  IC mag. energies:",e_mag_ic,e_mag_p_ic,e_mag_t_ic,    &
                & e_mag_ic/vol_ic
   
-               write(n_log_file,                                               &
+               if (rank == 0) write(n_log_file,                                               &
                &    '(1p,/,A,/,A,/,A,4ES16.6,/,A,4ES16.6,/,A,4ES16.6)')        &
                &    " ! Energies at end of time integration:",                 &
                &    " !  (total,poloidal,toroidal,total density)",             &
@@ -958,7 +960,7 @@ contains
                &    " !  IC mag. energies:",e_mag_ic,e_mag_p_ic,e_mag_t_ic,    &
                &    e_mag_ic/vol_ic
   
-               write(n_log_file,'(1p,/,A,/,A,/,A,4ES16.6,/,A,4ES16.6)')        &
+               if (rank == 0) write(n_log_file,'(1p,/,A,/,A,/,A,4ES16.6,/,A,4ES16.6)')        &
                & " ! Time averaged energies :",                                &
                & " !  (total,poloidal,toroidal,total density)",                &
                & " !  Kinetic energies:",e_kin_pMean+e_kin_tMean,e_kin_pMean,  &
@@ -968,7 +970,7 @@ contains
                &                         e_mag_tMean,(e_mag_pMean+e_mag_tMean)/&
                &                         vol_oc
   
-               write(n_log_file,                                               &
+               if (rank == 0) write(n_log_file,                                               &
                & '(1p,/,A,7(/,A,ES12.4),/,A,4ES12.4,/,A,2ES12.4,/,A,2ES12.4)') &
                & " ! Time averaged property parameters :",                     &
                & " !  Rm (Re)         :",RmMean,                               &

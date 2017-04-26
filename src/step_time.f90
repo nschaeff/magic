@@ -421,7 +421,7 @@ contains
 
 #ifdef WITH_MPI
       ! allocate the buffers for MPI gathering
-      allocate(recvcounts(0:n_procs-1),displs(0:n_procs-1))
+      allocate(recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1))
       call MPI_INFO_CREATE(info,ierr)
 #endif
 
@@ -459,7 +459,7 @@ contains
          close(sigFile)
       end if
       !call MPI_Win_create(signals,4*SIZEOF_integer,SIZEOF_integer,info,&
-      !     & MPI_COMM_WORLD,signal_window,ierr)
+      !     & comm_r,signal_window,ierr)
 
       !-- STARTING THE TIME STEPPING LOOP:
       if ( rank == 0 ) then
@@ -491,13 +491,14 @@ contains
       end if
 
 #ifdef WITH_MPI
-      call mpi_barrier(MPI_COMM_WORLD,ierr)
+      call mpi_barrier(comm_r,ierr)
 #endif
 
       PERFON('tloop')
       !LIKWID_ON('tloop')
       outer: do n_time_step=1,n_time_steps_go 
          n_time_cour=n_time_cour+1
+         
          
          if ( lVerbose .or. DEBUG_OUTPUT ) then 
             write(*,*)
@@ -507,15 +508,15 @@ contains
          call wallTime(runTimeTstart)
 
          ! =================================== BARRIER ======================
+         ! z,dz
          !PERFON('barr_0')
-         !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         !call MPI_Barrier(comm_r,ierr)
          !PERFOFF
          ! ==================================================================
 
          ! Here now comes the block where the LM distributed fields
          ! are redistributed to Rloc distribution which is needed for the radialLoop.
          ! s,ds
-         ! z,dz
          ! w,dw,ddw,p,dp
          ! b,db,ddb,aj,dj,ddj
          ! b_ic,db_ic, ddb_ic,aj_ic,dj_ic,ddj_ic
@@ -540,23 +541,23 @@ contains
 #ifdef WITH_MPI
          ! Broadcast omega_ic and omega_ma
          call MPI_Bcast(omega_ic,1,MPI_DEF_REAL,rank_with_l1m0, &
-                        MPI_COMM_WORLD,ierr)
+                        comm_r,ierr)
          call MPI_Bcast(omega_ma,1,MPI_DEF_REAL,rank_with_l1m0, &
-                        MPI_COMM_WORLD,ierr)
+                        comm_r,ierr)
 #endif
          PERFOFF
 
 #ifdef WITH_MPI
          ! =================================== BARRIER ======================
          PERFON('barr_1')
-         call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         call MPI_Barrier(comm_r,ierr)
          PERFOFF
          ! ==================================================================
 #endif
 
          PERFON('signals')
          !This dealing with a signal file is quite expensive
-         ! as the file can be read only on one rank and the result
+         ! as the file can be read only on one coord_r and the result
          ! must be distributed to all other ranks.
          if ( rank == 0 ) then
             !----- Signalling via file signal:
@@ -619,14 +620,14 @@ contains
          ! Broadcast the results from the signal file to all processes
          ! =======> THIS IS A GLOBAL SYNCHRONIZATION POINT <==========
 #if 0
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             if ((old_stop_signal /= n_stop_signal) .or.      &
                  & (old_graph_signal /= n_graph_signal) .or. &
                  & (old_rst_signal /= n_rst_signal) .or.     &
                  & (old_spec_signal /= n_spec_signal) .or.   &
                  & (old_pot_signal /= n_pot_signal) then
-               do iRank=1,n_procs-1
-                  write(*,"(A,I4)") "MPI_putting from rank 0 to rank ",iRank
+               do iRank=1,n_procs_r-1
+                  write(*,"(A,I4)") "MPI_putting from coord_r 0 to coord_r ",iRank
                   call MPI_Put(signals,5,MPI_integer,&
                        &       iRank,0,5,MPI_integer,signal_window,ierr)
                end do
@@ -634,7 +635,7 @@ contains
          end if
 #endif
 #ifdef WITH_MPI
-         call MPI_Bcast(signals,5,MPI_integer,0,MPI_COMM_WORLD,ierr)
+         call MPI_Bcast(signals,5,MPI_integer,0,comm_r,ierr)
 #endif
          !write(*,"(A)") "Win_fence 2 start"
          !PERFON('fence2')
@@ -650,7 +651,7 @@ contains
 
 #ifdef WITH_MPI
          PERFON('barr_2')
-         call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         call MPI_Barrier(comm_r,ierr)
          PERFOFF
 #endif
 
@@ -660,7 +661,7 @@ contains
 #ifdef WITH_MPI
             time_in_ms=time2ms(runTime)
             call MPI_Allreduce(MPI_IN_PLACE,time_in_ms,1,MPI_integer8, &
-                 &             MPI_MAX,MPI_COMM_WORLD,ierr)
+                 &             MPI_MAX,comm_r,ierr)
             call ms2time(time_in_ms,runTime)
 #endif
             if ( lTimeLimit(runTime,runTimeLimit) ) then
@@ -849,7 +850,7 @@ contains
                if ( l_save_out ) close(n_log_file)
             end if
 #ifdef WITH_MPI
-            call MPI_File_open(MPI_COMM_WORLD,graph_file,             &
+            call MPI_File_open(comm_r,graph_file,             &
                  &             IOR(MPI_MODE_WRONLY,MPI_MODE_CREATE),  &
                  &             MPI_INFO_NULL,graph_mpi_fh,ierr)
 #else
@@ -860,9 +861,8 @@ contains
             !PRINT*,"MPI_FILE_OPEN returned: ",trim(error_string)
             PERFOFF
          end if
-
          if ( DEBUG_OUTPUT ) then
-            do nLMB=1+rank*nLMBs_per_rank,min((rank+1)*nLMBs_per_rank,nLMBs)
+            do nLMB=1+coord_r*nLMBs_per_rank,min((coord_r+1)*nLMBs_per_rank,nLMBs)
                lmStart=lmStartB(nLMB)
                lmStop=lmStopB(nLMB)
                lmStart_00  =max(2,lmStart)
@@ -915,7 +915,7 @@ contains
          !PERFOFF
          ! =============================== BARRIER ===========================
          !PERFON('barr_2')
-         !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         !call MPI_Barrier(comm_r,ierr)
          !PERFOFF
          ! ===================================================================
 
@@ -977,7 +977,7 @@ contains
 
          ! ===================================== BARRIER =======================
          !PERFON('barr_rad')
-         !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         !call MPI_Barrier(comm_r,ierr)
          !PERFOFF
          ! =====================================================================
          if ( lVerbose ) write(*,*) "! start r2lo redistribution"
@@ -1008,9 +1008,9 @@ contains
          ! also exchange the lorentz_torques which are only set at the boundary points
          ! but are needed on all processes.
          call MPI_Bcast(lorentz_torque_ic,1,MPI_DEF_REAL, &
-              &         n_procs-1,MPI_COMM_WORLD,ierr)
+              &         n_procs_r-1,comm_r,ierr)
          call MPI_Bcast(lorentz_torque_ma,1,MPI_DEF_REAL, &
-              &         0,MPI_COMM_WORLD,ierr)
+              &         0,comm_r,ierr)
 #endif
          PERFOFF
          if ( lVerbose ) write(*,*) "! r2lo redistribution finished"
@@ -1051,13 +1051,12 @@ contains
             write(*,"(A,2ES20.12)") "middl: dtrkc,dthkc = ", &
                   SUM(dtrkc_Rloc),SUM(dthkc_Rloc)
          end if
-
          !PERFOFF
 
          !--- Output before update of fields in LMLoop:
          ! =================================== BARRIER ======================
          !PERFON('barr_4')
-         !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         !call MPI_Barrier(comm_r,ierr)
          !PERFOFF
          ! ==================================================================
          if ( lVerbose ) write(*,*) "! start output"
@@ -1080,7 +1079,7 @@ contains
               &      EperpaxiLMr_Rloc,EparaxiLMr_Rloc)
          PERFOFF
          if ( lVerbose ) write(*,*) "! output finished"
-
+         
          if ( l_graph ) then
 #ifdef WITH_MPI
             PERFON('graph')
@@ -1094,7 +1093,7 @@ contains
          end if
          ! =================================== BARRIER ======================
          !PERFON('barr_5')
-         !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         !call MPI_Barrier(comm_r,ierr)
          !PERFOFF
          ! ==================================================================
 
@@ -1141,7 +1140,7 @@ contains
             call check_time_hits(l_new_dtHit,time,dt,dtNew)
             l_new_dtNext=l_new_dtNext .or. l_new_dtHit
          end if
-
+         
          !----- Stop if time step has become too small:
          if ( dtNew < dtMin ) then
             if ( rank == 0 ) then
@@ -1215,7 +1214,7 @@ contains
 
          ! =================================== BARRIER ======================
          !PERFON('barr_6')
-         !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         !call MPI_Barrier(comm_r,ierr)
          !PERFOFF
          ! ==================================================================
 
@@ -1276,10 +1275,10 @@ contains
          ! =================================== BARRIER ======================
          !start_time=MPI_Wtime()
          !PERFON('barr_lm')
-         !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         !call MPI_Barrier(comm_r,ierr)
          !PERFOFF
          !end_time=MPI_Wtime()
-         !write(*,"(A,I4,A,F10.6,A)") " lm barrier on rank ",rank,&
+         !write(*,"(A,I4,A,F10.6,A)") " lm barrier on coord_r ",coord_r,&
          !     & " takes ",end_time-start_time," s."
          ! ==================================================================
          call wallTime(runTimeTstop)

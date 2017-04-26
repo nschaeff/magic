@@ -197,6 +197,8 @@ program magic
    !--- Read input parameters:
    call readNamelists  ! includes sent to other procs !
 
+   !--- Reasigns the coord_r variable and creates the parallel cartesian grid
+   call initialize_cartesian
    call initialize_output
 
    !--- Check parameters and write info to SDTOUT
@@ -303,7 +305,7 @@ program magic
    !local_bytes_used=bytes_allocated-local_bytes_used
    call memWrite('Total I/O', local_bytes_used)
 
-   if (rank == 0) print*, '-----> rank 0 has', bytes_allocated, ' B allocated'
+   if (rank == 0) print*, '-----> coord_r 0 has', bytes_allocated, ' B allocated'
 
 
    call finalize_memory_counter

@@ -51,6 +51,9 @@ contains
 
       !-- Name lists:
       integer :: runHours,runMinutes,runSeconds
+      
+      namelist/parallel/n_procs_r,n_procs_theta,n_procs_m
+      
       namelist/grid/n_r_max,n_cheb_max,n_phi_tot,n_theta_axi, &
          &  n_r_ic_max,n_cheb_ic_max,minc,nalias,l_axi,       &
          &  fd_order,fd_order_bound,fd_ratio,fd_stretch
@@ -63,7 +66,7 @@ contains
          & difnu,difeta,difkap,difchem,ldif,ldifexp,        &
          & l_correct_AMe,l_correct_AMz,tEND,l_non_rot,      &
          & l_newmap,alph1,alph2,l_cour_alf_damp,            &
-         & runHours,runMinutes,runSeconds,map_function,     &
+         & runHours,runMinutes,runSeconds,                  &
          & cacheblock_size_in_B,anelastic_flavour,          &
          & thermo_variable,radial_scheme,polo_flow_eq
       
@@ -166,6 +169,15 @@ contains
             call abortRun('! Input namelist file not found!')
          end if
 
+         open(newunit=inputHandle,file=trim(input_filename))
+         !-- Reading control parameters from namelists in STDIN:
+         if ( rank == 0 ) write(*,*) '!  Reading parallelization parameters!'
+         read(inputHandle,nml=parallel,iostat=res)
+         if ( res /= 0 .and. rank == 0 ) then
+            write(*,*) '! No parallel namelist found!'
+         end if
+         close(inputHandle)
+         
          open(newunit=inputHandle,file=trim(input_filename))
          !-- Reading control parameters from namelists in STDIN:
          if ( rank == 0 ) write(*,*) '!  Reading grid parameters!'
@@ -489,6 +501,13 @@ contains
          l_conv_nl=.false.
          l_mag_LF =.false.
       end if
+      
+      !-- Check if parallelization is consistent
+      if (n_procs_r * n_procs_m * n_procs_theta .NE. n_procs) then
+        call abortRun('! Invalid parallelization partition! Make sure that n_procs_r'//&
+                      '* n_procs_m * n_procs_theta equals the number of available processes!')
+      end if
+      
 
       !-- New checking of magnetic boundary condition.
       if ( kbotb > 4 ) then
@@ -531,23 +550,12 @@ contains
       if ( l_corrMov ) l_par= .true. 
 
       !--- Stuff for the radial non-linear mapping
-      call capitalize(map_function)
-
-      !-- This is the case of a tangent mapping (see Bayliss & Turkel, 1992)
-      if ( index(map_function, 'TAN') /= 0 .or. index(map_function, 'BAY') /= 0 ) then
-         !     alph1 can be any positive number, above 0
-         !     alph2 has to be a value between -1 and 1 (interval in Chebyshev space)
-         if ( (alph1 == 0.0_cp) .or. (alph2 < -one) .or. (alph2 > one) ) then
-            call abortRun('! Chebyshev mapping parameter is not correct !')
-         elseif ( l_newmap .and. (alph1 < 0.0_cp) ) then
-            alph1=abs(alph1)
-         end if
-      !-- This is the case of the Kosloff & Tal-Ezer mapping (1993)
-      else if ( index(map_function, 'ARCSIN') /= 0 .or. &
-      &         index(map_function, 'KTL') /= 0 ) then
-         if ( (alph1 < 0.0_cp) .or. (alph1 >= one) ) then
-            call abortRun('! Chebyshev mapping parameter is not correct !')
-         end if
+      !     alph1 can be any positive number, above 0
+      !     alph2 has to be a value between -1 and 1 (interval in Chebyshev space)
+      if ( (alph1 == 0.0_cp) .or. (alph2 < -one) .or. (alph2 > one) ) then
+         l_newmap=.false.
+      elseif ( l_newmap .and. (alph1 < 0.0_cp) ) then
+         alph1=abs(alph1)
       end if
 
       !--- Stuff for current carrying loop at equator
@@ -732,6 +740,11 @@ contains
 
 
       !-- Output of name lists:
+      write(n_out,*) " "
+      write(n_out,*) "&parallel"
+      write(n_out,'(''  n_procs_r        ='',i5,'','')') n_procs_r
+      write(n_out,'(''  n_procs_m        ='',i5,'','')') n_procs_m
+      write(n_out,'(''  n_procs_theta    ='',i5,'','')') n_procs_theta
 
       write(n_out,*) " "
       write(n_out,*) "&grid"
@@ -764,10 +777,8 @@ contains
       write(n_out,'(''  l_update_s      ='',l3,'','')') l_update_s
       write(n_out,'(''  l_update_xi     ='',l3,'','')') l_update_xi
       write(n_out,'(''  l_newmap        ='',l3,'','')') l_newmap
-      length=length_to_blank(map_function)
-      write(n_out,*) " map_function    = """,map_function(1:length),""","
-      write(n_out,'(''  alph1           ='',ES14.6,'','')') alph1
-      write(n_out,'(''  alph2           ='',ES14.6,'','')') alph2
+      write(n_out,'(''  alph1           ='',ES14.6,'','')') alpha1
+      write(n_out,'(''  alph2           ='',ES14.6,'','')') alpha2
       write(n_out,'(''  dtstart         ='',ES14.6,'','')') dtstart*tScale
       write(n_out,'(''  dtMax           ='',ES14.6,'','')') tScale*dtMax
       write(n_out,'(''  courfac         ='',ES14.6,'','')') courfac
@@ -790,13 +801,13 @@ contains
       write(n_out,'(''  runSeconds      ='',i4,'','')') runTimeLimit(3)
       write(n_out,'(''  tEND            ='',ES14.6,'','')') tEND
       length=length_to_blank(radial_scheme)
-      write(n_out,*) " radial_scheme   = """,radial_scheme(1:length),""","
+      write(n_out,*) " radial_scheme      = """,radial_scheme(1:length),""","
       length=length_to_blank(polo_flow_eq)
-      write(n_out,*) " polo_flow_eq    = """,polo_flow_eq(1:length),""","
+      write(n_out,*) " polo_flow_eq       = """,polo_flow_eq(1:length),""","
       length=length_to_blank(anelastic_flavour)
-      write(n_out,*) "anelastic_flavour= """,anelastic_flavour(1:length),""","
+      write(n_out,*) " anelastic_flavour  = """,anelastic_flavour(1:length),""","
       length=length_to_blank(thermo_variable)
-      write(n_out,*) " thermo_variable = """,thermo_variable(1:length),""","
+      write(n_out,*) " thermo_variable    = """,thermo_variable(1:length),""","
       write(n_out,*) "/"
 
       write(n_out,*) "&phys_param"
@@ -1066,9 +1077,9 @@ contains
       write(n_out,'(''  amp_RiMaAsym    ='',ES14.6,'','')') amp_RiMaAsym
       write(n_out,'(''  omega_RiMaAsym  ='',ES14.6,'','')') omega_RiMaAsym
       write(n_out,'(''  m_RiMaAsym      ='',i4,'','')') m_RiMaAsym
-      write(n_out,'(''  amp_RiMaSym     ='',ES14.6,'','')') amp_RiMaSym
-      write(n_out,'(''  omega_RiMaSym   ='',ES14.6,'','')') omega_RiMaSym
-      write(n_out,'(''  m_RiMaSym       ='',i4,'','')')  m_RiMaSym
+      write(n_out,'(''  amp_RiMaSym    ='',ES14.6,'','')') amp_RiMaSym
+      write(n_out,'(''  omega_RiMaSym  ='',ES14.6,'','')') omega_RiMaSym
+      write(n_out,'(''  m_RiMaSym      ='',i4,'','')')  m_RiMaSym
       write(n_out,*) "/"
 
       write(n_out,*) "&inner_core"
@@ -1085,9 +1096,9 @@ contains
       write(n_out,'(''  amp_RiIcAsym    ='',ES14.6,'','')') amp_RiIcAsym
       write(n_out,'(''  omega_RiIcAsym  ='',ES14.6,'','')') omega_RiIcAsym
       write(n_out,'(''  m_RiIcAsym      ='',i4,'','')') m_RiIcAsym
-      write(n_out,'(''  amp_RiIcSym     ='',ES14.6,'','')') amp_RiIcSym
-      write(n_out,'(''  omega_RiIcSym   ='',ES14.6,'','')') omega_RiIcSym
-      write(n_out,'(''  m_RiIcSym       ='',i4,'','')')  m_RiIcSym
+      write(n_out,'(''  amp_RiIcSym    ='',ES14.6,'','')') amp_RiIcSym
+      write(n_out,'(''  omega_RiIcSym  ='',ES14.6,'','')') omega_RiIcSym
+      write(n_out,'(''  m_RiIcSym      ='',i4,'','')')  m_RiIcSym
       write(n_out,*) "/"
       write(n_out,*) " "
 
@@ -1101,6 +1112,11 @@ contains
 
       !-- Local variable:
       integer :: n
+      
+      !----- Namelist parallel
+      n_procs_r     = n_procs
+      n_procs_theta = 1
+      n_procs_m     = 1
 
       !----- Namelist grid
       ! must be of form 4*integer+1
@@ -1266,9 +1282,8 @@ contains
 
       !----- Non-linear mapping parameters (Bayliss, 1992):
       l_newmap       =.false.
-      alph1          =0.8_cp
+      alph1          =two
       alph2          =0.0_cp
-      map_function   ='arcsin' ! By default Kosloff and Tal-Ezer mapping when l_newmap=.true.
 
       !----- External field
       n_imp          =0    ! No external field

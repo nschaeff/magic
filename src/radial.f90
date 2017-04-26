@@ -22,9 +22,8 @@ module radial_functions
    use radial_der, only: get_dr
    use mem_alloc, only: bytes_allocated
    use useful, only: logWrite, abortRun
-   use parallel_mod, only: rank
+   use parallel_mod, only: rank, coord_r
    use output_data, only: tag
-   use num_param, only: alph1, alph2
 
    implicit none
 
@@ -83,9 +82,17 @@ module radial_functions
    real(cp), public, allocatable :: d2cheb_ic(:,:)       ! Second radial derivative cheb_ic
    real(cp), public, allocatable :: cheb_int_ic(:)       ! Array for integrals of cheb for IC
    integer, public :: nDi_costf1_ic                      ! Radii for transform
+ 
    integer, public :: nDd_costf1_ic                      ! Radii for transform
+ 
    integer, public :: nDi_costf2_ic                      ! Radii for transform
+ 
    integer, public :: nDd_costf2_ic                      ! Radii for transform
+ 
+   !-- Radius functions for cut-back grid without boundaries:
+   !-- (and for the nonlinear mapping)
+   real(cp), public :: alph1       ! Input parameter for non-linear map to define degree of spacing (0.0:2.0)
+   real(cp), public :: alph2       ! Input parameter for non-linear map to define central point of different spacing (-1.0:1.0)
  
    real(cp), public, allocatable :: lambda(:)     ! Array of magnetic diffusivity
    real(cp), public, allocatable :: dLlambda(:)   ! Derivative of magnetic diffusivity
@@ -642,8 +649,8 @@ contains
 
          !----- cheb_grid calculates the n_r_ic_tot gridpoints,
          !      these are the extrema of a Cheb of degree n_r_ic_tot-1.
-         call cheb_grid(-r_icb,r_icb,n_r_ic_tot-1,r_ic_2,r_cheb_ic,  &
-              &         0.0_cp,0.0_cp,0.0_cp,0.0_cp,.false.)
+         call cheb_grid(-r_icb,r_icb,n_r_ic_tot-1, &
+                         r_ic_2,r_cheb_ic,0.0_cp,0.0_cp,0.0_cp,0.0_cp)
 
          !----- Store first n_r_ic_max points of r_ic_2 to r_ic:
          do n_r=1,n_r_ic_max-1

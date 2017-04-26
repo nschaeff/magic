@@ -13,9 +13,9 @@ module timing
 
    private
 
-   integer, parameter :: msecSecond=1000
-   integer, parameter :: msecMinute=60000
-   integer, parameter :: msecHour  =3600000
+   integer(lip), parameter :: msecSecond=1000
+   integer(lip), parameter :: msecMinute=60000
+   integer(lip), parameter :: msecHour  =3600000
 
    public :: wallTime, ms2time, time2ms, subTime, lTimeLimit, &
              addTime, lNegTime, writeTime, meanTime
@@ -80,11 +80,11 @@ contains
   
       mSeconds=ms
       hours   =int(mSeconds/msecHour)
-      mSeconds=mSeconds-hours*msecHour
+      mSeconds=mSeconds-int(hours*msecHour,kind=lip)
       minutes =int(mSeconds/msecMinute)
-      mSeconds=mSeconds-minutes*msecMinute
+      mSeconds=mSeconds-int(minutes*msecMinute,kind=lip)
       seconds =int(mSeconds/msecSecond)
-      mSeconds=mSeconds-seconds*msecSecond
+      mSeconds=mSeconds-int(seconds*msecSecond,kind=lip)
       time(1) =hours
       time(2) =minutes
       time(3) =seconds
@@ -238,7 +238,7 @@ contains
       days=time(1)/hoursDay
       timeH=time(1)-days*hoursDay
       if (nOut == 6) then
-         write(*,'(/,1X,2A,I4,A,I2,A,I2,A,I2,A,I3,A)')         &
+         write(*,'(/,1X,2A,I0,A,I2,A,I2,A,I2,A,I3,A)')         &
               &     text," ",days,"d : ",timeH,"h : ",time(2), &
               &       "m : ",time(3),"s : ",time(4),"ms"
       else

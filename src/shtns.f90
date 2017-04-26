@@ -25,7 +25,7 @@ contains
       integer :: nlm
       integer :: norm
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          call shtns_verbose(1)
       end if
 
@@ -38,7 +38,7 @@ contains
                             1.e-10_cp, n_theta_max, n_phi_max)
       call shtns_save_cfg(0)
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          call shtns_verbose(0)
       end if
 

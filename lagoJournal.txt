@@ -1,0 +1,45 @@
+2017-04-24
+------------------------------------------------------------------------
+ ✔ there was a lot of trouble with the output. That is because multiple
+   processes tried to open the same file simultaneously (since there are
+   n_proc_phi x n_proc_theta processes whose coord_r = 0). Mostly, I have
+   no idea if some of the computations done inside "if rank == 0" are to be
+   later used, or if they are *merely* for outputing purpose! For this reason,
+   in some of the occurrences I have replaced it for "if coord_r=0" and have
+   introduced a "if rank == 0" before open/close/write. I have also enforced
+   that l_save_out = .false. unless rank = 0. There might be problems lingering
+   with respect to output!
+ ✔ most of the occurrences of "rank" variable have been replaced by 
+   "coord_r", which is basically the rank in comm_r
+ ✔ most occurrences of MPI_COMM_WORLD have been replaced by comm_r
+ ✔ comm_r created (in initialize_cartesian). Every computation is cloned
+   now for each disjoint comm_r
+ ✔ rank is now the rank in cart_comm, whereas coord_X are the coordinates
+   in the cart_comm. The variable rank should still match the same rank as
+   previously.
+ ✔ added cart_comm
+ ✔ added coord_r, coord_theta, coord_phi to replace "rank"
+ ✔ added initialize_cartesian in parallel.f90
+   
+
+2017-04-19 and earlier
+---------------------------------------------
+As we discussed last year in the Skype call, as a first step, I was planning to parallelize the environment "very inefficiently", by merely cloning everything for every theta and phi. So, a run with 32 processes partitioned as (r,θ,φ)=(8,2,2) would yield 4 copies of the same computation, and each copy would only communicated with the 8 processes in the r direction. Once that would be settled, we could work on doing the real parallelization.
+
+1) I have noticed that there is a problem with your ms2time routine in timing.f90. It seems that the integers do not have enough bytes. I've changed the msecSecond, msecMinute and msecHour variables to integer(lip), and modified the function to:
+hours   =int(mSeconds/msecHour)
+mSeconds=mSeconds-int(hours*msecHour,kind=lip)
+minutes =int(mSeconds/msecMinute)
+mSeconds=mSeconds-int(minutes*msecMinute,kind=lip)
+seconds =int(mSeconds/msecSecond)
+mSeconds=mSeconds-int(seconds*msecSecond,kind=lip)
+
+2) which then seems to have the correct result. However, it prints things like 17000 days or more, and I have no idea if that is expected. If this doesn't look correct, then I'll doublecheck the result of MPI_Wtime.
+
+3) There are A LOT of temporary arrays being created as a result of the call to ZGETRS in algebra_lapack.f90 line 59. Have you looked into that?
+
+4) There is quite a substantial amount of code which is executed only for process 0, if I understood it correctly, those are meant for diagnostics and checkpointing in most of the cases. Have you ever checked the loadbalance of this code?
+
+5) I don't fully understand what is going on with nLMBs_per_rank, set in blocking.f90. It seems that it is always set to 1, am I correct (lines 139 and 140)?
+
+ 

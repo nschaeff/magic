@@ -10,7 +10,7 @@ module preCalculations
    use init_fields, only: bots, tops, s_bot, s_top, n_s_bounds,    &
        &                  l_reset_t, topxi, botxi, xi_bot, xi_top, &
        &                  n_xi_bounds
-   use parallel_mod, only: rank
+   use parallel_mod, only: rank, coord_r
    use logic, only: l_mag, l_cond_ic, l_non_rot, l_mag_LF, l_newmap,   &
        &            l_anel, l_heat, l_time_hits,  l_anelastic_liquid,  &
        &            l_cmb_field, l_storeTpot, l_storeVpot, l_storeBpot,&

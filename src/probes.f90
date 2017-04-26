@@ -12,7 +12,7 @@ module probe_mod
    ! 
    ! version 1.0: Works only for v_phi, for now. Will be extended for other data later.
 
-   use parallel_mod, only: rank 
+   use parallel_mod, only: coord_r, rank 
    use precision_mod
    use truncation, only: n_r_max, n_phi_max, nrp
    use radial_data, only: nRstart,nRstop
@@ -54,7 +54,7 @@ contains
       if((nRstart <= rad_usr) .and. (rad_usr <= nRstop)) then
          if ( .not. l_save_out )                                       &
          &  open(newunit=n_out_probes, file=probe_file, status='new')
-         rad_rank = rank
+         rad_rank = coord_r
       end if
 
       n_theta_usr = minloc(abs(theta_probe*deg2rad - theta),1)
@@ -63,7 +63,7 @@ contains
 
    subroutine finalize_probes
 
-      if ( rank==rad_rank .and. (.not. l_save_out) ) close(n_out_probes)
+      if ( coord_r==rad_rank .and. (.not. l_save_out) ) close(n_out_probes)
 
    end subroutine finalize_probes
 
@@ -106,14 +106,14 @@ contains
       fac_r=or1(n_r)*vScale*orho1(n_r)
       fac=fac_r*O_sin_theta(n_theta_cal)
       
-      write(fmtstr,'(i3)') 2*n_phi_probes       ! 2*n_phi_probes columns for data
+      if (rank == 0) write(fmtstr,'(i3)') 2*n_phi_probes       ! 2*n_phi_probes columns for data
 
-      if ( rank == rad_rank ) then
+      if ( coord_r == rad_rank ) then
          if ( l_save_out )                                                 &
          &  open(newunit=n_out_probes,file=probe_file,status='unknown', &
          &       position='append')
 
-         write(n_out_probes,'(ES20.12,'//trim(fmtstr)//'ES16.8)')  &
+         if (rank == 0) write(n_out_probes,'(ES20.12,'//trim(fmtstr)//'ES16.8)')  &
          & time,fac*vp(1:n_phi_max:probe_phi_step,n_theta_probe),  &
          &      fac*vp(1:n_phi_max:probe_phi_step,n_theta_probe+1)
 

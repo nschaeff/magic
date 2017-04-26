@@ -147,7 +147,7 @@ contains
       logical :: rank_has_l1m0
       integer :: sr_tag, fileHandle
 #ifdef WITH_MPI
-      integer :: i,sendcount,recvcounts(0:n_procs-1),displs(0:n_procs-1)
+      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
       integer :: status(MPI_STATUS_SIZE)
 #endif
 
@@ -239,26 +239,26 @@ contains
 #ifdef WITH_MPI
       if ( l_mag ) call MPI_Reduce(curlB2_r, curlB2_r_global, n_r_max,&
                    &               MPI_DEF_REAL, MPI_SUM, 0,          &
-                   &               MPI_COMM_WORLD, ierr)
+                   &               comm_r, ierr)
       if ( l_heat ) call MPI_Reduce(buoy_r, buoy_r_global, n_r_max,   &
                     &               MPI_DEF_REAL, MPI_SUM, 0,         &
-                    &               MPI_COMM_WORLD, ierr)
+                    &               comm_r, ierr)
       if ( l_chemical_conv ) call MPI_Reduce(buoy_chem_r, buoy_chem_r_global, &
                              &               n_r_max, MPI_DEF_REAL, MPI_SUM,  &
-                             &               0, MPI_COMM_WORLD, ierr)
+                             &               0, comm_r, ierr)
       !if ( l_conv ) call MPI_Reduce(curlU2_r,curlU2_r_global,n_r_max,&
-      !     & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+      !     & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 
       if ( l_conv ) then
          sendcount  = (nRstop-nRstart+1)
          recvcounts = nR_per_rank
-         recvcounts(n_procs-1) = nR_on_last_rank
-         do i=0,n_procs-1
+         recvcounts(n_procs_r-1) = nR_on_last_rank
+         do i=0,n_procs_r-1
             displs(i) = i*nR_per_rank
          end do
          call MPI_GatherV(viscHeatR, sendcount, MPI_DEF_REAL,                &
               &           viscHeatR_global, recvcounts,displs, MPI_DEF_REAL, &
-              &           0, MPI_COMM_WORLD, ierr)
+              &           0, comm_r, ierr)
       end if
 
 #else
@@ -270,7 +270,7 @@ contains
       if ( l_conv ) viscHeatR_global(:)=viscHeatR(:)
 #endif
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !-- Transform to cheb space:
          if ( l_conv ) then
             !curlU2MeanR=curlU2MeanR+timePassed*curlU2_r_global*eScale
@@ -326,17 +326,17 @@ contains
 
 #ifdef WITH_MPI
          call MPI_Reduce(curlB2_rIC, curlB2_rIC_global, n_r_ic_max, &
-              &          MPI_DEF_REAL, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+              &          MPI_DEF_REAL, MPI_SUM, 0, comm_r, ierr)
 #else
          curlB2_rIC_global=curlB2_rIC
 #endif
 
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             curlB2_IC=rIntIC(curlB2_rIC_global,n_r_ic_max,dr_fac_ic,chebt_ic)
             curlB2_IC=LFfac*opm*eScale*curlB2_IC
          end if
       else
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             curlB2_IC=0.0_cp
          end if
       end if  ! conducting inner core ?
@@ -354,7 +354,7 @@ contains
       l1m0=lo_map%lm2(1,0)
       rank_has_l1m0=.false. ! set default
       sr_tag=46378 !arbitray send-recv tag
-      if ( lmStartB(rank+1) <= l1m0 .and. lmStopB(rank+1) >= l1m0 ) then
+      if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then
          if ( l_rot_IC ) then
             z10ICB  =real(z(l1m0,n_r_ICB))
             drz10ICB=real(dz(l1m0,n_r_ICB))
@@ -371,33 +371,33 @@ contains
          end if
 
 #ifdef WITH_MPI
-         if ( rank /= 0 ) then
-            ! send data to rank 0
+         if ( coord_r /= 0 ) then
+            ! send data to coord_r 0
             call MPI_Send(z10ICB, 1, MPI_DEF_COMPLEX, 0, sr_tag, &
-                 &        MPI_COMM_WORLD, ierr)
+                 &        comm_r, ierr)
             call MPI_Send(drz10ICB, 1, MPI_DEF_COMPLEX, 0, sr_tag+1, &
-                 &        MPI_COMM_WORLD, ierr)
+                 &        comm_r, ierr)
             call MPI_Send(z10CMB, 1, MPI_DEF_COMPLEX, 0, sr_tag+2, &
-                 &        MPI_COMM_WORLD, ierr)
+                 &        comm_r, ierr)
             call MPI_Send(drz10CMB, 1, MPI_DEF_COMPLEX, 0, sr_tag+3, &
-                 &        MPI_COMM_WORLD, ierr)
+                 &        comm_r, ierr)
          end if
 #endif
          rank_has_l1m0=.true.
       end if
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
 #ifdef WITH_MPI
          if ( .not. rank_has_l1m0 ) then
             ! receive data from the source ranks
             call MPI_Recv(z10ICB, 1, MPI_DEF_COMPLEX, MPI_ANY_SOURCE, &
-                 &        sr_tag, MPI_COMM_WORLD, status, ierr)
+                 &        sr_tag, comm_r, status, ierr)
             call MPI_Recv(drz10ICB, 1, MPI_DEF_COMPLEX, MPI_ANY_SOURCE, &
-                 &        sr_tag+1, MPI_COMM_WORLD, status, ierr)
+                 &        sr_tag+1, comm_r, status, ierr)
             call MPI_Recv(z10CMB, 1, MPI_DEF_COMPLEX, MPI_ANY_SOURCE, &
-                 &        sr_tag+2, MPI_COMM_WORLD, status, ierr)
+                 &        sr_tag+2, comm_r, status, ierr)
             call MPI_Recv(drz10CMB, 1, MPI_DEF_COMPLEX, MPI_ANY_SOURCE, &
-                 &        sr_tag+3, MPI_COMM_WORLD, status, ierr)
+                 &        sr_tag+3, comm_r, status, ierr)
          end if
 #endif
 
@@ -459,7 +459,7 @@ contains
                open(newunit=n_power_file, file=power_file, status='unknown', &
                &    position='append')
             end if
-            write(n_power_file,'(1P,ES20.12,10ES16.8)')  &
+            if (rank == 0) write(n_power_file,'(1P,ES20.12,10ES16.8)')  &
             &    time*tScale, buoy, buoy_chem,           &
             &     -two*z10ICB*drz10ICB,                  &
             &    two*z10CMB*drz10CMB, viscDiss,          &
@@ -484,7 +484,7 @@ contains
             fileName='powerR.'//tag
             open(newunit=fileHandle, file=fileName, status='unknown')
             do n_r=1,n_r_max
-               write(fileHandle,'(ES20.10,4ES15.7)')  &
+               if (rank == 0) write(fileHandle,'(ES20.10,4ES15.7)')  &
                     &   r(n_r),               & ! 1) radius
                     &   buoMeanR(n_r),        & ! 2) Buo power
                     &   buo_chem_MeanR(n_r),  & ! 3) Chem power

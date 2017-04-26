@@ -17,7 +17,7 @@ module fields_average_mod
    use magnetic_energy, only: get_e_mag
    use output_data, only: tag, n_log_file, log_file, n_graphs, l_max_cmb, &
        &                  n_graph_file, graph_file
-   use parallel_mod, only: rank
+   use parallel_mod, only: rank, coord_r
 #ifdef WITH_SHTNS
    use shtns
 #else
@@ -54,7 +54,7 @@ module fields_average_mod
    complex(cp), allocatable :: b_ic_ave(:,:)
    complex(cp), allocatable :: aj_ic_ave(:,:)
  
-   ! on rank 0 we also allocate the following fields
+   ! on coord_r 0 we also allocate the following fields
    complex(cp), allocatable :: b_ave_global(:), bICB(:)
    complex(cp), allocatable :: db_ave_global(:), aj_ave_global(:)
    complex(cp), allocatable :: w_ave_global(:), dw_ave_global(:)
@@ -87,7 +87,7 @@ contains
          allocate( xi_ave(1,1) )
       end if
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          allocate( bICB(1:lm_max) )
          allocate( b_ave_global(1:lm_max) )
          allocate( db_ave_global(1:lm_max) )
@@ -329,8 +329,8 @@ contains
          end if
 
          !----- Get the radial derivatives:
-         lmStart=lmStartB(rank+1)
-         lmStop = lmStopB(rank+1)
+         lmStart=lmStartB(coord_r+1)
+         lmStop = lmStopB(coord_r+1)
 
          call get_dr(w_ave,dw_ave,ulm-llm+1,lmStart-llm+1,lmStop-llm+1,   &
               &      n_r_max,rscheme_oc,nocopy=.true.)
@@ -369,7 +369,7 @@ contains
          if ( l_heat ) then
             call spectrum_temp(time,n_spec,s_ave,ds_ave)
          end if
-         if ( l_save_out ) then
+         if ( l_save_out .and. (rank == 0)) then
             open(newunit=n_log_file, file=log_file, status='unknown', &
             &    position='append')
          end if
@@ -432,7 +432,7 @@ contains
             
          !----- Construct name of graphic file and open it:
          ! For the graphic file of the average fields, we gather them
-         ! on rank 0 and use the old serial output routine.
+         ! on coord_r 0 and use the old serial output routine.
 
          if ( rank == 0 ) then
             graph_file='G_ave.'//tag
@@ -468,7 +468,7 @@ contains
                call gather_from_lo_to_rank0(xi_ave(llm,nR),xi_ave_global)
             end if
 
-            if ( rank == 0 ) then
+            if ( coord_r == 0 ) then
                if ( l_mag ) then
                   call legPrep(b_ave_global,db_ave_global,db_ave_global, &
                        &       aj_ave_global,aj_ave_global,dLh,lm_max,   &
@@ -549,7 +549,7 @@ contains
             call gather_all_from_lo_to_rank0(gt_IC,aj_ic_ave,aj_ic_ave_global)
             call gather_all_from_lo_to_rank0(gt_IC,dj_ic_ave,dj_ic_ave_global)
 
-            if ( rank == 0 ) then
+            if ( coord_r == 0 ) then
                call graphOut_IC(b_ic_ave_global,db_ic_ave_global,   &
                     &           ddb_ic_ave_global,aj_ic_ave_global, &
                     &           dj_ic_ave_global,bICB)
@@ -602,7 +602,7 @@ contains
                  ! &        'Xi_lmr_ave.',omega_ma,omega_ic)
          ! end if
 
-         if ( l_save_out ) close(n_log_file)
+         if ( l_save_out .and. (rank == 0) ) close(n_log_file)
 
          ! now correct the stored average fields by the factor which has been
          ! applied before

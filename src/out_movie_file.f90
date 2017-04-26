@@ -1,7 +1,7 @@
 module out_movie
 
    use precision_mod
-   use parallel_mod, only: rank
+   use parallel_mod, only: coord_r, rank
    use communications, only: gt_OC, gather_all_from_lo_to_rank0
    use truncation, only: n_phi_max, n_theta_max, minc, lm_max, nrp, l_max,  &
        &                 n_m_max, lm_maxMag, n_r_maxMag, n_r_ic_maxMag,     &
@@ -175,7 +175,7 @@ contains
               &                 omega_ma)
       !
       !  Writes different movie frames into respective output files.
-      !  Called from rank 0 with full arrays in standard LM order.
+      !  Called from coord_r 0 with full arrays in standard LM order.
       !
     
       !-- Input of variables:
@@ -219,7 +219,7 @@ contains
       end do
 
       if ( l_dtB_frame ) then
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             allocate( b(lm_maxMag,n_r_maxMag), aj(lm_maxMag,n_r_maxMag) )
             allocate( db(lm_maxMag,n_r_maxMag), dj(lm_maxMag,n_r_maxMag) )
          else
@@ -232,7 +232,7 @@ contains
          call gather_all_from_lo_to_rank0(gt_OC,dj_LMloc,dj)
       end if
     
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
 
          t_movieS(n_frame)=time
        
@@ -259,10 +259,10 @@ contains
        
                !------ Start with info about movie type:
                version='JW_Movie_Version_2'
-               write(n_out) version
-               write(n_out) real(n_type,kind=outp), real(n_surface,kind=outp), &
+               if (rank == 0) write(n_out) version
+               if (rank == 0) write(n_out) real(n_type,kind=outp), real(n_surface,kind=outp), &
                     &       real(const,kind=outp), real(n_fields,kind=outp)
-               write(n_out) (real(n_movie_field_type(n,n_movie),kind=outp),n=1,n_fields)
+               if (rank == 0) write(n_out) (real(n_movie_field_type(n,n_movie),kind=outp),n=1,n_fields)
        
        
                !------ Combine OC and IC radial grid points:
@@ -278,7 +278,7 @@ contains
                end if
        
                !------ Now other info about grid and parameters:
-               write(n_out) runid          ! run identifyer (as set in namelist contrl)
+               if (rank == 0) write(n_out) runid          ! run identifyer (as set in namelist contrl)
                dumm( 1)=real(n_r_mov_tot,kind=outp)
                dumm( 2)=real(n_r_max,kind=outp)
                dumm( 3)=real(n_theta_max,kind=outp) ! no. of theta points
@@ -290,12 +290,12 @@ contains
                dumm( 9)=real(prmag,kind=outp)       !      -"-
                dumm(10)=real(radratio,kind=outp)    ! ratio of inner / outer core
                dumm(11)=real(tScale,kind=outp)      ! timescale
-               write(n_out) (dumm(n),n=1,11)
+               if (rank == 0) write(n_out) (dumm(n),n=1,11)
        
                !------ Write grid:
-               write(n_out) (real(r_mov_tot(n_r)/r_cmb,kind=outp), n_r=1,n_r_mov_tot)
-               write(n_out) (real(theta_ord(n_theta),kind=outp), n_theta=1,n_theta_max)
-               write(n_out) (real(phi(n_phi),kind=outp), n_phi=1,n_phi_max)
+               if (rank == 0) write(n_out) (real(r_mov_tot(n_r)/r_cmb,kind=outp), n_r=1,n_r_mov_tot)
+               if (rank == 0) write(n_out) (real(theta_ord(n_theta),kind=outp), n_theta=1,n_theta_max)
+               if (rank == 0) write(n_out) (real(phi(n_phi),kind=outp), n_phi=1,n_phi_max)
        
             end if  ! Write header ?
        
@@ -308,7 +308,7 @@ contains
             dumm(6)=real(movieDipLon,kind=outp)
             dumm(7)=real(movieDipStrength,kind=outp)
             dumm(8)=real(movieDipStrengthGeo,kind=outp)
-            write(n_out) (dumm(n),n=1,8)
+            if (rank == 0) write(n_out) (dumm(n),n=1,8)
        
             !------ Write frames:
             if ( .not. lStoreMov(n_movie) ) then
@@ -326,7 +326,7 @@ contains
                   if ( n_fields_ic > 0 ) then
                      n_stop=n_movie_field_stop(n_fields_oc + n_field,n_movie)
                   end if
-                  write(n_out) (real(frames(n),kind=outp),n=n_start,n_stop)
+                  if (rank == 0) write(n_out) (real(frames(n),kind=outp),n=n_start,n_stop)
                end do
             end if
        
@@ -334,7 +334,7 @@ contains
        
          end do  ! Loop over movies
 
-      end if ! rank 0
+      end if ! coord_r 0
 
       if ( l_dtB_frame ) deallocate( b, aj, db, dj )
 
@@ -1428,7 +1428,7 @@ contains
       !    fl(r,theta)=d_theta b(r,theta,m=0)/r                           
       !
 
-      !  This routine is called for l_ic=.true. only from rank 0 with full
+      !  This routine is called for l_ic=.true. only from coord_r 0 with full
       !  field b_ic in standard lm ordering available.
       !  The case l_ic=.false. is called from all ranks and uses b_Rloc.
 

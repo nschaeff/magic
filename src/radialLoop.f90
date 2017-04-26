@@ -10,7 +10,7 @@ module radialLoop
        &            l_cond_ic, l_mag_kin, l_cond_ma, l_mag_nl,               &
        &            l_single_matrix, l_double_curl, l_chemical_conv
    use constants, only: zero
-   use parallel_mod, only: rank, n_procs
+   use parallel_mod, only: coord_r, n_procs_r, rank
    use radial_data,only: nRstart,nRstop,n_r_cmb, nRstartMag, nRstopMag, &
        &                 n_r_icb
 #ifdef WITH_LIKWID
@@ -60,13 +60,13 @@ contains
 #endif
 #endif
       this_type = this_rIteration%getType()
-      write(*,"(2A)") "Using rIteration type: ",trim(this_type)
+      if (rank == 0) write(*,"(2A)") "Using rIteration type: ",trim(this_type)
       call this_rIteration%initialize()
       select type (this_rIteration)
-      class is (rIterThetaBlocking_t)
-         call this_rIteration%set_ThetaBlocking(nThetaBs,sizeThetaB)
-      class default
-         print*,"this_rIteration has no matching type in radialLoop.f90"
+         class is (rIterThetaBlocking_t)
+           call this_rIteration%set_ThetaBlocking(nThetaBs,sizeThetaB)
+         class default
+           print*,"this_rIteration has no matching type in radialLoop.f90"
       end select
 
       local_bytes_used = bytes_allocated-local_bytes_used
@@ -176,10 +176,10 @@ contains
       end if
 
       if ( l_cour ) then
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             dtrkc(n_r_cmb)=1.e10_cp
             dthkc(n_r_cmb)=1.e10_cp
-         elseif (rank == n_procs-1) then
+         elseif (coord_r == n_procs_r-1) then
             dtrkc(n_r_icb)=1.e10_cp
             dthkc(n_r_icb)=1.e10_cp
          end if
@@ -188,12 +188,12 @@ contains
       !------ Set nonlinear terms that are possibly needed at the boundaries.
       !       They may be overwritten by get_td later.
       do lm=1,lm_max
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             dVSrLM(lm,n_r_cmb) =zero
             if ( l_chemical_conv ) dVXirLM(lm,n_r_cmb)=zero
             if ( l_mag ) dVxBhLM(lm,n_r_cmb)=zero
             if ( l_double_curl ) dVxVhLM(lm,n_r_cmb)=zero
-         elseif (rank == n_procs-1) then
+         elseif (coord_r == n_procs_r-1) then
             dVSrLM(lm,n_r_icb) =zero
             if ( l_chemical_conv ) dVXirLM(lm,n_r_icb)=zero
             if ( l_mag ) dVxBhLM(lm,n_r_icb)=zero

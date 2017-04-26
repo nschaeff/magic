@@ -376,7 +376,7 @@ contains
       end if
 
 #ifdef WITH_MPI
-      call MPI_Abort(MPI_COMM_WORLD, code, ierr)
+      call MPI_Abort(comm_r, code, ierr)
 #else
       stop
 #endif

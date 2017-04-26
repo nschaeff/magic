@@ -173,7 +173,7 @@ contains
       end if
 
       !nThreadsLMmax = 1
-      nLMB=1+rank
+      nLMB=1+coord_r
       !nTh=1
       if ( lVerbose ) then
          write(*,'(/," ! lm block no:",i3)') nLMB
@@ -209,7 +209,7 @@ contains
             PERFOFF
             ! Here one could start the redistribution of s_LMloc,ds_LMloc etc. with a 
             ! nonblocking send
-            !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+            !call MPI_Barrier(comm_r,ierr)
             !PERFON('rdstSst')
             call lo2r_redist_start(lo2r_s,s_LMloc_container,s_Rloc_container)
             !PERFOFF
@@ -252,7 +252,7 @@ contains
               &        w1,coex,dt,lRmsNext)
          PERFOFF
 
-         !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+         !call MPI_Barrier(comm_r,ierr)
 
          if ( DEBUG_OUTPUT ) then
             !do lm=lmStart,lmStop
@@ -279,14 +279,14 @@ contains
          end if
 
          if ( l_single_matrix ) then
-            if ( rank == rank_with_l1m0 ) then
+            if ( coord_r == rank_with_l1m0 ) then
                do nR=1,n_r_max
                   z10(nR)=real(z_LMloc(lo_map%lm2(1,0),nR))
                end do
             end if
 #ifdef WITH_MPI
             call MPI_Bcast(z10,n_r_max,MPI_DEF_REAL,rank_with_l1m0, &
-                 &         MPI_COMM_WORLD,ierr)
+                 &         comm_r,ierr)
 #endif
             if ( l_TP_form ) then
                call updateWPT( w_LMloc, dw_LMloc, ddw_LMloc, z10, dwdt,     &

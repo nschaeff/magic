@@ -15,7 +15,7 @@ module updateS_mod
    use horizontal_data, only: dLh,hdif_S
    use logic, only: l_update_s, l_anelastic_liquid
    use LMLoop_data, only: llm, ulm
-   use parallel_mod, only: rank,chunksize
+   use parallel_mod, only: coord_r,chunksize
    use algebra, only: cgeslML,sgesl, sgefa
    use radial_der, only: get_ddr, get_dr
    use fields, only:  work_LMloc

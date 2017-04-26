@@ -110,7 +110,7 @@ contains
       complex(cp), allocatable :: workD(:,:),workE(:,:)
       real(cp), allocatable :: r_old(:)
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          inquire(file=start_file, exist=startfile_does_exist)
        
          if ( startfile_does_exist ) then
@@ -225,6 +225,10 @@ contains
 
          call rscheme_oc_old%initialize(n_r_max_old, n_in, n_in_2)
 
+         !--
+         !-- There's possibly an issue when the Chebyshev mapping was used in
+         !-- the old grid. So far get_grid uses l_newmap as a global quantity
+         !--
          call rscheme_oc_old%get_grid(n_r_max_old, r_icb_old, r_cmb_old, ratio1, &
               &                       ratio2, r_old)
 
@@ -264,21 +268,21 @@ contains
          end if
          !PERFOFF
 
-      end if ! rank == 0
+      end if ! coord_r == 0
 
 #ifdef WITH_MPI
-      call MPI_Bcast(l_mag_old,1,MPI_LOGICAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(lreadS,1,MPI_LOGICAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(lreadXi,1,MPI_LOGICAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(minc_old,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(inform,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(sigma_ratio_old,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(time,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(dt_old,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(n_time_step,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
+      call MPI_Bcast(l_mag_old,1,MPI_LOGICAL,0,comm_r,ierr)
+      call MPI_Bcast(lreadS,1,MPI_LOGICAL,0,comm_r,ierr)
+      call MPI_Bcast(lreadXi,1,MPI_LOGICAL,0,comm_r,ierr)
+      call MPI_Bcast(minc_old,1,MPI_INTEGER,0,comm_r,ierr)
+      call MPI_Bcast(inform,1,MPI_INTEGER,0,comm_r,ierr)
+      call MPI_Bcast(sigma_ratio_old,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(time,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(dt_old,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(n_time_step,1,MPI_INTEGER,0,comm_r,ierr)
 #endif
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          allocate( workA(lm_max,n_r_max), workB(lm_max,n_r_max) )
          allocate( workC(lm_max,n_r_max) )
          allocate( workD(lm_max,n_r_max) )
@@ -295,7 +299,7 @@ contains
       workD(:,:)=zero
       workE(:,:)=zero
     
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          n_r_maxL = max(n_r_max,n_r_max_old)
 
          call mapDataHydro( wo,zo,po,so,xio,r_old,lm2lmo,n_r_max_old,  &
@@ -331,7 +335,7 @@ contains
       workE(:,:)=zero
     
       !-- Read the d?dt fields
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          if ( lreadXi ) then
             if ( lreadS ) then
                read(n_start_file) so,wo,zo,po,xio
@@ -376,7 +380,7 @@ contains
 
       deallocate(workA, workB, workC, workD, workE)
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          allocate( workA(lm_maxMag,n_r_maxMag), workB(lm_maxMag,n_r_maxMag) )
          allocate( workC(lm_maxMag,n_r_maxMag) )
          allocate( workD(lm_maxMag, n_r_maxMag) )
@@ -392,7 +396,7 @@ contains
       workC(:,:)=zero
       workD(:,:)=zero
     
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          if ( lreadXi ) then
             read(n_start_file) raxi_old, sc_old
             if ( raxi /= raxi_old ) &
@@ -432,7 +436,7 @@ contains
       !   mode (l,m)=(minc,minc) if parameter tipdipole  /=  0
       if ( l_heat .and. minc<minc_old .and. tipdipole>0.0_cp ) then
          lm=l_max+2
-         if ( lmStartB(rank+1)<=lm .and. lmStopB(rank+1)>=lm ) then
+         if ( lmStartB(coord_r+1)<=lm .and. lmStopB(coord_r+1)>=lm ) then
             do nR=1,n_r_max+1
                fr=sin(pi*(r(nR)-r(n_r_max)))
                s(lm,nR)=tipdipole*fr
@@ -442,7 +446,7 @@ contains
 
       if ( l_chemical_conv .and. minc<minc_old .and. tipdipole>0.0_cp ) then
          lm=l_max+2
-         if ( lmStartB(rank+1)<=lm .and. lmStopB(rank+1)>=lm ) then
+         if ( lmStartB(coord_r+1)<=lm .and. lmStopB(coord_r+1)>=lm ) then
             do nR=1,n_r_max+1
                fr=sin(pi*(r(nR)-r(n_r_max)))
                xi(lm,nR)=tipdipole*fr
@@ -456,7 +460,7 @@ contains
            &       .and. minc==1 .and. minc_old/=1 .and.          &
            &       tipdipole>0.0_cp .and. l_mag_old ) then
          lm=l_max+2
-         if ( lmStartB(rank+1)<=lm .and. lmStopB(rank+1)>=lm ) then
+         if ( lmStartB(coord_r+1)<=lm .and. lmStopB(coord_r+1)>=lm ) then
             do nR=1,n_r_max+1
                b(lm,nR)=tipdipole
             end do
@@ -468,7 +472,7 @@ contains
       !
       !
       if ( l_mag_old ) then
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             allocate( workA(lm_max,n_r_ic_max), workB(lm_max,n_r_ic_max) )
             allocate( workC(lm_max,n_r_ic_max), workD(lm_max,n_r_ic_max) )
             bytes_allocated = bytes_allocated - 4*lm_maxMag*n_r_maxMag*SIZEOF_DEF_COMPLEX
@@ -484,7 +488,7 @@ contains
          workD(:,:)=zero
       end if
       
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          ! deallocation of the local arrays
          deallocate( lm2lmo )
          deallocate( wo,zo,po,so )
@@ -500,7 +504,7 @@ contains
          if ( l_mag_old ) then
        
             if ( inform >= 2 .and. sigma_ratio_old /= 0.0_cp ) then
-               if ( rank == 0 ) then
+               if ( coord_r == 0 ) then
                   allocate( lm2lmo(lm_max) )
                   call getLm2lmO(n_r_ic_max,n_r_ic_max_old,l_max,l_max_old, &
                        &         m_max,minc,minc_old,inform,lm_max,         &
@@ -563,7 +567,7 @@ contains
       tOmega_ma2       =0.0_cp
       dt_new           =dt_old
       
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          deallocate( r_old )
          call rscheme_oc_old%finalize() ! deallocate old radial scheme
     
@@ -657,16 +661,16 @@ contains
                  write(*,*) '! New MA rotation osz. rate 2 (old/new):', &
                  omegaOsz_ma2Old,omegaOsz_ma2
          end if
-      end if ! rank == 0
+      end if ! coord_r == 0
 
 #ifdef WITH_MPI
-      call MPI_Bcast(omega_ic1Old,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(omega_ma1Old,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(tOmega_ic1,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(tOmega_ic2,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(tOmega_ma1,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(tOmega_ma2,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(dt_new,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
+      call MPI_Bcast(omega_ic1Old,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(omega_ma1Old,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(tOmega_ic1,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(tOmega_ic2,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(tOmega_ma1,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(tOmega_ma2,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(dt_new,1,MPI_DEF_REAL,0,comm_r,ierr)
 #endif
        
       !----- Set IC and mantle rotation rates:
@@ -692,7 +696,7 @@ contains
                write(*,*) '! omega_ic=',omega_ic
             end if
             if ( kbotv == 2 ) then
-               if ( lmStartB(rank+1)<=l1m0 .and. lmStopB(rank+1)>=l1m0 ) then
+               if ( lmStartB(coord_r+1)<=l1m0 .and. lmStopB(coord_r+1)>=l1m0 ) then
                   z(l1m0,n_r_icb)=cmplx(omega_ic/c_z10_omega_ic,0.0_cp,kind=cp)
                end if
             end if
@@ -720,7 +724,7 @@ contains
                write(*,*) '! omega_ma1=',omega_ma1
             end if
             if ( ktopv == 2 ) then
-               if ( lmStartB(rank+1)<=l1m0 .and. lmStopB(rank+1)>=l1m0 ) then
+               if ( lmStartB(coord_r+1)<=l1m0 .and. lmStopB(coord_r+1)>=l1m0 ) then
                   z(l1m0,n_r_cmb)=cmplx(omega_ma/c_z10_omega_ma,0.0_cp,kind=cp)
                end if
             end if
@@ -735,10 +739,10 @@ contains
 
       ! The broadcast is still needed for old file format
 #ifdef WITH_MPI
-      call MPI_Bcast(omega_ic,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(omega_ma,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(lorentz_torque_ic,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(lorentz_torque_ma,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
+      call MPI_Bcast(omega_ic,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(omega_ma,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(lorentz_torque_ic,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(lorentz_torque_ma,1,MPI_DEF_REAL,0,comm_r,ierr)
 #endif
 
    end subroutine readStartFields_old
@@ -803,7 +807,7 @@ contains
       complex(cp), allocatable :: work(:,:)
       real(cp), allocatable :: r_old(:)
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          inquire(file=start_file, exist=startfile_does_exist)
        
          if ( startfile_does_exist ) then
@@ -877,6 +881,10 @@ contains
 
          call rscheme_oc_old%initialize(n_r_max_old, n_in, n_in_2)
 
+         !--
+         !-- There's possibly an issue when the Chebyshev mapping was used in
+         !-- the old grid. So far get_grid uses l_newmap as a global quantity
+         !--
          call rscheme_oc_old%get_grid(n_r_max_old, r_icb_old, r_cmb_old, ratio1, &
               &                       ratio2, r_old)
 
@@ -931,37 +939,37 @@ contains
          read(n_start_file) l_heat_old, l_chemical_conv_old, l_mag_old, &
          &                  l_cond_ic_old
        
-      end if ! rank == 0
+      end if ! coord_r == 0
 
 #ifdef WITH_MPI
-      call MPI_Bcast(l_mag_old,1,MPI_LOGICAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(l_heat_old,1,MPI_LOGICAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(l_chemical_conv_old,1,MPI_LOGICAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(l_cond_ic_old,1,MPI_LOGICAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(minc_old,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(time,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(omega_ic1Old,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(omega_ma1Old,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(tOmega_ic1,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(tOmega_ic2,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(tOmega_ma1,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(tOmega_ma2,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(dt_old,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(n_time_step,1,MPI_INTEGER,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(dt_new,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(lorentz_torque_ic,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
-      call MPI_Bcast(lorentz_torque_ma,1,MPI_DEF_REAL,0,MPI_COMM_WORLD,ierr)
+      call MPI_Bcast(l_mag_old,1,MPI_LOGICAL,0,comm_r,ierr)
+      call MPI_Bcast(l_heat_old,1,MPI_LOGICAL,0,comm_r,ierr)
+      call MPI_Bcast(l_chemical_conv_old,1,MPI_LOGICAL,0,comm_r,ierr)
+      call MPI_Bcast(l_cond_ic_old,1,MPI_LOGICAL,0,comm_r,ierr)
+      call MPI_Bcast(minc_old,1,MPI_INTEGER,0,comm_r,ierr)
+      call MPI_Bcast(time,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(omega_ic1Old,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(omega_ma1Old,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(tOmega_ic1,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(tOmega_ic2,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(tOmega_ma1,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(tOmega_ma2,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(dt_old,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(n_time_step,1,MPI_INTEGER,0,comm_r,ierr)
+      call MPI_Bcast(dt_new,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(lorentz_torque_ic,1,MPI_DEF_REAL,0,comm_r,ierr)
+      call MPI_Bcast(lorentz_torque_ma,1,MPI_DEF_REAL,0,comm_r,ierr)
 #endif
 
       !-- Allocate arrays
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          allocate( work(lm_max,n_r_max), workOld(n_data_oldP) )
       else
          allocate( work(1,n_r_max), workOld(1) )
       end if
 
       !-- Read the poloidal flow
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          work(:,:)=zero
          read(n_start_file) workOld
          call mapOneField( workOld,scale_v,r_old,lm2lmo,n_r_max_old, &
@@ -974,7 +982,7 @@ contains
       end do
 
       !-- Read dwdt
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          work(:,:)=zero
          read(n_start_file) workOld
          call mapOneField( workOld,scale_v,r_old,lm2lmo,n_r_max_old, &
@@ -987,7 +995,7 @@ contains
       end do
 
       !-- Read the toroidal flow
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          work(:,:)=zero
          read(n_start_file) workOld
          call mapOneField( workOld,scale_v,r_old,lm2lmo,n_r_max_old, &
@@ -1000,7 +1008,7 @@ contains
       end do
 
       !-- Read dzdt
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          work(:,:)=zero
          read(n_start_file) workOld
          call mapOneField( workOld,scale_v,r_old,lm2lmo,n_r_max_old, &
@@ -1013,7 +1021,7 @@ contains
       end do
 
       !-- Read the pressure
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          work(:,:)=zero
          read(n_start_file) workOld
          call mapOneField( workOld,scale_v,r_old,lm2lmo,n_r_max_old, &
@@ -1024,7 +1032,7 @@ contains
       end do
 
       !-- Read dpdt
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          work(:,:)=zero
          read(n_start_file) workOld
          call mapOneField( workOld,scale_v,r_old,lm2lmo,n_r_max_old, &
@@ -1036,7 +1044,7 @@ contains
 
       if ( l_heat_old ) then
          !-- Read the entropy
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             work(:,:)=zero
             read(n_start_file) workOld
             call mapOneField( workOld,scale_s,r_old,lm2lmo,n_r_max_old, &
@@ -1049,7 +1057,7 @@ contains
          end if
 
          !-- Read dsdt
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             work(:,:)=zero
             read(n_start_file) workOld
             call mapOneField( workOld,scale_s,r_old,lm2lmo,n_r_max_old, &
@@ -1064,7 +1072,7 @@ contains
 
       if ( l_chemical_conv_old ) then
          !-- Read the chemical composition
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             work(:,:)=zero
             read(n_start_file) workOld
             call mapOneField( workOld,scale_xi,r_old,lm2lmo,n_r_max_old, &
@@ -1077,7 +1085,7 @@ contains
          end if
 
          !-- Read dsdt
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             work(:,:)=zero
             read(n_start_file) workOld
             call mapOneField( workOld,scale_xi,r_old,lm2lmo,n_r_max_old, &
@@ -1103,7 +1111,7 @@ contains
 
          if ( l_mag_old ) then
             !-- Read the poloidal magnetic field
-            if ( rank == 0 ) then
+            if ( coord_r == 0 ) then
                work(:,:)=zero
                read(n_start_file) workOld
                call mapOneField( workOld,scale_b,r_old,lm2lmo,n_r_max_old, &
@@ -1116,7 +1124,7 @@ contains
             end do
 
             !-- Read dbdt
-            if ( rank == 0 ) then
+            if ( coord_r == 0 ) then
                work(:,:)=zero
                read(n_start_file) workOld
                call mapOneField( workOld,scale_b,r_old,lm2lmo,n_r_max_old,   &
@@ -1129,7 +1137,7 @@ contains
             end do
 
             !-- Read the toroidal magnetic field
-            if ( rank == 0 ) then
+            if ( coord_r == 0 ) then
                work(:,:)=zero
                read(n_start_file) workOld
                call mapOneField( workOld,scale_b,r_old,lm2lmo,n_r_max_old,   &
@@ -1142,7 +1150,7 @@ contains
             end do
 
             !-- Read djdt
-            if ( rank == 0 ) then
+            if ( coord_r == 0 ) then
                work(:,:)=zero
                read(n_start_file) workOld
                call mapOneField( workOld,scale_b,r_old,lm2lmo,n_r_max_old,   &
@@ -1159,7 +1167,7 @@ contains
                if ( l_cond_ic_old ) then
                   deallocate( work, workOld )
 
-                  if ( rank == 0 ) then
+                  if ( coord_r == 0 ) then
                      deallocate( lm2lmo )
                      allocate( lm2lmo(lm_max) )
                      call getLm2lmO(n_r_ic_max,n_r_ic_max_old,l_max,l_max_old, &
@@ -1174,7 +1182,7 @@ contains
                   end if
 
                   !-- Read the inner core poloidal magnetic field
-                  if ( rank == 0 ) then
+                  if ( coord_r == 0 ) then
                      work(:,:)=zero
                      read(n_start_file) workOld
                      call mapOneField( workOld,scale_b,r_old,lm2lmo,n_r_ic_max_old, &
@@ -1188,7 +1196,7 @@ contains
                   end do
 
                   !-- Read dbdt_ic
-                  if ( rank == 0 ) then
+                  if ( coord_r == 0 ) then
                      work(:,:)=zero
                      read(n_start_file) workOld
                      call mapOneField( workOld,scale_b,r_old,lm2lmo,n_r_ic_max_old, &
@@ -1202,7 +1210,7 @@ contains
                   end do
 
                   !-- Read the inner core toroidal magnetic field
-                  if ( rank == 0 ) then
+                  if ( coord_r == 0 ) then
                      work(:,:)=zero
                      read(n_start_file) workOld
                      call mapOneField( workOld,scale_b,r_old,lm2lmo,n_r_ic_max_old, &
@@ -1216,7 +1224,7 @@ contains
                   end do
 
                   !-- Read djdt_ic
-                  if ( rank == 0 ) then
+                  if ( coord_r == 0 ) then
                      work(:,:)=zero
                      read(n_start_file) workOld
                      call mapOneField( workOld,scale_b,r_old,lm2lmo,n_r_ic_max_old,&
@@ -1229,7 +1237,7 @@ contains
                      call scatter_from_rank0_to_lo(work(:,nR),djdt_ic(llm:ulm,nR))
                   end do
 
-                  if ( rank == 0 ) deallocate( lm2lmo )
+                  if ( coord_r == 0 ) deallocate( lm2lmo )
 
                else
                   !-- No inner core fields provided by start_file, we thus assume that
@@ -1261,18 +1269,18 @@ contains
       deallocate( work, workOld )
       
       !-- Close file
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          deallocate( r_old )
          call rscheme_oc_old%finalize() ! deallocate old radial scheme
          close(n_start_file)
-      end if ! rank == 0
+      end if ! coord_r == 0
 
 
       !-- If mapping towards reduced symmetry, add thermal perturbation in
       !   mode (l,m)=(minc,minc) if parameter tipdipole  /=  0
       if ( l_heat .and. minc<minc_old .and. tipdipole>0.0_cp ) then
          lm=l_max+2
-         if ( lmStartB(rank+1)<=lm .and. lmStopB(rank+1)>=lm ) then
+         if ( lmStartB(coord_r+1)<=lm .and. lmStopB(coord_r+1)>=lm ) then
             do nR=1,n_r_max+1
                fr=sin(pi*(r(nR)-r(n_r_max)))
                s(lm,nR)=tipdipole*fr
@@ -1282,7 +1290,7 @@ contains
 
       if ( l_chemical_conv .and. minc<minc_old .and. tipdipole>0.0_cp ) then
          lm=l_max+2
-         if ( lmStartB(rank+1)<=lm .and. lmStopB(rank+1)>=lm ) then
+         if ( lmStartB(coord_r+1)<=lm .and. lmStopB(coord_r+1)>=lm ) then
             do nR=1,n_r_max+1
                fr=sin(pi*(r(nR)-r(n_r_max)))
                xi(lm,nR)=tipdipole*fr
@@ -1296,7 +1304,7 @@ contains
            &       .and. minc==1 .and. minc_old/=1 .and.          &
            &       tipdipole>0.0_cp .and. l_mag_old ) then
          lm=l_max+2
-         if ( lmStartB(rank+1)<=lm .and. lmStopB(rank+1)>=lm ) then
+         if ( lmStartB(coord_r+1)<=lm .and. lmStopB(coord_r+1)>=lm ) then
             do nR=1,n_r_max+1
                b(lm,nR)=tipdipole
             end do
@@ -1326,7 +1334,7 @@ contains
                write(*,*) '! omega_ic=',omega_ic
             end if
             if ( kbotv == 2 ) then
-               if ( lmStartB(rank+1)<=l1m0 .and. lmStopB(rank+1)>=l1m0 ) then
+               if ( lmStartB(coord_r+1)<=l1m0 .and. lmStopB(coord_r+1)>=l1m0 ) then
                   z(l1m0,n_r_icb)=cmplx(omega_ic/c_z10_omega_ic,0.0_cp,kind=cp)
                end if
             end if
@@ -1354,7 +1362,7 @@ contains
                write(*,*) '! omega_ma1=',omega_ma1
             end if
             if ( ktopv == 2 ) then
-               if ( lmStartB(rank+1)<=l1m0 .and. lmStopB(rank+1)>=l1m0 ) then
+               if ( lmStartB(coord_r+1)<=l1m0 .and. lmStopB(coord_r+1)>=l1m0 ) then
                   z(l1m0,n_r_cmb)=cmplx(omega_ma/c_z10_omega_ma,0.0_cp,kind=cp)
                end if
             end if
@@ -1501,8 +1509,7 @@ contains
          do lm=lmStart,lmStop
             lmo=lm2lmo(lm)
             if ( lmo > 0 ) then
-               if ( dim1 /= n_r_max_old .or.                                        &
-               &    rscheme_oc%order_boundary /= rscheme_oc_old%order_boundary .or. &
+               if ( dim1 /= n_r_max_old .or. &
                &    rscheme_oc%version /= rscheme_oc_old%version ) then
 
                   do nR=1,n_r_max_old  ! copy on help arrays
@@ -1577,7 +1584,6 @@ contains
             lmo=lm2lmo(lm)
             if ( lmo > 0 ) then
                if ( n_r_max /= n_r_max_old .or. &
-               &    rscheme_oc%order_boundary /= rscheme_oc_old%order_boundary .or. &
                &    rscheme_oc%version /= rscheme_oc_old%version ) then
 
                   do nR=1,n_r_max_old  ! copy on help arrays
@@ -1685,8 +1691,7 @@ contains
          do lm=lmStart,lmStop
             lmo=lm2lmo(lm)
             if ( lmo > 0 ) then
-               if ( n_rad_tot /= n_r_max_old .or.                                   &
-               &    rscheme_oc%order_boundary /= rscheme_oc_old%order_boundary .or. &
+               if ( n_rad_tot /= n_r_max_old .or. &
                &    rscheme_oc%version /= rscheme_oc_old%version ) then
                   do nR=1,n_r_max_old  ! copy on help arrays
                      n=lmo+(nR-1)*lm_max_old
@@ -1762,9 +1767,7 @@ contains
 
       !-- If **both** the old and the new schemes are Chebyshev, we can
       !-- use costf to get the new data
-      !-- Both have also to use the same mapping (order_boundary is a proxy of l_map
-      if ( rscheme_oc%version == 'cheb' .and. rscheme_oc_old%version == 'cheb' &
-      &   .and. rscheme_oc%order_boundary == rscheme_oc_old%order_boundary  ) then
+      if ( rscheme_oc%version == 'cheb' .and. rscheme_oc_old%version == 'cheb' ) then
 
          !-- Guess the boundary values, since they have not been stored:
          if ( .not. l_IC .and. lBc ) then

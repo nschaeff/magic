@@ -178,7 +178,7 @@ contains
       real(cp) :: fkin(nfs), fconv(nfs), fvisc(nfs), fres(nfs), fpoyn(nfs)
 
       integer :: fileHandle
-      integer :: i,sendcount,recvcounts(0:n_procs-1),displs(0:n_procs-1)
+      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
 
 
       if ( l_viscBcCalc ) then
@@ -224,26 +224,26 @@ contains
 
          sendcount  = (nRstop-nRstart+1)
          recvcounts = nR_per_rank
-         recvcounts(n_procs-1) = nR_on_last_rank
-         do i=0,n_procs-1
+         recvcounts(n_procs_r-1) = nR_on_last_rank
+         do i=0,n_procs_r-1
             displs(i) = i*nR_per_rank
          end do
 #ifdef WITH_MPI
          call MPI_GatherV(duhR,sendcount,MPI_DEF_REAL,              &
              &           duhR_global,recvcounts,displs,MPI_DEF_REAL,&
-             &           0,MPI_COMM_WORLD,ierr)
+             &           0,comm_r,ierr)
          call MPI_GatherV(uhR,sendcount,MPI_DEF_REAL,              &
              &           uhR_global,recvcounts,displs,MPI_DEF_REAL,&
-             &           0,MPI_COMM_WORLD,ierr)
+             &           0,comm_r,ierr)
          call MPI_GatherV(gradT2R,sendcount,MPI_DEF_REAL,              &
              &           gradT2R_global,recvcounts,displs,MPI_DEF_REAL,&
-             &           0,MPI_COMM_WORLD,ierr)
+             &           0,comm_r,ierr)
          call MPI_GatherV(sR,sendcount,MPI_DEF_REAL,              &
              &           sR_global,recvcounts,displs,MPI_DEF_REAL,&
-             &           0,MPI_COMM_WORLD,ierr)
+             &           0,comm_r,ierr)
          call MPI_GatherV(Svar,sendcount,MPI_DEF_REAL,              &
              &           Svar_global,recvcounts,displs,MPI_DEF_REAL,&
-             &           0,MPI_COMM_WORLD,ierr)
+             &           0,comm_r,ierr)
 #else
          duhR_global   =duhR
          uhR_global    =uhR
@@ -329,31 +329,31 @@ contains
 
          sendcount  = (nRstop-nRstart+1)
          recvcounts = nR_per_rank
-         recvcounts(n_procs-1) = nR_on_last_rank
-         do i=0,n_procs-1
+         recvcounts(n_procs_r-1) = nR_on_last_rank
+         do i=0,n_procs_r-1
             displs(i) = i*nR_per_rank
          end do
 #ifdef WITH_MPI
          call MPI_GatherV(fkinR,sendcount,MPI_DEF_REAL,&
              &           fkinR_global,recvcounts,displs,MPI_DEF_REAL,&
-             &           0,MPI_COMM_WORLD,ierr)
+             &           0,comm_r,ierr)
          call MPI_GatherV(fconvR,sendcount,MPI_DEF_REAL,&
              &           fconvR_global,recvcounts,displs,MPI_DEF_REAL,&
-             &           0,MPI_COMM_WORLD,ierr)
+             &           0,comm_r,ierr)
          call MPI_GatherV(fviscR,sendcount,MPI_DEF_REAL,&
              &           fviscR_global,recvcounts,displs,MPI_DEF_REAL,&
-             &           0,MPI_COMM_WORLD,ierr)
+             &           0,comm_r,ierr)
          call MPI_GatherV(fcR,sendcount,MPI_DEF_REAL,&
              &           fcR_global,recvcounts,displs,MPI_DEF_REAL,&
-             &           0,MPI_COMM_WORLD,ierr)
+             &           0,comm_r,ierr)
 
          if ( l_mag_nl ) then
             call MPI_GatherV(fpoynR,sendcount,MPI_DEF_REAL,&
                 &           fpoynR_global,recvcounts,displs,MPI_DEF_REAL,&
-                &           0,MPI_COMM_WORLD,ierr)
+                &           0,comm_r,ierr)
             call MPI_GatherV(fresR,sendcount,MPI_DEF_REAL,&
                 &           fresR_global,recvcounts,displs,MPI_DEF_REAL,&
-                &           0,MPI_COMM_WORLD,ierr)
+                &           0,comm_r,ierr)
          end if
 #else
          fkinR_global =fkinR
@@ -368,7 +368,7 @@ contains
       end if
 
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          do nR=1,n_r_max
             ReR(nR)=sqrt(two*ekinR(nR)*or2(nR)/(4*pi*mass))
             RoR(nR)=ReR(nR)*ek
@@ -378,7 +378,7 @@ contains
                RolR(nR)=RoR(nR)
             end if
             if ( l_mag_nl ) then
-               RmR(nR)=ReR(nR)*prmag*sigma(nR)
+               RmR(nR)=ReR(nR)*prmag*sigma(nR)*r(nR)*r(nR)
             else
                RmR(nR)=ReR(nR)
             end if
@@ -390,7 +390,7 @@ contains
          dlVu2cMeanR=dlVu2cMeanR+timePassed*dlVRu2c
          RolMeanR   =RolMeanR   +timePassed*RolR
          RolMeanRu2 =RolMeanRu2 +timePassed*RolRu2
-         RmMeanR    =RmMeanR    +timePassed*RmR*sqrt(mass/rho0)
+         RmMeanR    =RmMeanR    +timePassed*RmR*sqrt(mass/rho0)*or2
          !write(*,"(A,ES20.12)") "dlVcMeanR(n_r_icb) = ",dlVcMeanR(n_r_icb)
          ! this is to get u2 value for RmR(r) to plot in parR.tag
          ! and also remove r**2, so it has to be volume-averaged 
@@ -526,7 +526,7 @@ contains
       real(cp) :: Eperp(nfs), Epar(nfs), Eperpaxi(nfs), Eparaxi(nfs)
       real(cp) :: EperpT,EparT,EperpaxT,EparaxT
 
-      integer :: i,sendcount,recvcounts(0:n_procs-1),displs(0:n_procs-1)
+      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
       integer :: fileHandle
 
       do nR=nRstart,nRstop
@@ -558,24 +558,24 @@ contains
 
       sendcount  = (nRstop-nRstart+1)
       recvcounts = nR_per_rank
-      recvcounts(n_procs-1) = nR_on_last_rank
-      do i=0,n_procs-1
+      recvcounts(n_procs_r-1) = nR_on_last_rank
+      do i=0,n_procs_r-1
          displs(i) = i*nR_per_rank
       end do
 
 #ifdef WITH_MPI
       call MPI_GatherV(EperpR,sendcount,MPI_DEF_REAL,&
           &           EperpR_global,recvcounts,displs,MPI_DEF_REAL,&
-          &           0,MPI_COMM_WORLD,ierr)
+          &           0,comm_r,ierr)
       call MPI_GatherV(EparR,sendcount,MPI_DEF_REAL,&
           &           EparR_global,recvcounts,displs,MPI_DEF_REAL,&
-          &           0,MPI_COMM_WORLD,ierr)
+          &           0,comm_r,ierr)
       call MPI_GatherV(EperpaxiR,sendcount,MPI_DEF_REAL,&
           &           EperpaxiR_global,recvcounts,displs,MPI_DEF_REAL,&
-          &           0,MPI_COMM_WORLD,ierr)
+          &           0,comm_r,ierr)
       call MPI_GatherV(EparaxiR,sendcount,MPI_DEF_REAL,&
           &           EparaxiR_global,recvcounts,displs,MPI_DEF_REAL,&
-          &           0,MPI_COMM_WORLD,ierr)
+          &           0,comm_r,ierr)
 #else
       EperpR_global   =EperpR
       EparR_global    =EparR
@@ -584,7 +584,7 @@ contains
 #endif
 
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          EperpT  =four*pi*rInt_R(EperpR_global*r*r,r,rscheme_oc)
          EparT   =four*pi*rInt_R(EparR_global*r*r,r,rscheme_oc)
          EperpaxT=four*pi*rInt_R(EperpaxiR_global*r*r,r,rscheme_oc)
@@ -595,7 +595,7 @@ contains
             open(newunit=n_perpPar_file, file=perpPar_file, &
             &    status='unknown', position='append')
          end if
-         write(n_perpPar_file,'(1P,ES20.12,4ES16.8)') &
+         if (rank == 0) write(n_perpPar_file,'(1P,ES20.12,4ES16.8)') &
               &  time*tScale,     & ! 1
               &  EperpT,EparT,    & ! 2,3
               &  EperpaxT,EparaxT   ! 4,5
@@ -613,7 +613,7 @@ contains
              filename='perpParR.'//tag
              open(newunit=fileHandle, file=filename, status='unknown')
              do nR=1,n_r_max
-                write(fileHandle,'(ES20.10,4ES15.7)')&
+                if (rank == 0) write(fileHandle,'(ES20.10,4ES15.7)')&
                            &   r(nR),                &! 1) radius
                            &   EperpMeanR(nR),       &! 2) E perpendicular
                            &   EparMeanR(nR),        &! 3) E parallel

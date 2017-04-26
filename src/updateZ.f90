@@ -192,11 +192,11 @@ contains
       integer :: n_r_bot, n_r_top
       complex(cp) :: rhs_sum
     
-      !call mpi_barrier(MPI_COMM_WORLD,ierr)
+      !call mpi_barrier(comm_r,ierr)
       !write(*,"(3(A,2ES20.12))") "begin upZ: dzdt = ",get_global_sum( dzdt ),&
       !     &", z = ",get_global_sum( z ),&
       !     &", dzdtLast = ",get_global_sum( dzdtLast )
-      !call mpi_barrier(MPI_COMM_WORLD,ierr)
+      !call mpi_barrier(comm_r,ierr)
     
       if ( .not. l_update_v ) return
     
@@ -210,7 +210,7 @@ contains
       lm2m(1:lm_max) => lo_map%lm2m
     
     
-      nLMB = 1+rank
+      nLMB = 1+coord_r
       lmStart     =lmStartB(nLMB)
       lmStop      =lmStopB(nLMB)
       lmStart_00  =max(2,lmStart)
@@ -705,7 +705,7 @@ contains
          do nR=1,n_r_max
 #ifdef WITH_MPI
             call MPI_Allreduce(ddzASL_loc(:,nR), ddzASL(:,nR), l_max+1, &
-                 &             MPI_DEF_REAL, MPI_SUM, MPI_COMM_WORLD, ierr)
+                 &             MPI_DEF_REAL, MPI_SUM, comm_r, ierr)
 #else
             ddzASL(:,nR)=ddzASL_loc(:,nR)
 #endif

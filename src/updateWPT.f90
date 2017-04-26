@@ -24,7 +24,7 @@ module updateWPT_mod
    use algebra, only: cgeslML, sgefa, sgesl
    use LMLoop_data, only: llm, ulm
    use communications, only: get_global_sum
-   use parallel_mod, only: chunksize, rank
+   use parallel_mod, only: chunksize, coord_r
    use radial_der, only: get_dddr, get_ddr, get_dr
    use fields, only: work_LMloc
    use constants, only: zero, one, two, three, four, third, half, pi, osq4pi

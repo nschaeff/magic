@@ -211,13 +211,13 @@ contains
 
 #ifdef WITH_MPI
       call MPI_Reduce(e_p_r_l,e_p_r_l_global,n_r_max*(l_max+1),&
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_r_l,e_t_r_l_global,n_r_max*(l_max+1),&
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_p_r_m,e_p_r_m_global,n_r_max*(l_max+1),&
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_r_m,e_t_r_m_global,n_r_max*(l_max+1),&
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
       e_p_r_l_global=e_p_r_l
       e_t_r_l_global=e_t_r_l
@@ -225,7 +225,7 @@ contains
       e_t_r_m_global=e_t_r_m
 #endif
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !-- Radial Integrals:
          fac=half*eScale
          if ( BV == 'B' ) fac=fac*LFfac
@@ -322,7 +322,7 @@ contains
                   !     &  dt_norm*e_cmb2_m_ave(l),    &
                   !     & (dt_norm*e_cmb_m_ave(l))**2, &
                   !     & dt_norm*e_cmb2_m_ave(l) - (dt_norm*e_cmb_m_ave(l))**2
-                  write(nOut,'(2X,1P,I4,16ES16.8)') l,                        &
+                  if (rank == 0) write(nOut,'(2X,1P,I4,16ES16.8)') l,                        &
                        &  dt_norm*e_p_l_ave(l),   dt_norm*e_p_m_ave(l),       &
                        &  dt_norm*e_t_l_ave(l),   dt_norm*e_t_m_ave(l),       &
                        &  dt_norm*e_cmb_l_ave(l), dt_norm*e_cmb_m_ave(l),     &
@@ -339,7 +339,7 @@ contains
                end do
             else
                do l=0,l_max
-                  write(nOut,'(2X,1P,I4,8ES16.8)') l,                         &
+                  if (rank == 0) write(nOut,'(2X,1P,I4,8ES16.8)') l,                         &
                        &  dt_norm*ek_p_l_ave(l), dt_norm*ek_p_m_ave(l),       &
                        &  dt_norm*ek_t_l_ave(l), dt_norm*ek_t_m_ave(l),       &
                        &  dt_norm*ek_p2_l_ave(l),dt_norm*ek_p2_m_ave(l),      &
@@ -353,10 +353,10 @@ contains
                   open(newunit=n_log_file, file=log_file, status='unknown', &
                   &    position='append')
                end if
-               write(n_log_file,"(/,A,A)")  &
+               if (rank == 0) write(n_log_file,"(/,A,A)")  &
                &     ' ! TIME AVERAGED SPECTRA STORED IN FILE: ', &
                &      outFile
-               write(n_log_file,"(A,I5)")   &
+               if (rank == 0) write(n_log_file,"(A,I5)")   &
                &     ' !              No. of averaged spectra: ', &
                &     n_time_ave
                if ( l_save_out ) close(n_log_file)
@@ -556,40 +556,40 @@ contains
 #ifdef WITH_MPI
       if ( l_mag ) then
          call MPI_Reduce(e_mag_p_r_l, e_mag_p_r_l_global, n_r_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_mag_t_r_l, e_mag_t_r_l_global, n_r_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       end if
       if ( l_anel ) then
          call MPI_Reduce(u2_p_r_l, u2_p_r_l_global, n_r_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(u2_t_r_l, u2_t_r_l_global, n_r_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       end if
       call MPI_Reduce(e_kin_p_r_l, e_kin_p_r_l_global, n_r_max*l_max,&
-           &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_kin_t_r_l, e_kin_t_r_l_global, n_r_max*l_max,&
-           &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
     
       ! then the m-spectra
       if ( l_mag ) then
          call MPI_Reduce(e_mag_p_r_m, e_mag_p_r_m_global, n_r_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_mag_t_r_m, e_mag_t_r_m_global, n_r_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(eCMB, eCMB_global, l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       end if
       if ( l_anel ) then
          call MPI_Reduce(u2_p_r_m, u2_p_r_m_global, n_r_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(u2_t_r_m, u2_t_r_m_global, n_r_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       end if
       call MPI_Reduce(e_kin_p_r_m, e_kin_p_r_m_global, n_r_max*(l_max+1),&
-           &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_kin_t_r_m, e_kin_t_r_m_global, n_r_max*(l_max+1),&
-           &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
       if ( l_mag ) then
          e_mag_p_r_l_global=e_mag_p_r_l
@@ -610,7 +610,7 @@ contains
       e_kin_t_r_m_global=e_kin_t_r_m
 #endif
     
-      ! now switch to rank 0 for the postprocess
+      ! now switch to coord_r 0 for the postprocess
       
     
       ! Getting appropriate radius index for e_kin_nearSurf spectra
@@ -625,7 +625,7 @@ contains
          end if
       end do
     
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !-- Save CMB energy spectra:
          O_surface=one/(four*pi*r(1)*r(1))
     
@@ -725,13 +725,13 @@ contains
     
 #ifdef WITH_MPI
          call MPI_Reduce(e_mag_p_ic_r_l, e_mag_p_ic_r_l_global, n_r_ic_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_mag_t_ic_r_l, e_mag_t_ic_r_l_global, n_r_ic_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_mag_p_ic_r_m, e_mag_p_ic_r_m_global, n_r_ic_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_mag_t_ic_r_m, e_mag_t_ic_r_m_global, n_r_ic_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
          e_mag_p_ic_r_l_global=e_mag_p_ic_r_l
          e_mag_t_ic_r_l_global=e_mag_t_ic_r_l
@@ -740,7 +740,7 @@ contains
 #endif
     
     
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             !----- Radial Integrals:
             fac_mag=LFfac*half*eScale
             do l=1,l_max
@@ -957,18 +957,18 @@ contains
       ! Reduction over all ranks
 #ifdef WITH_MPI
       call MPI_Reduce(T_r_l,T_r_l_global,n_r_max*(l_max+1),&
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(T_ICB_l,T_ICB_l_global,l_max+1,&
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(dT_ICB_l,dT_ICB_l_global,l_max+1,&
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
       T_r_l_global   =T_r_l
       T_ICB_l_global =T_ICB_l
       dT_ICB_l_global=dT_ICB_l
 #endif
 
-      if ( rank == 0 .and. l_heat ) then
+      if ( coord_r == 0 .and. l_heat ) then
          !-- Radial Integrals:
          surf_ICB=four*pi*r_icb*r_icb
          fac      =one/vol_oc
@@ -1029,9 +1029,9 @@ contains
                open(newunit=n_log_file, file=log_file, status='unknown', &
                &    position='append')
             end if
-            write(n_log_file,"(/,A,A)")  &
+            if (rank == 0) write(n_log_file,"(/,A,A)")  &
             &    ' ! TIME AVERAGED T/C SPECTRA STORED IN FILE: ', outFile
-            write(n_log_file,"(A,I5)")  &
+            if (rank == 0) write(n_log_file,"(A,I5)")  &
             &    ' !              No. of averaged spectra: ', n_time_ave
             if ( l_save_out ) close(n_log_file)
 
@@ -1119,17 +1119,17 @@ contains
       ! reduction over all ranks
 #ifdef WITH_MPI
       call MPI_Reduce(T_r_l,T_r_l_global,n_r_max*(l_max+1),&
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(T_r_m,T_r_m_global,n_r_max*(l_max+1),&
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(T_ICB_l,T_ICB_l_global,l_max+1,&
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(T_ICB_m,T_ICB_m_global,l_max+1,&
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(dT_ICB_l,dT_ICB_l_global,l_max+1,&
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(dT_ICB_m,dT_ICB_m_global,l_max+1,&
-           &          MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
       T_r_l_global   =T_r_l
       T_r_m_global   =T_r_m
@@ -1139,7 +1139,7 @@ contains
       dT_ICB_m_global=dT_ICB_m
 #endif
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !-- Radial Integrals:
          surf_ICB =four*pi*r_icb*r_icb
          fac      =one/vol_oc
@@ -1241,15 +1241,15 @@ contains
 #ifdef WITH_MPI
       if ( l_mag ) then
          call MPI_Reduce(e_mag_p_r_m, e_mag_p_r_m_global, n_r_max*(l_max+1),&
-                 &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+                 &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_mag_t_r_m, e_mag_t_r_m_global, n_r_max*(l_max+1),&
-                 &MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+                 &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       end if
 
       call MPI_Reduce(e_kin_p_r_m, e_kin_p_r_m_global, n_r_max*(l_max+1),&
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_kin_t_r_m, e_kin_t_r_m_global, n_r_max*(l_max+1),&
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
       e_mag_p_r_m_global=e_mag_p_r_m
       e_mag_t_r_m_global=e_mag_t_r_m
@@ -1257,7 +1257,7 @@ contains
       e_kin_t_r_m_global=e_kin_t_r_m
 #endif
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
 
          !-- Radial Integrals:
          fac_mag=0.5*LFfac*eScale
@@ -1277,7 +1277,7 @@ contains
                  & form='unformatted',position='append')
          end if
 
-         write(n_am_kpol_file) time,(e_kin_p_m(m),m=0,m_max_modes)
+         if (rank == 0) write(n_am_kpol_file) time,(e_kin_p_m(m),m=0,m_max_modes)
 
          if ( l_save_out ) then
             close(n_am_kpol_file)
@@ -1288,7 +1288,7 @@ contains
                  & form='unformatted',position='append')
          end if
 
-         write(n_am_ktor_file) time,(e_kin_t_m(m),m=0,m_max_modes)
+         if (rank == 0) write(n_am_ktor_file) time,(e_kin_t_m(m),m=0,m_max_modes)
 
          if ( l_save_out ) then
             close(n_am_ktor_file)
@@ -1300,7 +1300,7 @@ contains
                     & form='unformatted',position='append')
             end if
 
-            write(n_am_mpol_file) time,(e_mag_p_m(m),m=0,m_max_modes)
+            if (rank == 0) write(n_am_mpol_file) time,(e_mag_p_m(m),m=0,m_max_modes)
 
             if ( l_save_out ) then
                close(n_am_mpol_file)
@@ -1311,14 +1311,14 @@ contains
                     & form='unformatted',position='append')
             end if
 
-            write(n_am_mtor_file) time,(e_mag_t_m(m),m=0,m_max_modes)
+            if (rank == 0) write(n_am_mtor_file) time,(e_mag_t_m(m),m=0,m_max_modes)
 
             if ( l_save_out ) then
                close(n_am_mtor_file)
             end if
          end if
 
-      end if ! rank == 0
+      end if ! coord_r == 0
     
    end subroutine get_amplitude 
 !------------------------------------------------------------------------------

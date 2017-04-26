@@ -189,9 +189,9 @@ contains
       end do
 #ifdef WITH_MPI
       call MPI_Allreduce(MPI_IN_PLACE,dt_r,1,MPI_DEF_REAL, &
-                         MPI_MIN,MPI_COMM_WORLD,ierr)
+                         MPI_MIN,comm_r,ierr)
       call MPI_Allreduce(MPI_IN_PLACE,dt_h,1,MPI_DEF_REAL, &
-                         MPI_MIN,MPI_COMM_WORLD,ierr)
+                         MPI_MIN,comm_r,ierr)
 #endif
     
       dt_rh=min(dt_r,dt_h)

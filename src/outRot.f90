@@ -170,11 +170,12 @@ contains
     
       lm2(0:,0:) => lo_map%lm2
       l1m0=lm2(1,0)
+      
+      if ( (rank == 0) .AND. DEBUG_OUTPUT ) &
+          write(*,"(I3,A,3I6)") coord_r,":lmStartB,lmStopB,l1m0=",        &
+                        lmStartB(coord_r+1),lmStopB(coord_r+1),l1m0
     
-      if ( DEBUG_OUTPUT ) write(*,"(I3,A,3I6)") rank,":lmStartB,lmStopB,l1m0=",& 
-                        lmStartB(rank+1),lmStopB(rank+1),l1m0
-    
-      if ( lmStartB(rank+1) <= l1m0 .and. lmStopB(rank+1) >= l1m0 ) then
+      if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then
          !-- Calculating viscous torques:
          if ( l_rot_ic .and. kbotv == 2 ) then
             call get_viscous_torque(viscous_torque_ic, &
@@ -189,26 +190,26 @@ contains
          end if
          rank_has_l1m0=.true.
 #ifdef WITH_MPI
-         if ( rank /= 0 ) then
-            ! send viscous_torque_ic and viscous_torque_ma to rank 0 for 
+         if ( coord_r /= 0 ) then
+            ! send viscous_torque_ic and viscous_torque_ma to coord_r 0 for 
             ! output
             call MPI_Send(viscous_torque_ic,1,MPI_DEF_REAL,0, &
-                 &        sr_tag,MPI_COMM_WORLD,ierr)
+                 &        sr_tag,comm_r,ierr)
             call MPI_Send(viscous_torque_ma,1,MPI_DEF_REAL,0, &
-                 &        sr_tag+1,MPI_COMM_WORLD,ierr)
+                 &        sr_tag+1,comm_r,ierr)
          end if
 #endif
       else
          rank_has_l1m0=.false.
       end if
     
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
 #ifdef WITH_MPI
          if ( .not. rank_has_l1m0 ) then
             call MPI_Recv(viscous_torque_ic,1,MPI_DEF_REAL,MPI_ANY_SOURCE,&
-                 &        sr_tag,MPI_COMM_WORLD,status,ierr)
+                 &        sr_tag,comm_r,status,ierr)
             call MPI_Recv(viscous_torque_ma,1,MPI_DEF_REAL,MPI_ANY_SOURCE,&
-                 &        sr_tag+1,MPI_COMM_WORLD,status,ierr)
+                 &        sr_tag+1,comm_r,status,ierr)
          end if
 #endif
          if ( l_SRIC ) then
@@ -218,7 +219,7 @@ contains
                open(newunit=n_SRIC_file, file=SRIC_file, status='unknown', &
                &    position='append')
             end if
-            write(n_SRIC_file,'(1p,2x,ES20.12,4ES17.6)')   &
+            if (rank == 0) write(n_SRIC_file,'(1p,2x,ES20.12,4ES17.6)')   &
                  time*tScale,omega_ic/tScale,              &
                  (powerLor+powerVis)*vScale*vScale/tScale, &
                  powerVis*vScale*vScale/tScale,            &
@@ -232,7 +233,7 @@ contains
                open(newunit=n_SRMA_file, file=SRMA_file, status='unknown', &
                &    position='append')
             end if
-            write(n_SRMA_file,'(1p,2x,ES20.12,4ES17.6)')   &
+            if (rank == 0) write(n_SRMA_file,'(1p,2x,ES20.12,4ES17.6)')   &
                  time*tScale, omega_ma/tScale,             &
                  (powerLor+powerVis)*vScale*vScale/tScale, &
                  powerVis*vScale*vScale/tScale,            &
@@ -260,11 +261,11 @@ contains
                open(newunit=n_driftVQ_file, file=driftVQ_file, status='unknown', &
                &    position='append')
             end if
-            write(n_driftVD_file,'(1P,2X,ES20.12,24ES12.4)') &
+            if (rank == 0) write(n_driftVD_file,'(1P,2X,ES20.12,24ES12.4)') &
                  time, (zvals_on_rank0(ilm,1),ilm=1,4),   &
                  (zvals_on_rank0(ilm,2),ilm=1,4),         &
                  (zvals_on_rank0(ilm,3),ilm=1,4)
-            write(n_driftVQ_file,'(1P,2X,ES20.12,24ES12.4)') &
+            if (rank == 0) write(n_driftVQ_file,'(1P,2X,ES20.12,24ES12.4)') &
                  time, (zvals_on_rank0(ilm,1),ilm=5,8),   &
                  (zvals_on_rank0(ilm,2),ilm=5,8),         &
                  (zvals_on_rank0(ilm,3),ilm=5,8)
@@ -287,10 +288,10 @@ contains
                   open(newunit=n_driftBQ_file, file=driftBQ_file, status='unknown', &
                   &    position='append')
                end if
-               write(n_driftBD_file,'(1P,2X,ES20.12,16ES12.4)') &
+               if (rank == 0) write(n_driftBD_file,'(1P,2X,ES20.12,16ES12.4)') &
                     time, (bvals_on_rank0(ilm,1),ilm=5,8),   &
                     (bvals_on_rank0(ilm,2),ilm=5,8)
-               write(n_driftBQ_file,'(1P,2X,ES20.12,16ES12.4)') &
+               if (rank == 0) write(n_driftBQ_file,'(1P,2X,ES20.12,16ES12.4)') &
                     time, (bvals_on_rank0(ilm,1),ilm=1,4),   &
                     (bvals_on_rank0(ilm,2),ilm=1,4)
                if ( l_save_out ) then
@@ -307,7 +308,7 @@ contains
                open(newunit=n_rot_file, file=rot_file, status='unknown', &
                &    position='append')
             end if
-            write(n_rot_file,'(1P,2X,ES20.12,6ES14.6)') &
+            if (rank == 0) write(n_rot_file,'(1P,2X,ES20.12,6ES14.6)') &
                  time*tScale, omega_ic/tScale,          &
                  lScale**2*vScale*lorentz_torque_ic,    &
                  lScale**2*vScale*viscous_torque_ic,    &
@@ -323,29 +324,29 @@ contains
          rank_has_l1m1=.false.
          l1m0=lo_map%lm2(1,0)
          l1m1=lo_map%lm2(1,1)
-         if ( (lmStartB(rank+1) <= l1m0) .and. (l1m0 <= lmStopB(rank+1)) ) then
+         if ( (lmStartB(coord_r+1) <= l1m0) .and. (l1m0 <= lmStopB(coord_r+1)) ) then
             do nR=1,n_r_max
                z10(nR)=z(l1m0,nR)
             end do
             rank_has_l1m0=.true.
 #ifdef WITH_MPI
-            if (rank /= 0) then
+            if (coord_r /= 0) then
                call MPI_Send(z10,n_r_max,MPI_DEF_COMPLEX,0,sr_tag, & 
-                             MPI_COMM_WORLD,ierr)
+                             comm_r,ierr)
             end if
 #endif
          end if
     
          if ( l1m1 > 0 ) then
-            if ( (lmStartB(rank+1) <= l1m1) .and. (l1m1 <= lmStopB(rank+1)) ) then
+            if ( (lmStartB(coord_r+1) <= l1m1) .and. (l1m1 <= lmStopB(coord_r+1)) ) then
                do nR=1,n_r_max
                   z11(nR)=z(l1m1,nR)
                end do
                rank_has_l1m1=.true.
 #ifdef WITH_MPI
-               if ( rank /= 0 ) then
+               if ( coord_r /= 0 ) then
                   call MPI_Send(z11,n_r_max,MPI_DEF_COMPLEX,0, &
-                              & sr_tag+1,MPI_COMM_WORLD,ierr)
+                              & sr_tag+1,comm_r,ierr)
                end if
 #endif
             end if
@@ -355,17 +356,17 @@ contains
             end do
          end if
          ! now we have z10 and z11 in the worst case on two different
-         ! ranks, which are also different from rank 0
-         if ( rank == 0 ) then
+         ! ranks, which are also different from coord_r 0
+         if ( coord_r == 0 ) then
 #ifdef WITH_MPI
             if ( .not. rank_has_l1m0 ) then
                call MPI_Recv(z10,n_r_max,MPI_DEF_COMPLEX,&
-                    &        MPI_ANY_SOURCE,sr_tag,MPI_COMM_WORLD,status,ierr)
+                    &        MPI_ANY_SOURCE,sr_tag,comm_r,status,ierr)
             end if
             if ( l1m1 > 0 ) then
                if ( .not. rank_has_l1m1 ) then
                   call MPI_Recv(z11,n_r_max,MPI_DEF_COMPLEX,&
-                       &        MPI_ANY_SOURCE,sr_tag+1,MPI_COMM_WORLD,status,ierr)
+                       &        MPI_ANY_SOURCE,sr_tag+1,comm_r,status,ierr)
                end if
             end if
 #endif
@@ -388,17 +389,17 @@ contains
             if ( AMzLast /= 0.0_cp ) then
                !write(*,"(A,4ES22.15)") "col9 = ",eKinAMz,eKinAMzLast, &
                !     &                  dt,(eKinAMz-eKinAMzLast)
-               write(n_angular_file,'(1p,2x,ES20.12,5ES14.6,3ES20.12)', advance='no') &
+               if (rank == 0) write(n_angular_file,'(1p,2x,ES20.12,5ES14.6,3ES20.12)', advance='no') &
                     & time*tScale, angular_moment_oc,                                 &
                     & angular_moment_ic(3), angular_moment_ma(3),                     &
                     & AMz,(AMz-AMzLast)/AMzLast/dt,eKinAMz
                if (eKinAMzLast /= 0.0_cp) then
-                  write(n_angular_file,'(1ES20.12)', advance='no') &
+                  if (rank == 0) write(n_angular_file,'(1ES20.12)', advance='no') &
                     & (eKinAMz-eKinAMzLast)/eKinAMzLast/dt
                else
-                  write(n_angular_file,'(1ES20.12)', advance='no') 0.0
+                  if (rank == 0) write(n_angular_file,'(1ES20.12)', advance='no') 0.0
                end if
-               write(n_angular_file,'(3ES20.12)') eKinIC,eKinOC,eKinMA
+               if (rank == 0) write(n_angular_file,'(3ES20.12)') eKinIC,eKinOC,eKinMA
             end if
             if ( l_save_out ) close(n_angular_file)
             AMzLast=AMz
@@ -658,19 +659,19 @@ contains
       do ilm=1,n_lm_vals
          lm=lm_vals(ilm)
          if ( lmStartB(1) <= lm .and. lm <= lmStopB(1) ) then
-            ! the value is already on rank 0
-            if (rank == 0) vals_on_rank0(ilm)=field(lm,n_r)
+            ! the value is already on coord_r 0
+            if (coord_r == 0) vals_on_rank0(ilm)=field(lm,n_r)
          else
             tag=876+ilm
             ! on which process is the lm value?
 #ifdef WITH_MPI
-            if (lmStartB(rank+1) <= lm .and. lm <= lmStopB(rank+1)) then
+            if (lmStartB(coord_r+1) <= lm .and. lm <= lmStopB(coord_r+1)) then
                call MPI_Send(field(lm,n_r),1,MPI_DEF_COMPLEX,&
-                    & 0,tag,MPI_COMM_WORLD,ierr)
+                    & 0,tag,comm_r,ierr)
             end if
-            if (rank == 0) then
+            if (coord_r == 0) then
                call MPI_Recv(vals_on_rank0(ilm),1,MPI_DEF_COMPLEX,&
-                    & MPI_ANY_SOURCE,tag,MPI_COMM_WORLD,status,ierr)
+                    & MPI_ANY_SOURCE,tag,comm_r,status,ierr)
             end if
 #endif
          end if

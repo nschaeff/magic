@@ -66,11 +66,11 @@ contains
       nZmaxA=2*nSmax
 
       !-- Distribute over the ranks
-      nS_per_rank = nSmax/n_procs
-      nSstart = 1+rank*nS_per_rank
-      nSstop = 1+(rank+1)*nS_per_rank-1
-      nS_remaining = nSmax-(1+n_procs*nS_per_rank-1)
-      if ( rank == n_procs-1 ) then
+      nS_per_rank = nSmax/n_procs_r
+      nSstart = 1+coord_r*nS_per_rank
+      nSstop = 1+(coord_r+1)*nS_per_rank-1
+      nS_remaining = nSmax-(1+n_procs_r*nS_per_rank-1)
+      if ( coord_r == n_procs_r-1 ) then
          nSstop = nSstop+nS_remaining
       end if
       nS_on_last_rank = nS_per_rank + nS_remaining
@@ -100,7 +100,7 @@ contains
          allocate( nZC_Sloc(nSstart:nSstop),nZ2(nZmaxA,nSstart:nSstop) )
          bytes_allocated = bytes_allocated + (nSstop-nSstart+1)*(1+nZmaxA)* &
          &                 SIZEOF_INTEGER
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             allocate (nZC(nSmax))
             bytes_allocated = bytes_allocated+nSmax*SIZEOF_INTEGER
          else
@@ -229,7 +229,7 @@ contains
       real(outp) :: CHel_Sloc(nrp,nSstart:nSstop)
 
 #ifdef WITH_MPI
-      integer :: i,sendcount,recvcounts(0:n_procs-1),displs(0:n_procs-1)
+      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
 #endif
 
 
@@ -509,19 +509,19 @@ contains
 
 #ifdef WITH_MPI
       call MPI_Allreduce(MPI_IN_PLACE, EkSTC, 1, MPI_DEF_REAL, MPI_SUM,  &
-           &             MPI_COMM_WORLD, ierr)
+           &             comm_r, ierr)
       call MPI_Allreduce(MPI_IN_PLACE, EkNTC, 1, MPI_DEF_REAL, MPI_SUM,  &
-           &             MPI_COMM_WORLD, ierr)
+           &             comm_r, ierr)
       call MPI_Allreduce(MPI_IN_PLACE, EkOTC, 1, MPI_DEF_REAL, MPI_SUM,  &
-           &             MPI_COMM_WORLD, ierr)
+           &             comm_r, ierr)
       call MPI_Allreduce(MPI_IN_PLACE, Egeos, 1, MPI_DEF_REAL, MPI_SUM,  &
-           &             MPI_COMM_WORLD, ierr)
+           &             comm_r, ierr)
       call MPI_Allreduce(MPI_IN_PLACE, CVzOTC, 1, MPI_DEF_REAL, MPI_SUM, &
-           &             MPI_COMM_WORLD, ierr)
+           &             comm_r, ierr)
       call MPI_Allreduce(MPI_IN_PLACE, CVorOTC, 1, MPI_DEF_REAL, MPI_SUM,&
-           &             MPI_COMM_WORLD, ierr)
+           &             comm_r, ierr)
       call MPI_Allreduce(MPI_IN_PLACE, CHelOTC, 1, MPI_DEF_REAL, MPI_SUM,&
-           &             MPI_COMM_WORLD, ierr)
+           &             comm_r, ierr)
 #endif
 
       if ( lCorrel ) then
@@ -531,7 +531,7 @@ contains
          end do
 #ifdef WITH_MPI
          call MPI_Allreduce(MPI_IN_PLACE, surf, 1, MPI_DEF_REAL, MPI_SUM,  &
-              &             MPI_COMM_WORLD, ierr)
+              &             comm_r, ierr)
 #endif
 
          surf   =two*pi*surf
@@ -561,9 +561,9 @@ contains
       end if
 #ifdef WITH_MPI
       call MPI_Allreduce(MPI_IN_PLACE, dpFlow, 1, MPI_DEF_REAL, MPI_SUM,  &
-           &             MPI_COMM_WORLD, ierr)
+           &             comm_r, ierr)
       call MPI_Allreduce(MPI_IN_PLACE, dzFlow, 1, MPI_DEF_REAL, MPI_SUM,  &
-           &             MPI_COMM_WORLD, ierr)
+           &             comm_r, ierr)
 #endif
 
       if ( Ekin > 0.0_cp ) then
@@ -591,20 +591,20 @@ contains
 #ifdef WITH_MPI
          sendcount  = (nSstop-nSstart+1)*nrp
          recvcounts = nS_per_rank*nrp
-         recvcounts(n_procs-1)=nS_on_last_rank*nrp
-         do i=0,n_procs-1
+         recvcounts(n_procs_r-1)=nS_on_last_rank*nrp
+         do i=0,n_procs_r-1
             displs(i) = i*nS_per_rank*nrp
          end do
 
          call MPI_GatherV(CVZ_Sloc,sendcount,MPI_OUT_REAL,     &
               &           CVZ,recvcounts,displs,MPI_OUT_REAL,  &
-              &           0,MPI_COMM_WORLD,ierr)
+              &           0,comm_r,ierr)
          call MPI_GatherV(CVor_Sloc,sendcount,MPI_OUT_REAL,    &
               &           CVor,recvcounts,displs,MPI_OUT_REAL, &
-              &           0,MPI_COMM_WORLD,ierr)
+              &           0,comm_r,ierr)
          call MPI_GatherV(CHel_Sloc,sendcount,MPI_OUT_REAL,    &
               &           CHel,recvcounts,displs,MPI_OUT_REAL, &
-              &           0,MPI_COMM_WORLD,ierr)
+              &           0,comm_r,ierr)
 #else
          CVz(:,:) =CVz_Sloc(:,:) 
          CVor(:,:)=CVor_Sloc(:,:) 
@@ -759,7 +759,7 @@ contains
       integer :: n_pvz_file, n_vcy_file
 
 #ifdef WITH_MPI
-      integer :: i,sendcount,recvcounts(0:n_procs-1),displs(0:n_procs-1)
+      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
 #endif
 
       if ( lVerbose ) write(*,*) '! Starting outPV!'
@@ -783,7 +783,7 @@ contains
             end do
 #ifdef WITH_MPI
             call MPI_Allreduce(dzVpLMr_loc(:,nR), dzVPLMr(:,nR), l_max+1, &
-                 &             MPI_DEF_REAL, MPI_SUM, MPI_COMM_WORLD, ierr)
+                 &             MPI_DEF_REAL, MPI_SUM, comm_r, ierr)
 #else
             dzVPLMr(:,nR)=dzVpLMr_loc(:,nR)
 #endif
@@ -890,34 +890,34 @@ contains
 
 #ifdef WITH_MPI
          sendcount  = (nSstop-nSstart+1)*nZmaxA
-         do i=0,n_procs-1
+         do i=0,n_procs_r-1
             recvcounts(i) = nS_per_rank*nZmaxA
             displs(i) = i*nS_per_rank*nZmaxA
          end do
-         recvcounts(n_procs-1)=nS_on_last_rank*nZmaxA
+         recvcounts(n_procs_r-1)=nS_on_last_rank*nZmaxA
          call MPI_GatherV(omS_Sloc, sendcount, MPI_DEF_REAL,      &
               &           omS, recvcounts, displs, MPI_DEF_REAL,  &
-              &           0, MPI_COMM_WORLD, ierr)
+              &           0, comm_r, ierr)
 
          sendcount  = (nSstop-nSstart+1)*nZmaxA*n_phi_max*5
-         do i=0,n_procs-1
+         do i=0,n_procs_r-1
             recvcounts(i) = nS_per_rank*nZmaxA*n_phi_max*5
             displs(i) = i*nS_per_rank*nZmaxA*n_phi_max*5
          end do
-         recvcounts(n_procs-1)=nS_on_last_rank*nZmaxA*n_phi_max*5
+         recvcounts(n_procs_r-1)=nS_on_last_rank*nZmaxA*n_phi_max*5
          call MPI_GatherV(frame_Sloc, sendcount, MPI_OUT_REAL,    &
               &           frame, recvcounts, displs, MPI_OUT_REAL,&
-              &           0, MPI_COMM_WORLD, ierr)
+              &           0, comm_r, ierr)
 
          sendcount  = (nSstop-nSstart+1)
-         do i=0,n_procs-1
+         do i=0,n_procs_r-1
             recvcounts(i) = nS_per_rank
             displs(i) = i*nS_per_rank
          end do
-         recvcounts(n_procs-1)=nS_on_last_rank
+         recvcounts(n_procs_r-1)=nS_on_last_rank
          call MPI_GatherV(nZC_Sloc, sendcount, MPI_INTEGER,       &
               &           nZC, recvcounts, displs, MPI_INTEGER,   &
-              &           0, MPI_COMM_WORLD, ierr)
+              &           0, comm_r, ierr)
 #else
          omS(:,:)    =omS_Sloc(:,:)
          frame(:,:,:)=frame_Sloc(:,:,:)
@@ -966,7 +966,7 @@ contains
             close(n_pvz_file)
             close(n_vcy_file)
 
-         end if ! Rank 0
+         end if ! coord_r 0
 
       end if ! l_stop_time
 
@@ -1341,15 +1341,15 @@ contains
       call gather_all_from_lo_to_rank0(gt_OC,dzS,dzS_global)
 #ifdef WITH_MPI
       call MPI_Bcast(wS_global,n_r_max*lm_max, MPI_DEF_COMPLEX, 0,  &
-           &         MPI_COMM_WORLD, ierr)
+           &         comm_r, ierr)
       call MPI_Bcast(dwS_global,n_r_max*lm_max, MPI_DEF_COMPLEX, 0, &
-           &         MPI_COMM_WORLD, ierr)
+           &         comm_r, ierr)
       call MPI_Bcast(ddwS_global,n_r_max*lm_max, MPI_DEF_COMPLEX, 0,&
-           &         MPI_COMM_WORLD, ierr)
+           &         comm_r, ierr)
       call MPI_Bcast(zS_global,n_r_max*lm_max, MPI_DEF_COMPLEX, 0,  &
-           &         MPI_COMM_WORLD, ierr)
+           &         comm_r, ierr)
       call MPI_Bcast(dzS_global,n_r_max*lm_max, MPI_DEF_COMPLEX, 0, &
-           &         MPI_COMM_WORLD, ierr)
+           &         comm_r, ierr)
 #endif
    end subroutine costf_arrays
 !------------------------------------------------------------------------------
