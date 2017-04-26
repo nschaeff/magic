@@ -119,21 +119,21 @@ contains
          call abortRun('Wrong switch in getDlm')
       end if
 
-      ! reduce to rank 0
+      ! reduce to coord_r 0
 #ifdef WITH_MPI
       call MPI_Reduce(e_lr,e_lr_global,n_r_max*l_max,MPI_DEF_REAL,&
-           &          MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_mr,e_mr_global,n_r_max*(l_max+1),MPI_DEF_REAL,&
-           &          MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_lr_c,e_lr_c_global,n_r_max*l_max,MPI_DEF_REAL,&
-           &          MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           &          MPI_SUM,0,comm_r,ierr)
 #else
       e_lr_global  =e_lr
       e_mr_global  =e_mr
       e_lr_c_global=e_lr_c
 #endif
          
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !-- Radial Integrals:
          fac=half*eScale
          E  =0.0_cp

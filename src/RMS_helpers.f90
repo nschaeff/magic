@@ -132,13 +132,13 @@ contains
 
 #ifdef WITH_MPI
       call MPI_Reduce(PolRms_r, PolRms_r_global, n_r_max, MPI_DEF_REAL, MPI_SUM, &
-           &          0, MPI_COMM_WORLD, ierr)
+           &          0, comm_r, ierr)
       call MPI_Reduce(PolAsRms_r, PolAsRms_r_global, n_r_max, MPI_DEF_REAL, MPI_SUM, &
-           &          0, MPI_COMM_WORLD, ierr)
+           &          0, comm_r, ierr)
       call MPI_Reduce(TorRms_r, TorRms_r_global, n_r_max, MPI_DEF_REAL, MPI_SUM, &
-           &          0, MPI_COMM_WORLD, ierr)
+           &          0, comm_r, ierr)
       call MPI_Reduce(TorAsRms_r, TorAsRms_r_global, n_r_max, MPI_DEF_REAL, MPI_SUM, &
-           &          0, MPI_COMM_WORLD, ierr)
+           &          0, comm_r, ierr)
 #else
       PolRms_r_global(:)  =PolRms_r(:)
       PolAsRms_r_global(:)=PolAsRms_r(:)
@@ -146,7 +146,7 @@ contains
       TorAsRms_r_global(:)=TorAsRms_r(:)
 #endif
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !-- Radial Integrals:
          PolRms  =rInt_R(PolRms_r_global,r,rscheme_oc)
          TorRms  =rInt_R(TorRms_r_global,r,rscheme_oc)

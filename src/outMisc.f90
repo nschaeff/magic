@@ -112,7 +112,7 @@ contains
       real(cp) :: HelRMSN,HelRMSS,HelEA,HelRMS,HelnaRMS
     
       integer :: n_r
-      integer :: i,sendcount,recvcounts(0:n_procs-1),displs(0:n_procs-1),ierr
+      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1),ierr
     
     
       !------ Integration of Helicity, on input the Helicity is
@@ -159,44 +159,44 @@ contains
  
       end do
     
-      ! Now we have to gather the results on rank 0 for
+      ! Now we have to gather the results on coord_r 0 for
       ! the arrays: Hel2Nr,Helna2Nr,HelEAr,HelNr,HelnaNr
       ! Hel2Sr,Helna2Sr,HelSr,HelnaSr
     
       sendcount  = (nRstop-nRstart+1)
       recvcounts = nR_per_rank
-      recvcounts(n_procs-1) = nR_on_last_rank
-      do i=0,n_procs-1
+      recvcounts(n_procs_r-1) = nR_on_last_rank
+      do i=0,n_procs_r-1
          displs(i) = i*nR_per_rank
       end do
 #ifdef WITH_MPI
       call MPI_GatherV(Hel2Nr,sendcount,MPI_DEF_REAL,&
            &           Hel2Nr_global,recvcounts,displs,MPI_DEF_REAL,&
-           &           0,MPI_COMM_WORLD,ierr)
+           &           0,comm_r,ierr)
       call MPI_GatherV(Helna2Nr,sendcount,MPI_DEF_REAL,&
            &           Helna2Nr_global,recvcounts,displs,MPI_DEF_REAL,&
-           &           0,MPI_COMM_WORLD,ierr)
+           &           0,comm_r,ierr)
       call MPI_GatherV(HelEAr,sendcount,MPI_DEF_REAL,&
            &           HelEAr_global,recvcounts,displs,MPI_DEF_REAL,&
-           &           0,MPI_COMM_WORLD,ierr)
+           &           0,comm_r,ierr)
       call MPI_GatherV(HelNr,sendcount,MPI_DEF_REAL,&
            &           HelNr_global,recvcounts,displs,MPI_DEF_REAL,&
-           &           0,MPI_COMM_WORLD,ierr)
+           &           0,comm_r,ierr)
       call MPI_GatherV(HelnaNr,sendcount,MPI_DEF_REAL,&
            &           HelnaNr_global,recvcounts,displs,MPI_DEF_REAL,&
-           &           0,MPI_COMM_WORLD,ierr)
+           &           0,comm_r,ierr)
       call MPI_GatherV(HelSr,sendcount,MPI_DEF_REAL,&
            &           HelSr_global,recvcounts,displs,MPI_DEF_REAL,&
-           &           0,MPI_COMM_WORLD,ierr)
+           &           0,comm_r,ierr)
       call MPI_GatherV(Helna2Sr,sendcount,MPI_DEF_REAL,&
            &           Helna2Sr_global,recvcounts,displs,MPI_DEF_REAL,&
-           &           0,MPI_COMM_WORLD,ierr)
+           &           0,comm_r,ierr)
       call MPI_GatherV(Hel2Sr,sendcount,MPI_DEF_REAL,&
            &           Hel2Sr_global,recvcounts,displs,MPI_DEF_REAL,&
-           &           0,MPI_COMM_WORLD,ierr)
+           &           0,comm_r,ierr)
       call MPI_GatherV(HelnaSr,sendcount,MPI_DEF_REAL,&
            &           HelnaSr_global,recvcounts,displs,MPI_DEF_REAL,&
-           &           0,MPI_COMM_WORLD,ierr)
+           &           0,comm_r,ierr)
 #else
       Hel2Nr_global=Hel2Nr
       Helna2Nr_global=Helna2Nr
@@ -209,7 +209,7 @@ contains
       HelnaSr_global=HelnaSr
 #endif
     
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !------ Integration over r without the boundaries and normalization:
          HelN  =rInt_R(HelNr_global,r,rscheme_oc)
          HelS  =rInt_R(HelSr_global,r,rscheme_oc)
@@ -255,7 +255,7 @@ contains
             &    status='unknown', position='append')
          end if
 
-         write(n_helicity_file,'(1P,ES20.12,8ES16.8)')    &
+         if (rank == 0) write(n_helicity_file,'(1P,ES20.12,8ES16.8)')    &
               & timeScaled,HelN, HelS, HelRMSN, HelRMSS,  &
               & HelnaN, HelnaS, HelnaRMSN, HelnaRMSS
 
@@ -298,7 +298,7 @@ contains
       character(len=76) :: filename
       integer :: n_r, filehandle
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
 
          if ( l_anelastic_liquid .or. l_TP_form ) then
             do n_r=1,n_r_max
@@ -459,46 +459,48 @@ contains
 
          tmp(:)=rhoprime(:)*r(:)*r(:)
          mass=four*pi*rInt_R(tmp,r,rscheme_oc)
-    
-         if ( l_save_out ) then
-            open(newunit=n_heat_file, file=heat_file, status='unknown', &
-            &    position='append')
+         
+         if ( rank == 0 ) then
+           if ( l_save_out ) then
+               open(newunit=n_heat_file, file=heat_file, status='unknown', &
+               &    position='append')
+           end if
+           
+           !-- avoid too small number in output
+           if ( abs(toppres) <= 1e-11_cp ) toppres=0.0_cp
+           
+           if ( abs(mass) <= 1e-11_cp ) mass=0.0_cp
+           
+           if (rank == 0) write(n_heat_file,'(1P,ES20.12,16ES16.8)')          &
+           &     time, botnuss, topnuss, deltanuss,            &
+           &     bottemp, toptemp, botentropy, topentropy,     &
+           &     botflux, topflux, toppres, mass, topsherwood, &
+           &     botsherwood, deltasherwood, botxi, topxi
+           
+           if ( l_save_out ) close(n_heat_file)
          end if
-
-         !-- avoid too small number in output
-         if ( abs(toppres) <= 1e-11_cp ) toppres=0.0_cp
-
-         if ( abs(mass) <= 1e-11_cp ) mass=0.0_cp
-
-         write(n_heat_file,'(1P,ES20.12,16ES16.8)')          &
-         &     time, botnuss, topnuss, deltanuss,            &
-         &     bottemp, toptemp, botentropy, topentropy,     &
-         &     botflux, topflux, toppres, mass, topsherwood, &
-         &     botsherwood, deltasherwood, botxi, topxi
-
-         if ( l_save_out ) close(n_heat_file)
-
+           
          if ( l_stop_time ) then
             SMeanR(:)=SMeanR(:)/timeNorm
             TMeanR(:)=TMeanR(:)/timeNorm
             PMeanR(:)=PMeanR(:)/timeNorm
             XiMeanR(:)=XiMeanR(:)/timeNorm
-
+         
             rhoPrime(:)=ThExpNb*alpha0(:)*(-rho0(:)*temp0(:)*SMeanR(:)+ &
-               &         ViscHeatFac*ogrun(:)*PMeanR(:) )
-
+              &         ViscHeatFac*ogrun(:)*PMeanR(:) )
+         
             filename='heatR.'//tag
             open(newunit=filehandle, file=filename, status='unknown')
             do n_r=1,n_r_max
-               write(filehandle, '(ES20.10,5ES15.7)' ) &
-               &      r(n_r),SMeanR(n_r),TMeanR(n_r),  &
-               &      PMeanR(n_r),rhoprime(n_r),XiMeanR(n_r)
+              write(filehandle, '(ES20.10,5ES15.7)' ) &
+              &      r(n_r),SMeanR(n_r),TMeanR(n_r),  &
+              &      PMeanR(n_r),rhoprime(n_r),XiMeanR(n_r)
             end do
-
+         
             close(filehandle)
          end if
 
-      end if ! rank == 0
+      end if ! coord_r == 0
     
    end subroutine outHeat
 !---------------------------------------------------------------------------

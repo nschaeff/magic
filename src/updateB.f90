@@ -28,7 +28,7 @@ module updateB_mod
    use special
    use algebra, only: cgeslML, sgefa
    use LMLoop_data, only: llmMag,ulmMag
-   use parallel_mod, only:  rank,chunksize
+   use parallel_mod, only:  coord_r,chunksize
    use RMS_helpers, only: hInt2PolLM, hInt2TorLM
    use fields, only: work_LMloc
    use radial_der_even, only: get_ddr_even
@@ -247,18 +247,18 @@ contains
       !    dVxBhLM is still in the R-distributed space,
       !    the ouput workA is in the LM-distributed space.
       !if (2*lmStart-1 - llmMag+1 /= 1) then
-      !   write(*,"(I4,2(A,I6))") rank,": lmStart = ",lmStart,", llmMag = ",llmMag
+      !   write(*,"(I4,2(A,I6))") coord_r,": lmStart = ",lmStart,", llmMag = ",llmMag
       !   STOP
       !end if
       !if (lmStop  /=  ulmMag) then
-      !   write(*,"(I4,A,2I6)") rank,": ",ulmMag,lmStop
+      !   write(*,"(I4,A,2I6)") coord_r,": ",ulmMag,lmStop
       !   stop
       !end if
       !call get_dr( dVxBhLM,workA, &
       !     &         ulmMag-llmMag+1,(2*lmStart-1)-llmMag+1,lmStop-llmMag+1, &
       !     &         n_r_max,rscheme_oc )
       ! simplified interface
-      !PRINT*,rank,": computing for ",ulmMag-llmMag+1," rows, chebt_oc = ",chebt_oc
+      !PRINT*,coord_r,": computing for ",ulmMag-llmMag+1," rows, chebt_oc = ",chebt_oc
 
       !PERFON('upB_fin')
       all_lms=lmStop-lmStart_00+1
@@ -308,7 +308,7 @@ contains
       !PERFOFF
 
       ! This is a loop over all l values which should be treated on 
-      ! the actual MPI rank
+      ! the actual MPI coord_r
       !$OMP PARALLEL default(shared)
       !$OMP SINGLE
       do nLMB2=1,nLMBs2(nLMB)

@@ -1287,7 +1287,7 @@ contains
       integer :: n_start,n_stop,n_field
       integer :: myTag, status(MPI_STATUS_SIZE)
       integer :: local_start,local_end,irank,sendcount
-      integer :: recvcounts(0:n_procs-1),displs(0:n_procs-1)
+      integer :: recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
       real(cp), allocatable :: field_frames_global(:)
       integer :: max_field_length,field_length
       
@@ -1301,7 +1301,7 @@ contains
             if (field_length > max_field_length) max_field_length=field_length
          end do
       end do
-      if (rank == 0) then
+      if (coord_r == 0) then
          allocate(field_frames_global(max_field_length))
       else
          ! This is only needed for debug runs with boundary check.
@@ -1315,7 +1315,7 @@ contains
          n_const  =n_movie_const(n_movie)
          if ( n_surface == -1 ) then ! Earth Surface
             ! theta-phi surface for n_r=1 (CMB)
-            ! frames is already existent on rank 0 with all
+            ! frames is already existent on coord_r 0 with all
             ! needed values
             ! do nothing, pass to the next movie
             
@@ -1323,7 +1323,7 @@ contains
 
          else if ( n_surface == 0 ) then ! 3d
             ! 3d, all grid points written to frames
-            ! but only n_r=nRstart:nRstop on one rank,
+            ! but only n_r=nRstart:nRstop on one coord_r,
             ! gather needed
             do n_field=1,n_fields
                n_start = n_movie_field_start(n_field,n_movie)
@@ -1331,25 +1331,25 @@ contains
             end do
 
          else if ( n_surface == 1 ) then ! Surface r=constant
-            ! frames is set only for one rank, where n_r=n_const
-            ! send to rank 0
+            ! frames is set only for one coord_r, where n_r=n_const
+            ! send to coord_r 0
             n_start=n_movie_field_start(1,n_movie)
             n_stop =n_movie_field_stop(n_fields,n_movie)
             myTag=7654
-            if (rank == 0) then
+            if (coord_r == 0) then
                if ((nRstart <= n_const) .and. (n_const <= nRstop)) then
-                  ! relevant frames already set on rank 0
+                  ! relevant frames already set on coord_r 0
                   ! do nothing
                else
                   call MPI_Recv(frames(n_start),n_stop-n_start+1,MPI_DEF_REAL,&
-                       & MPI_ANY_SOURCE,mytag,MPI_COMM_WORLD,status,ierr)
+                       & MPI_ANY_SOURCE,mytag,comm_r,status,ierr)
                end if
             else
                if ((nRstart <= n_const) .and. (n_const <= nRstop)) then
-                  ! relevant frames are all on this rank  /= 0
-                  ! send to rank 0
+                  ! relevant frames are all on this coord_r  /= 0
+                  ! send to coord_r 0
                   call MPI_Send(frames(n_start),n_stop-n_start+1,MPI_DEF_REAL,&
-                       & 0,mytag,MPI_COMM_WORLD,ierr)
+                       & 0,mytag,comm_r,ierr)
                end if
             end if
 
@@ -1361,21 +1361,21 @@ contains
 
                local_start=n_start+(nRstart-1)*n_phi_max
                local_end  =local_start+nR_per_rank*n_phi_max-1
-               if (rank == n_procs-1) local_end = local_start+nR_on_last_rank*n_phi_max-1
+               if (coord_r == n_procs_r-1) local_end = local_start+nR_on_last_rank*n_phi_max-1
                if (local_end > n_stop) then
                   call abortRun('local_end exceeds n_stop')
                end if
-               do irank=0,n_procs-1
+               do irank=0,n_procs_r-1
                   recvcounts(irank) = nR_per_rank*n_phi_max
                   displs(irank)     = irank*nR_per_rank*n_phi_max
                end do
-               recvcounts(n_procs-1) = nR_on_last_rank*n_phi_max
+               recvcounts(n_procs_r-1) = nR_on_last_rank*n_phi_max
                sendcount=local_end-local_start+1
 
                call mpi_gatherv(frames(local_start),sendcount,MPI_DEF_REAL,&
                     & field_frames_global,recvcounts,displs,MPI_DEF_REAL,&
-                    & 0,MPI_COMM_WORLD,ierr)
-               if (rank == 0) then
+                    & 0,comm_r,ierr)
+               if (coord_r == 0) then
                   frames(n_start:n_stop)=field_frames_global(1:field_length)
                end if
             end do  ! Do loop over field for one movie
@@ -1390,21 +1390,21 @@ contains
 
                local_start=n_start+(nRstart-1)*n_theta_max
                local_end  =local_start+nR_per_rank*n_theta_max-1
-               if (rank == n_procs-1) local_end = local_start+ &
+               if (coord_r == n_procs_r-1) local_end = local_start+ &
                                                   nR_on_last_rank*n_theta_max-1
                if (local_end > n_stop) then
                   call abortRun('local_end exceeds n_stop')
                end if
-               do irank=0,n_procs-1
+               do irank=0,n_procs_r-1
                   recvcounts(irank) = nR_per_rank*n_theta_max
                   displs(irank)     = irank*nR_per_rank*n_theta_max
                end do
-               recvcounts(n_procs-1) = nR_on_last_rank*n_theta_max
+               recvcounts(n_procs_r-1) = nR_on_last_rank*n_theta_max
                sendcount=local_end-local_start+1
                call mpi_gatherv(frames(local_start),sendcount,MPI_DEF_REAL,&
                     & field_frames_global,recvcounts,displs,MPI_DEF_REAL,&
-                    & 0,MPI_COMM_WORLD,ierr)
-               if (rank == 0) then
+                    & 0,comm_r,ierr)
+               if (coord_r == 0) then
                   frames(n_start:n_stop)=field_frames_global(1:field_length)
                end if
             end do  ! Do loop over field for one movie
@@ -1412,7 +1412,7 @@ contains
          end if
       end do
 
-      if (rank == 0) deallocate(field_frames_global)
+      if (coord_r == 0) deallocate(field_frames_global)
 #endif
 
    end subroutine movie_gather_frames_to_rank0

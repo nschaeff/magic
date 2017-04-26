@@ -13,7 +13,7 @@ module updateXi_mod
    use horizontal_data, only: dLh, hdif_Xi
    use logic, only: l_update_xi
    use LMLoop_data, only: llm,ulm
-   use parallel_mod, only: rank,chunksize
+   use parallel_mod, only: coord_r,chunksize
    use algebra, only: cgeslML,sgesl, sgefa
    use radial_der, only: get_ddr, get_dr
    use constants, only: zero, one, two

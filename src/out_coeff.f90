@@ -10,7 +10,7 @@ module out_coeff
        &            l_cond_ic
    use radial_functions, only: r, rho0
    use physical_parameters, only: ra, ek, pr, prmag, radratio, sigma_ratio
-   use parallel_mod, only: rank
+   use parallel_mod, only: rank, coord_r
    use blocking, only: lm2
    use truncation, only: lm_max, l_max, minc, n_r_max, n_r_ic_max, minc
    use communications, only: gather_from_lo_to_rank0
@@ -91,7 +91,7 @@ contains
 
       call gather_from_lo_to_rank0(b_LMloc, work)
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
 
          !--- Definition of max degree for output
          if ( l_max < l_max_cmb ) l_max_cmb=l_max
@@ -142,8 +142,8 @@ contains
          end do
 
          !--- Finally write output array out(*) into cmb_file:
-         write(n_cmb_file) time,(out(n),n=1,n_out)
-
+         if ( rank == 0 ) write(n_cmb_file) time,(out(n),n=1,n_out)
+         
          !--- Close cmb_file
          if ( l_save_out .or. n_cmb_sets == 0 ) then
             close(n_cmb_file)
@@ -222,7 +222,7 @@ contains
            l_max_r-m_max_r+1
       n_data=2*lm_max_r-l_max_r-2
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          if ( nVBS == 1 ) then
             allocate(out(3*n_data))
          else if ( nVBS == 2 ) then
@@ -240,7 +240,7 @@ contains
 
       call gather_from_lo_to_rank0(w_LMloc, work)
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          if ( nVBS == 3 ) then
             !--- Axisymmetric part of s: (m=0) only real part stored
             do l=0,l_max ! start with l=0
@@ -279,7 +279,7 @@ contains
 
          call gather_from_lo_to_rank0(dw_LMloc, work)
 
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             !-- Now output for flow or magnetic field only:
             !--- Axisymmetric part of dw: (m=0) only real part stored
             do l=1,l_max
@@ -305,7 +305,7 @@ contains
 
          call gather_from_lo_to_rank0(z_LMloc, work)
 
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             !--- Axisymmetric part of z: (m=0) only real part stored
             do l=1,l_max
                lm=lm2(l,0)
@@ -335,7 +335,7 @@ contains
 
          call gather_from_lo_to_rank0(ddw_LMloc, work)
 
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             !--- Axisymmetric part of ddw: (m=0) only real part stored
             do l=1,l_max
                lm=lm2(l,0)
@@ -359,7 +359,7 @@ contains
          end if 
       end if
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
 
          !--- Open output file with name $file:
          if ( l_save_out ) then
@@ -368,13 +368,11 @@ contains
          end if
 
          !--- If this is the first set write, l_max_r and minc into first line:
-         if ( n_sets == 1 ) then
-            write(n_file) l_max_r,minc,n_data,r
-         end if
+         if ( n_sets == 1 .and. (rank ==0) ) write(n_file) l_max_r,minc,n_data,r
 
-
+         
          !--- Finally write output array out(*) into file:
-         write(n_file) time,(out(n),n=1,n_out)
+         if (rank == 0) write(n_file) time,(out(n),n=1,n_out)
 
          !--- Close file
          if ( l_save_out ) then
@@ -421,10 +419,10 @@ contains
       if ( root(1:1) /= 'T' .and. root(1:1) /= 'Xi' ) lVB= .true.
 
     
-      ! now gather the fields on rank 0 and write them to file
+      ! now gather the fields on coord_r 0 and write them to file
       ! it would be nicer to write the fields with MPI IO in parallel
       ! but then presumably the file format will change
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          allocate(workA_global(lm_max,n_r_max))
          allocate(workB_global(lm_max,n_r_max))
       else

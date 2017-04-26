@@ -31,7 +31,7 @@ module start_fields
    use useful, only: cc2real, logWrite
    use LMLoop_data, only: lm_per_rank, lm_on_last_rank, llm, ulm, &
        &                  ulmMag,llmMag
-   use parallel_mod, only: rank, n_procs, nLMBs_per_rank
+   use parallel_mod, only: rank, coord_r, n_procs_r, nLMBs_per_rank, comm_r
    use communications, only: lo2r_redist_start, lo2r_s, lo2r_flow, lo2r_field, &
        &                     lo2r_xi
    use radial_der, only: get_dr, get_ddr
@@ -218,10 +218,10 @@ contains
          end if
 
          if ( dt > 0.0_cp ) then
-            if ( rank==0 ) write(message,'(''! Using old time step:'',ES16.6)') dt
+            if ( coord_r==0 ) write(message,'(''! Using old time step:'',ES16.6)') dt
          else
             dt=dtMax
-            if ( rank==0 ) write(message,'(''! Using dtMax time step:'',ES16.6)') dtMax
+            if ( coord_r==0 ) write(message,'(''! Using dtMax time step:'',ES16.6)') dtMax
          end if
 
          if ( .not. l_heat ) then
@@ -271,7 +271,7 @@ contains
       call logWrite(message)
 
 #ifdef WITH_MPI
-      call MPI_Barrier(MPI_COMM_WORLD, ierr)
+      call MPI_Barrier(comm_r, ierr)
 #endif
 
       allocate( workA_LMloc(llm:ulm,n_r_max) )
@@ -301,7 +301,7 @@ contains
       end if
 
       !  Computing derivatives
-      do nLMB=1+rank*nLMBs_per_rank,min((rank+1)*nLMBs_per_rank,nLMBs)
+      do nLMB=1+coord_r*nLMBs_per_rank,min((coord_r+1)*nLMBs_per_rank,nLMBs)
          lmStart=lmStartB(nLMB)
          lmStop =lmStopB(nLMB)
  

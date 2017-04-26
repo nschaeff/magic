@@ -369,13 +369,13 @@ contains
          size_of_data_per_r = size_of_data_per_thetaB * nThetaBs
          size_of_data_per_rank = size_of_data_per_r * nR_per_rank
 
-         if ( rank == 0 ) then
-            ! rank zero writes the Header
+         if ( coord_r == 0 ) then
+            ! coord_r zero writes the Header
             disp = 0
             call MPI_FILE_SET_VIEW(graph_mpi_fh,disp,MPI_CHARACTER, &
                                    MPI_CHARACTER,"external32",MPI_INFO_NULL,ierr)
          else
-            disp = size_of_header+rank*size_of_data_per_rank
+            disp = size_of_header+coord_r*size_of_data_per_rank
             call MPI_FILE_SET_VIEW(graph_mpi_fh,disp,&
                  & MPI_CHARACTER,MPI_CHARACTER,"external32",MPI_INFO_NULL,ierr)
          end if
@@ -691,12 +691,12 @@ contains
       size_of_data_per_rank = size_of_data_per_r * nR_per_rank
 
       if ( rank == 0 ) then
-         ! rank zero writes the Header
+         ! coord_r zero writes the Header
          disp = 0
          call MPI_FILE_SET_VIEW(graph_mpi_fh,disp,MPI_CHARACTER, &
                                 MPI_CHARACTER,"external32",MPI_INFO_NULL,ierr)
       else
-         disp = size_of_header+rank*size_of_data_per_rank
+         disp = size_of_header+coord_r*size_of_data_per_rank
          call MPI_FILE_SET_VIEW(graph_mpi_fh,disp,&
               & MPI_CHARACTER,MPI_CHARACTER,"external32",MPI_INFO_NULL,ierr)
       end if
@@ -806,8 +806,8 @@ contains
       !  field onto graphic output file. If the inner core is             
       !  insulating (l_cond_ic=false) the potential field is calculated   
       !  from the outer core field at r=r_cmb.                            
-      !  This version assumes that the fields are fully local on the rank 
-      !  which is calling this routine (usually rank 0).                  
+      !  This version assumes that the fields are fully local on the coord_r 
+      !  which is calling this routine (usually coord_r 0).                  
       !
 
       !-- Input variables:
@@ -901,9 +901,9 @@ contains
     
     
 #ifdef WITH_MPI
-         ! in process n_procs-1 the last oc fields have been written,
+         ! in process n_procs_r-1 the last oc fields have been written,
          ! Now just append on this process.
-         if ( rank == n_procs-1 ) then
+         if ( coord_r == n_procs_r-1 ) then
             call MPI_FILE_WRITE(graph_mpi_fh,4*4,1,MPI_INTEGER,status,ierr)
             call MPI_FILE_WRITE(graph_mpi_fh,real(n_r_max+nR-2,outp),1, &
                                 MPI_OUT_REAL,status,ierr)
@@ -922,7 +922,7 @@ contains
 
          !-- Write radial magnetic field:
 #ifdef WITH_MPI
-         if (rank == n_procs-1) then
+         if (coord_r == n_procs_r-1) then
             call graph_write_mpi(n_phi_max,n_theta_max,Br,graph_mpi_fh)
          end if
 #else
@@ -931,7 +931,7 @@ contains
 
          !-- Write latitudinal magnetic field:
 #ifdef WITH_MPI
-         if (rank == n_procs-1) then
+         if (coord_r == n_procs_r-1) then
             call graph_write_mpi(n_phi_max,n_theta_max,Bt,graph_mpi_fh)
          end if
 #else
@@ -940,7 +940,7 @@ contains
   
          !-- Write longitudinal magnetic field:
 #ifdef WITH_MPI
-         if (rank == n_procs-1) then
+         if (coord_r == n_procs_r-1) then
             call graph_write_mpi(n_phi_max,n_theta_max,Bp,graph_mpi_fh)
          end if
 #else

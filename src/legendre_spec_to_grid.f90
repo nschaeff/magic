@@ -11,7 +11,7 @@ module legendre_spec_to_grid
    use horizontal_data, only: Plm, dPlm, lStart, lStop, lmOdd, D_mc2m, &
        &                      osn2
    use constants, only: zero, half, one
-   use parallel_mod, only: rank
+   use parallel_mod, only: coord_r
    use leg_helper_mod, only: leg_helper_t
    use useful, only: abortRun
 
@@ -101,7 +101,7 @@ contains
       complex(cp) :: cbhN1M(n_m_max),cbhN2M(n_m_max),cbhN,cbhN1,cbhN2
       complex(cp) :: cbhS1M(n_m_max),cbhS2M(n_m_max),cbhS,cbhS1,cbhS2
     
-      !call MPI_Barrier(MPI_COMM_WORLD,ierr)
+      !call MPI_Barrier(comm_r,ierr)
     
       nThetaNHS=(nThetaStart-1)/2
     

@@ -10,7 +10,7 @@ module fields
    use logic, only: l_chemical_conv
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag
    use radial_data, only: nRstart, nRstop
-   use parallel_mod, only: rank
+   use parallel_mod, only: coord_r
  
    implicit none
 
@@ -78,7 +78,7 @@ contains
    subroutine initialize_fields
 
       !-- Velocity potentials:
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          allocate( b(lm_maxMag,n_r_maxMag) )
          bytes_allocated = bytes_allocated +  &
                            lm_maxMag*n_r_maxMag*SIZEOF_DEF_COMPLEX

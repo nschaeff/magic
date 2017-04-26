@@ -120,9 +120,9 @@ contains
 
 #ifdef WITH_MPI
       call MPI_Reduce(e_p,e_p_global, 6*n_r_tot, MPI_DEF_REAL, &
-           &          MPI_SUM, 0, MPI_COMM_WORLD, ierr )
+           &          MPI_SUM, 0, comm_r, ierr )
       call MPI_Reduce(e_p_AS,e_p_AS_global, 6*n_r_tot, MPI_DEF_REAL, &
-           &          MPI_SUM, 0, MPI_COMM_WORLD, ierr )
+           &          MPI_SUM, 0, comm_r, ierr )
 #else
       e_p_global(:,:)   =e_p(:,:)
       e_p_AS_global(:,:)=e_p_AS(:,:)
@@ -238,9 +238,9 @@ contains
 
 #ifdef WITH_MPI
       call MPI_Reduce(e_t,e_t_global, 6*n_r_tot, MPI_DEF_REAL, &
-           &          MPI_SUM, 0, MPI_COMM_WORLD, ierr )
+           &          MPI_SUM, 0, comm_r, ierr )
       call MPI_Reduce(e_t_AS,e_t_AS_global, 6*n_r_tot, MPI_DEF_REAL, &
-           &          MPI_SUM, 0, MPI_COMM_WORLD, ierr )
+           &          MPI_SUM, 0, comm_r, ierr )
 #else
       e_t_global(:,:)   =e_t(:,:)
       e_t_AS_global(:,:)=e_t_AS(:,:)

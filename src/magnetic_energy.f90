@@ -123,7 +123,7 @@ contains
       !
 
       if ( l_earth_likeness ) then
-         if ( rank == 0 ) deallocate( Plm_comp )
+         if ( coord_r == 0 ) deallocate( Plm_comp )
          deallocate( bCMB )
          if ( .not. l_save_out ) close(n_compliance_file)
       end if
@@ -353,51 +353,51 @@ contains
 #ifdef WITH_MPI
       ! reduce over the ranks
       call MPI_Reduce(e_p_r,    e_p_r_global,     n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_r,    e_t_r_global,     n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_p_as_r, e_p_as_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_as_r, e_t_as_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_p_es_r, e_p_es_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_es_r, e_t_es_r_global,  n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_p_eas_r,e_p_eas_r_global, n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_t_eas_r,e_t_eas_r_global, n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_dipole_ax_r,e_dipole_ax_r_global, n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_dipole_r,   e_dipole_r_global,    n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(els_r,   els_r_global,    n_r_max, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 
       ! reduce some scalars
       call MPI_Reduce(e_geo,     e_geo_global,    1, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_es_geo,  e_es_geo_global, 1, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_as_geo,  e_as_geo_global, 1, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_eas_geo, e_eas_geo_global,1, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 
       if ( l_earth_likeness ) then
          call MPI_Reduce(ad,ad_global,1,MPI_DEF_REAL,MPI_SUM,0,    &
-              &          MPI_COMM_WORLD,ierr)
+              &          comm_r,ierr)
          call MPI_Reduce(nad,nad_global,1,MPI_DEF_REAL,MPI_SUM,0,  &
-              &          MPI_COMM_WORLD,ierr)
+              &          comm_r,ierr)
          call MPI_Reduce(sym,sym_global,1,MPI_DEF_REAL,MPI_SUM,0,  &
-              &          MPI_COMM_WORLD,ierr)
+              &          comm_r,ierr)
          call MPI_Reduce(asym,asym_global,1,MPI_DEF_REAL,MPI_SUM,0,&
-              &          MPI_COMM_WORLD,ierr)
+              &          comm_r,ierr)
          call MPI_Reduce(zon,zon_global,1,MPI_DEF_REAL,MPI_SUM,0,  &
-              &          MPI_COMM_WORLD,ierr)
+              &          comm_r,ierr)
          call MPI_Reduce(nzon,nzon_global,1,MPI_DEF_REAL,MPI_SUM,0,&
-              &          MPI_COMM_WORLD,ierr)
+              &          comm_r,ierr)
       end if
 #else
       e_p_r_global        =e_p_r
@@ -427,7 +427,7 @@ contains
 
       if ( l_earth_likeness ) call gather_from_lo_to_rank0(b(:,n_r_cmb), bCMB)
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !-- Get Values at CMB:
          e_cmb          =e_p_r_global(n_r_cmb)+e_t_r_global(n_r_cmb)
          e_dip_cmb      =e_dipole_r_global(n_r_cmb)
@@ -487,7 +487,7 @@ contains
                   eDR=e_dipA(nR)/eTot
                end if
                surf=four*pi*r(nR)**2
-               write(fileHandle,'(ES20.10,9ES15.7)') r(nR),         &
+               if (rank == 0) write(fileHandle,'(ES20.10,9ES15.7)') r(nR),&
                     &               fac*e_pA(nR)/timetot,           &
                     &               fac*e_p_asA(nR)/timetot,        &
                     &               fac*e_tA(nR)/timetot,           &
@@ -587,13 +587,13 @@ contains
          ! reduce over the ranks
 #ifdef WITH_MPI
          call MPI_Reduce(e_p_ic_r,    e_p_ic_r_global,    n_r_ic_max, &
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_t_ic_r,    e_t_ic_r_global,    n_r_ic_max, &
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_p_as_ic_r, e_p_as_ic_r_global, n_r_ic_max, &
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_t_as_ic_r, e_t_as_ic_r_global, n_r_ic_max, &
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
          e_p_ic_r_global   =e_p_ic_r
          e_t_ic_r_global   =e_t_ic_r
@@ -601,7 +601,7 @@ contains
          e_t_as_ic_r_global=e_t_as_ic_r
 #endif
 
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             e_p_ic   =rIntIC(e_p_ic_r_global,n_r_ic_max,dr_fac_ic,chebt_ic)
             e_t_ic   =rIntIC(e_t_ic_r_global,n_r_ic_max,dr_fac_ic,chebt_ic)
             e_p_as_ic=rIntIC(e_p_as_ic_r_global,n_r_ic_max,dr_fac_ic,chebt_ic)
@@ -627,15 +627,15 @@ contains
 
 #ifdef WITH_MPI
          call MPI_Reduce(e_p_ic,    e_p_ic_global,   1, &
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_p_as_ic, e_p_as_ic_global,1, &
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
          e_p_ic_global   =e_p_ic
          e_p_as_ic_global=e_p_as_ic
 #endif
 
-         if (rank == 0) then
+         if (coord_r == 0) then
             fac      =half*LFfac/r_icb*eScale
             e_p_ic   =fac*e_p_ic_global
             e_t_ic   =0.0_cp
@@ -662,15 +662,15 @@ contains
 
 #ifdef WITH_MPI
       call MPI_Reduce(e_p_os,    e_p_os_global,   1, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_p_as_os, e_p_as_os_global,1, &
-           & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
       e_p_os_global   =e_p_os
       e_p_as_os_global=e_p_as_os
 #endif
 
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          fac      =half*LFfac/r_cmb*eScale
          e_p_os   =fac*e_p_os_global
          e_p_as_os=fac*e_p_as_os_global
@@ -694,18 +694,18 @@ contains
 
 #ifdef WITH_MPI
          call MPI_Reduce(e_p_e,    e_p_e_global,   1, &
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_p_as_e, e_p_as_e_global,1, &
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_dipole_e, e_dipole_e_global,1, &
-              & MPI_DEF_REAL,MPI_SUM,0,MPI_COMM_WORLD,ierr)
+              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
          e_p_e_global     =e_p_e
          e_p_as_e_global  =e_p_as_e
          e_dipole_e_global=e_dipole_e
 #endif
          
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             fac       =half*LFfac/r_cmb**2*eScale
             e_p_e     =fac*e_p_e_global 
             e_p_as_e  =fac*e_p_as_e_global
@@ -751,23 +751,23 @@ contains
 
       rank_has_l1m0=.false.
       rank_has_l1m1=.false.
-      !write(*,"(I5,A,2I5,A,2I5)") rank,": l1m0,l1m1 = ",l1m0,l1m1,&
-      !     & ", lm block: ",lmStartB(rank+1),lmStopB(rank+1)
-      if ( (l1m0 >= lmStartB(rank+1)) .and. (l1m0 <= lmStopB(rank+1)) ) then
+      !write(*,"(I5,A,2I5,A,2I5)") coord_r,": l1m0,l1m1 = ",l1m0,l1m1,&
+      !     & ", lm block: ",lmStartB(coord_r+1),lmStopB(coord_r+1)
+      if ( (l1m0 >= lmStartB(coord_r+1)) .and. (l1m0 <= lmStopB(coord_r+1)) ) then
          b10=b(l1m0,n_r_cmb)
 #ifdef WITH_MPI
-         if (rank /= 0) then
-            call MPI_Send(b10,1,MPI_DEF_COMPLEX,0,sr_tag,MPI_COMM_WORLD,ierr)
+         if (coord_r /= 0) then
+            call MPI_Send(b10,1,MPI_DEF_COMPLEX,0,sr_tag,comm_r,ierr)
          end if
 #endif
          rank_has_l1m0=.true.
       end if
       if ( l1m1 > 0 ) then
-         if ( (l1m1 >= lmStartB(rank+1)) .and. (l1m1 <= lmStopB(rank+1)) ) then
+         if ( (l1m1 >= lmStartB(coord_r+1)) .and. (l1m1 <= lmStopB(coord_r+1)) ) then
             b11=b(l1m1,n_r_cmb)
 #ifdef WITH_MPI
-            if (rank /= 0) then
-               call MPI_Send(b11,1,MPI_DEF_COMPLEX,0,sr_tag+1,MPI_COMM_WORLD,ierr)
+            if (coord_r /= 0) then
+               call MPI_Send(b11,1,MPI_DEF_COMPLEX,0,sr_tag+1,comm_r,ierr)
             end if
 #endif
             rank_has_l1m1=.true.
@@ -778,17 +778,17 @@ contains
       end if
 
          
-      if ( rank == 0 ) then
+      if ( coord_r == 0 ) then
          !-- Calculate pole position:
          rad =180.0_cp/pi
 #ifdef WITH_MPI
          if (.not.rank_has_l1m0) then
             call MPI_IRecv(b10,1,MPI_DEF_COMPLEX,MPI_ANY_SOURCE,&
-                 &         sr_tag,MPI_COMM_WORLD,request1, ierr)
+                 &         sr_tag,comm_r,request1, ierr)
          end if
          if ( .not. rank_has_l1m1 ) then
             call MPI_IRecv(b11,1,MPI_DEF_COMPLEX,MPI_ANY_SOURCE,&
-                 &         sr_tag+1,MPI_COMM_WORLD,request2,ierr)
+                 &         sr_tag+1,comm_r,request2,ierr)
          end if
          if ( .not. rank_has_l1m0 ) then
             call MPI_Wait(request1,status,ierr)
@@ -824,7 +824,7 @@ contains
             ! There are still differences in field 17 of the dipole file. These
             ! differences are due to the summation for e_es_cmb and are only of the order
             ! of machine accuracy.
-            write(n_dipole_file,'(1P,ES20.12,19ES14.6)')   &
+            if ( rank == 0 ) write(n_dipole_file,'(1P,ES20.12,19ES14.6)')   &
                  &       time*tScale,                      &! 1
                  &       theta_dip,phi_dip,                &! 2,3
                  &       Dip,                              &! 4  
@@ -867,7 +867,7 @@ contains
                else
                   zon=0.0_cp
                end if
-               write(n_compliance_file,'(1P,ES20.12,4ES16.8)')    &
+               if ( rank == 0 ) write(n_compliance_file,'(1P,ES20.12,4ES16.8)')    &
                     &       time*tScale, ad,                      &
                     &       sym, zon, fluxConcentration
 

@@ -1,6 +1,6 @@
 module LMLoop_data
 
-   use parallel_mod, only: rank, nLMBs_per_rank, n_procs
+   use parallel_mod, only: coord_r, nLMBs_per_rank, n_procs_r
    use blocking, only: nLMBs, sizeLMB, lmStartB, lmStopB
    use logic, only: l_mag
 #ifndef WITH_MPI
@@ -27,10 +27,9 @@ contains
       ! set the local lower and upper index for lm
 #ifdef WITH_MPI
       ! we have nLMBs LM blocks which are distributed over the ranks
-      ! with nLMBs_per_rank blocks per rank (computed in m_blocking.F90)
-      
-      nLMB_start = 1+rank*nLMBs_per_rank
-      nLMB_end   = min((rank+1)*nLMBs_per_rank,nLMBs)
+      ! with nLMBs_per_rank blocks per coord_r (computed in m_blocking.F90)
+      nLMB_start = 1+coord_r*nLMBs_per_rank
+      nLMB_end   = min((coord_r+1)*nLMBs_per_rank,nLMBs)
       llm = lmStartB(nLMB_start)
       ulm = lmStopB(nLMB_end)
       if ( l_mag ) then
@@ -41,8 +40,8 @@ contains
          ulmMag = 1
       end if
       lm_per_rank=nLMBs_per_rank*sizeLMB
-      lm_on_last_rank=lmStopB (min(n_procs*nLMBs_per_rank,nLMBs))- &
-                      lmStartB(1+(n_procs-1)*nLMBs_per_rank)+1
+      lm_on_last_rank=lmStopB (min(n_procs_r*nLMBs_per_rank,nLMBs))- &
+                      lmStartB(1+(n_procs_r-1)*nLMBs_per_rank)+1
 #else
       llm = 1
       ulm = lm_max
