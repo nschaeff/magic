@@ -48,7 +48,7 @@ def getParser():
                         default=False, help='Use MPI')
     parser.add_argument('--use-openmp', action='store_true', dest='use_openmp', 
                         default=False, help='Use the hybrid version')
-    parser.add_argument('--use-mkl', action='store_true', dest='use_mkl', 
+    parser.add_argument('--use-mkl', action='store_true', dest='use_mkl',   
                         default=False, 
                         help='Use the MKL for FFTs and Lapack calls')
     parser.add_argument('--use-shtns', action='store_true', dest='use_shtns', 
@@ -63,6 +63,9 @@ def getParser():
                         help='Specify the number of threads (hybrid version)')
     parser.add_argument('--mpicmd', action='store', dest='mpicmd', type=str,
                         default='mpirun', help='Specify the mpi executable')
+    parser.add_argument('--extracmd', action='store', dest='extracmd', type=str,
+                        default='', 
+                        help='extra command line arguments to be passed to magic.exe')
 
     return parser
 
@@ -195,9 +198,9 @@ def get_exec_cmd(args, execDir):
         else:
             os.environ['I_MPI_PIN_PROCESSOR_LIST'] = 'allcores'
 
-        execCmd = '%s -n %i %s' % (args.mpicmd, args.nranks, magicExec)
+        execCmd = '%s -n %i %s %s' % (args.mpicmd, args.nranks, magicExec, args.extracmd)
     else: # Without MPI
-        execCmd = '%s' % magicExec
+        execCmd = '%s %s' % (magicExec, args.extracmd)
 
     return execCmd
 

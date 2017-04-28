@@ -81,7 +81,8 @@ contains
       real(outp) :: dummy(n_phi_max,nfs)
     
       character(len=20) :: version
-    
+      
+      if ( rank /= 0 ) return
     
       !-- Write header & colatitudes for n_r=0:
       if ( l_chemical_conv ) then

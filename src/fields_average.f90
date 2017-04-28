@@ -434,7 +434,8 @@ contains
          ! For the graphic file of the average fields, we gather them
          ! on coord_r 0 and use the old serial output routine.
 
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
+!             write(graph_file,'(A,I0,A)') 'G_ave.', rank, tag
             graph_file='G_ave.'//tag
             open(newunit=n_graph_file, file=graph_file, status='unknown', &
             &    form='unformatted')
