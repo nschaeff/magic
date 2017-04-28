@@ -239,7 +239,7 @@ program magic
       write(n_log_file,*) '!                 _/j  L l\_!  _//^---^\\_               '
       write(n_log_file,*) '!              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~            '
       write(n_log_file,*) '!                                                        '
-      write(n_log_file,*) '!                                                        '
+      write(n_log_file,*) '!                             beta lago-paral version    '
 
 
 

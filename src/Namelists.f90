@@ -47,7 +47,9 @@ contains
       integer :: argument_count
       integer :: res
       integer :: inputHandle
-      character(len=100) :: input_filename
+      character(len=100)  :: input_filename
+      character(len=1024) :: sbuffer         ! for parallel namelist
+      character(:), allocatable :: cmd_args  ! for parallel namelist
 
       !-- Name lists:
       integer :: runHours,runMinutes,runSeconds
@@ -156,12 +158,12 @@ contains
       call defaultNamelists
 
 
-      ! get the filename of the input file as first argument from the command line
+      ! get the filename of the input file as the last argument from the command line
       argument_count = command_argument_count()
       if (argument_count == 0) then
-         call abortRun('The filename of the input file must be provided as first argument')
+         call abortRun('The filename of the input file must be provided as the last argument')
       else
-         call get_command_argument(1,input_filename)
+         call get_command_argument(argument_count,input_filename)
 
          inquire(file = input_filename, exist = nml_exist)
 
@@ -169,6 +171,11 @@ contains
             call abortRun('! Input namelist file not found!')
          end if
 
+         ! This is a little bit ugly, but it is just because magic_wizard.py 
+         ! makes it really difficult to manually modify the input.nml
+         ! So for the moment, the parallelization configurations are to
+         ! be set via namelist, but will be overriden by command-line argument
+         ! if it is present - Lago
          open(newunit=inputHandle,file=trim(input_filename))
          !-- Reading control parameters from namelists in STDIN:
          if ( rank == 0 ) write(*,*) '!  Reading parallelization parameters!'
@@ -177,6 +184,15 @@ contains
             write(*,*) '! No parallel namelist found!'
          end if
          close(inputHandle)
+         cmd_args = ""
+         if (argument_count > 1) then
+            do n=1,argument_count-1
+               call get_command_argument(n,sbuffer)
+               cmd_args = cmd_args//trim(adjustl(sbuffer))//" "
+            end do
+            cmd_args = "&parallel "//cmd_args//" /"
+            read(cmd_args,nml=parallel,iostat=res)
+         end if
          
          open(newunit=inputHandle,file=trim(input_filename))
          !-- Reading control parameters from namelists in STDIN:
