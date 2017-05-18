@@ -1002,7 +1002,6 @@ contains
             call r2lo_redist_start(r2lo_b,dbdt_Rloc_container,dbdt_LMloc_container)
             call r2lo_redist_wait(r2lo_b)
          end if
-
 #ifdef WITH_MPI
          ! ------------------
          ! also exchange the lorentz_torques which are only set at the boundary points
@@ -1241,7 +1240,7 @@ contains
             call subTime(runTimeRstart,runTimeRstop,runTimePassed)
             call addTime(runTimeLM,runTimePassed)
          end if
-
+         
          if (DEBUG_OUTPUT) then
             write(*,"(A,6ES20.12)") "lo_arr end: z_LMloc,dz_LMloc,dzdtLast_lo = ",&
                  & GET_GLOBAL_SUM( z_LMloc ),               &
@@ -1270,7 +1269,7 @@ contains
                  & GET_GLOBAL_SUM( dj_LMloc ),                      &
                  & GET_GLOBAL_SUM( djdtLast_LMloc )
          end if
-
+         
          !----- Timing and info of advancement:
          ! =================================== BARRIER ======================
          !start_time=MPI_Wtime()
@@ -1296,8 +1295,10 @@ contains
             end if
             call addTime(runTime,runTimePassed)
          end if
+         
          if ( real(n_time_step,cp)+tenth_n_time_steps*real(nPercent,cp) >=  &
             & real(n_time_steps,cp)  .or. n_time_steps < 31 ) then
+            
             write(message,'(" ! Time step finished:",i6)') n_time_step
             call logWrite(message)
             if ( real(n_time_step,cp)+tenth_n_time_steps*real(nPercent,cp) >= &
@@ -1306,6 +1307,7 @@ contains
                call logWrite(message)
                nPercent=nPercent-1
             end if
+            
             do n=1,4
                runTimePassed(n)=runTimeT(n)
             end do
@@ -1323,13 +1325,12 @@ contains
                   if ( l_save_out ) close(n_log_file)
                end if
             end if
+            
          end if
-
       end do outer ! end of time stepping !
-
+      
       !LIKWID_OFF('tloop')
       PERFOFF
-
       if ( l_movie ) then
          if ( rank == 0 ) then
             if (n_frame > 0) then
@@ -1367,12 +1368,12 @@ contains
             end if
          end if
       end if
-
+      
       if ( l_cmb_field ) then
          write(message,'(A,i9)') " !  No of stored sets of b at CMB: ",n_cmb_sets
          call logWrite(message)
       end if
-
+      
       call meanTime(runTimeR, nTimeR)
       call meanTime(runTimeLM,nTimeLM)
       call meanTime(runTimeTM,nTimeTM)

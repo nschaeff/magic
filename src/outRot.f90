@@ -164,6 +164,8 @@ contains
 #endif
       logical :: rank_has_l1m0,rank_has_l1m1
       logical :: DEBUG_OUTPUT=.false.
+      
+      if (rank .NE. 0) DEBUG_OUTPUT = .false.
 
       ! some arbitrary tag for the send and recv
       sr_tag=12345
@@ -171,7 +173,7 @@ contains
       lm2(0:,0:) => lo_map%lm2
       l1m0=lm2(1,0)
       
-      if ( (rank == 0) .AND. DEBUG_OUTPUT ) &
+      if ( DEBUG_OUTPUT ) &
           write(*,"(I3,A,3I6)") coord_r,":lmStartB,lmStopB,l1m0=",        &
                         lmStartB(coord_r+1),lmStopB(coord_r+1),l1m0
     

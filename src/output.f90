@@ -417,6 +417,8 @@ contains
       real(cp) :: timeScaled
       character(len=96) :: message
       logical :: DEBUG_OUTPUT=.false.
+      
+      if (rank .NE. 0) DEBUG_OUTPUT = .false.
   
       timeScaled=tScale*time
       timePassedLog=timePassedLog+dt
@@ -453,7 +455,6 @@ contains
          PERFOFF
          if ( DEBUG_OUTPUT ) write(*,"(A,I6)") "Written  e_mag  on coord_r ",coord_r
          
-
          !----- Calculate distribution of energies on all m's
          if ( l_energy_modes ) then  
             PERFON('out_amplitude') 
@@ -623,7 +624,7 @@ contains
               &               db_ic_LMloc,ddb_ic_LMloc,aj_ic_LMloc,        &
               &               dj_ic_LMloc,ddj_ic_LMloc,l_frame)
       end if
-  
+      
   
       if ( l_RMS ) then
          if ( n_time_step == 1 ) then
@@ -672,7 +673,7 @@ contains
          call write_Bcmb(timeScaled,b_LMloc(:,n_r_cmb),l_max_cmb,   &
               &          n_cmb_setsMov,cmbMov_file,n_cmbMov_file)
       end if
-  
+      
       !--- Store potential coeffs for velocity fields and magnetic fields
       if ( l_r ) then
          PERFON('out_r')
@@ -728,7 +729,6 @@ contains
               &     dpdtLast_LMloc,dsdtLast_LMloc,dxidtLast_LMloc,dbdtLast_LMloc,&
               &     djdtLast_LMloc,dbdt_icLast_LMloc,djdt_icLast_LMloc)
       end if
-  
   
       ! ===================================================
       !      GATHERING for output
@@ -788,7 +788,7 @@ contains
               &                 dj_LMloc,b_ic,db_ic,aj_ic,dj_ic,omega_ic,     &
               &                 omega_ma)
       end if
-  
+      
       ! =======================================================================
       ! ======= compute output on coord_r 0 ==============
       ! =======================================================================
