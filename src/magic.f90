@@ -425,7 +425,6 @@ program magic
    if ( l_mag ) call finalize_magnetic_energy
    call finalize_kinetic_energy
    if ( l_probe ) call finalize_probes
-
    call finalize_communications
    call finalize_step_time
    call finalize_fieldsLast

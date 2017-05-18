@@ -92,7 +92,7 @@ contains
             rst_file='checkpoint_t='//trim(string)//'.'//tag
          end if
       end if
-
+      
       if ( rank == 0 ) then
          open(newunit=n_rst_file, file=rst_file, status='unknown', &
          &    form='unformatted')
@@ -133,7 +133,7 @@ contains
       end if
 
       !-- Gather fields on coord_r 0 and write
-
+         
       !-- Poloidal flow
       call gather_all_from_lo_to_rank0(gt_OC,w,work)
       if ( rank == 0 ) write(n_rst_file) work
@@ -179,7 +179,7 @@ contains
       !-- Inner core magnetic field
       if ( l_mag .and. l_cond_ic ) then
          deallocate( work )
-         if ( rank == 0 ) then
+         if ( coord_r == 0 ) then
             allocate ( work(lm_max, n_r_ic_max) )
          else
             allocate ( work(1,1) )

@@ -147,21 +147,23 @@ contains
          if ( inform == -1 ) inform=informOld
        
          !---- Compare parameters:
-         if ( ra /= ra_old ) &
-              write(*,'(/,'' ! New Rayleigh number (old/new):'',2ES16.6)') ra_old,ra
-         if ( ek /= ek_old ) &
-              write(*,'(/,'' ! New Ekman number (old/new):'',2ES16.6)') ek_old,ek
-         if ( pr /= pr_old ) &
-              write(*,'(/,'' ! New Prandtl number (old/new):'',2ES16.6)') pr_old,pr
-         if ( prmag /= pm_old )                                          &
-              write(*,'(/,'' ! New mag Pr.number (old/new):'',2ES16.6)') &
-              pm_old,prmag
-         if ( radratio /= radratio_old )                                    &
-              write(*,'(/,'' ! New mag aspect ratio (old/new):'',2ES16.6)') &
-              radratio_old,radratio
-         if ( sigma_ratio /= sigma_ratio_old )                             &
-              write(*,'(/,'' ! New mag cond. ratio (old/new):'',2ES16.6)') &
-              sigma_ratio_old,sigma_ratio
+         if (rank == 0) then
+            if ( ra /= ra_old ) &
+               write(*,'(/,'' ! New Rayleigh number (old/new):'',2ES16.6)') ra_old,ra
+            if ( ek /= ek_old ) &
+               write(*,'(/,'' ! New Ekman number (old/new):'',2ES16.6)') ek_old,ek
+            if ( pr /= pr_old ) &
+               write(*,'(/,'' ! New Prandtl number (old/new):'',2ES16.6)') pr_old,pr
+            if ( prmag /= pm_old )                                          &
+               write(*,'(/,'' ! New mag Pr.number (old/new):'',2ES16.6)') &
+               pm_old,prmag
+            if ( radratio /= radratio_old )                                    &
+               write(*,'(/,'' ! New mag aspect ratio (old/new):'',2ES16.6)') &
+               radratio_old,radratio
+            if ( sigma_ratio /= sigma_ratio_old )                             &
+               write(*,'(/,'' ! New mag cond. ratio (old/new):'',2ES16.6)') &
+               sigma_ratio_old,sigma_ratio
+         end if
        
          if ( n_phi_tot_old == 1 ) then ! Axisymmetric restart file
             l_max_old=nalias_old*n_theta_max_old/30
@@ -173,12 +175,14 @@ contains
          l_mag_old=.false.
          if ( pm_old /= 0.0_cp ) l_mag_old= .true. 
        
-         if ( n_phi_tot_old /= n_phi_tot) &
-              write(*,*) '! New n_phi_tot (old,new):',n_phi_tot_old,n_phi_tot
-         if ( nalias_old /= nalias) &
-              write(*,*) '! New nalias (old,new)   :',nalias_old,nalias
-         if ( l_max_old /= l_max ) &
-              write(*,*) '! New l_max (old,new)    :',l_max_old,l_max
+         if (rank == 0) then
+            if ( n_phi_tot_old /= n_phi_tot) &
+               write(*,*) '! New n_phi_tot (old,new):',n_phi_tot_old,n_phi_tot
+            if ( nalias_old /= nalias) &
+               write(*,*) '! New nalias (old,new)   :',nalias_old,nalias
+            if ( l_max_old /= l_max ) &
+               write(*,*) '! New l_max (old,new)    :',l_max_old,l_max
+         end if
 
        
          if ( inform==6 .or. inform==7 .or. inform==9 .or. inform==11 .or. &
@@ -232,9 +236,11 @@ contains
          call rscheme_oc_old%get_grid(n_r_max_old, r_icb_old, r_cmb_old, ratio1, &
               &                       ratio2, r_old)
 
-         if ( rscheme_oc%version /= rscheme_oc_old%version ) &
-            & write(*,'(/,'' ! New radial scheme (old/new):'',2A4)') &
-            & rscheme_oc_old%version, rscheme_oc%version
+         if (rank == 0) then
+            if ( rscheme_oc%version /= rscheme_oc_old%version ) &
+               & write(*,'(/,'' ! New radial scheme (old/new):'',2A4)') &
+               & rscheme_oc_old%version, rscheme_oc%version
+         end if
        
          allocate( lm2lmo(lm_max) )
        
@@ -399,10 +405,12 @@ contains
       if ( coord_r == 0 ) then
          if ( lreadXi ) then
             read(n_start_file) raxi_old, sc_old
-            if ( raxi /= raxi_old ) &
-              write(*,'(/,'' ! New composition-based Rayleigh number (old/new):'',2ES16.6)') raxi_old,raxi
-            if ( sc /= sc_old ) &
-              write(*,'(/,'' ! New Schmidt number (old/new):'',2ES16.6)') sc_old,sc
+            if (rank == 0) then
+               if ( raxi /= raxi_old ) &
+               write(*,'(/,'' ! New composition-based Rayleigh number (old/new):'',2ES16.6)') raxi_old,raxi
+               if ( sc /= sc_old ) &
+               write(*,'(/,'' ! New Schmidt number (old/new):'',2ES16.6)') sc_old,sc
+            end if
          end if
     
          if ( l_mag_old ) then
@@ -414,7 +422,7 @@ contains
                     &           .false.,workA,workB,workC,workD )
             end if
          else
-            write(*,*) '! No magnetic data in input file!'
+            if (rank == 0) write(*,*) '! No magnetic data in input file!'
          end if
       end if
 
@@ -1407,7 +1415,7 @@ contains
       &    .and. m_max==m_max_old ) then
 
          !----- Direct reading of fields, grid not changed:
-         write(*,'(/,'' ! Reading fields directly.'')')
+         if (rank == 0) write(*,'(/,'' ! Reading fields directly.'')')
 
          n_data_old=n_data
          if ( inform>2 ) then
@@ -1422,9 +1430,9 @@ contains
       else
 
          !----- Mapping onto new grid !
-         write(*,'(/,'' ! Mapping onto new grid.'')')
+         if (rank == 0) write(*,'(/,'' ! Mapping onto new grid.'')')
 
-         if ( mod(minc_old,minc) /= 0 )                                &
+         if (( mod(minc_old,minc) /= 0 ) .and. (rank == 0))                &
               &     write(6,'('' ! Warning: Incompatible old/new minc= '',2i3)')
 
          lm_max_old=m_max_old*(l_max_old+1)/minc_old -                &
@@ -1439,13 +1447,13 @@ contains
          end if
 
          !-- Write info to STdoUT:
-         write(*,'('' ! Old/New  l_max= '',2I4,''  m_max= '',2I4,     &
-              &       ''  minc= '',2I3,''  lm_max= '',2I8/)')         &
-              &           l_max_old,l_max,m_max_old,m_max,            &
+         if (rank == 0) write(*,'('' ! Old/New  l_max= '',2I4,''  m_max= '',2I4,&
+              &       ''  minc= '',2I3,''  lm_max= '',2I8/)')                   &
+              &           l_max_old,l_max,m_max_old,m_max,                      &
               &           minc_old,minc,lm_max_old,lm_max
-         if ( n_r_max_old /= n_r_max )                                &
-              &        write(*,'('' ! Old/New n_r_max='',2i4)')       &
-             &              n_r_max_old,n_r_max
+         if (( n_r_max_old /= n_r_max )  .and. (rank == 0))                     &
+              &        write(*,'('' ! Old/New n_r_max='',2i4)')                 &
+              &           n_r_max_old,n_r_max
 
       end if
 
@@ -1572,7 +1580,8 @@ contains
          allocate( xioR(n_r_maxL) )
          bytes_allocated = bytes_allocated + n_r_maxL*SIZEOF_DEF_COMPLEX
       end if
-      write(*,"(A,I12)") "maximal allocated bytes in mapData are ",bytes_allocated
+      if (rank == 0) write(*,"(A,I12)") "maximal allocated bytes in mapData are ",&
+                     bytes_allocated
 
       !PERFON('mD_map')
       do nLMB=1,nLMBs ! Blocking of loop over all (l,m)
@@ -1681,7 +1690,8 @@ contains
       allocate( woR(n_r_maxL),zoR(n_r_maxL) )
       allocate( poR(n_r_maxL),soR(n_r_maxL) )
       bytes_allocated = bytes_allocated + 4*n_r_maxL*SIZEOF_DEF_COMPLEX
-      write(*,"(A,I12)") "maximal allocated bytes in mapData are ",bytes_allocated
+      if (rank == 0) write(*,"(A,I12)") "maximal allocated bytes in mapData are ",&
+                     bytes_allocated
 
       !PERFON('mD_map')
       do nLMB=1,nLMBs ! Blocking of loop over all (l,m)

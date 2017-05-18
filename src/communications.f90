@@ -458,7 +458,7 @@ contains
          !call MPI_Barrier(comm_r,ierr)
       end if
 
-      if ( coord_r == 0 ) then
+      if ( coord_r == 0 ) then    
          ! reorder
          if ( .not. l_axi ) then
             do nR=1,self%dim2

@@ -7,7 +7,7 @@ module parallel_mod
    use MPI
 #endif
    use omp_lib
-   use logic, only: l_save_out
+   use logic, only: l_save_out, lVerbose
 
    implicit none
 
@@ -78,7 +78,8 @@ contains
       call MPI_Comm_Rank(comm_r, coord_r, ierr) 
       call check_MPI_error(ierr)
       
-      if (rank .ne. 0) l_save_out = .false.      
+      if (rank .ne. 0) l_save_out = .false.
+      if (rank .ne. 0) lVerbose   = .false.
       
 #endif WITH_MPI
    end subroutine initialize_cartesian

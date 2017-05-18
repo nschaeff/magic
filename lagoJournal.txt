@@ -1,3 +1,28 @@
+2017-05-18
+------------------------------------------------------------------------
+ ✔ fixed a bug in output.f90 which would allocate the array with the 
+   proper size only for rank=0 (instead of coord_r = 0). That caused a
+   glibc error
+ ✔ All diagnostics tests passed
+
+
+2017-04-27
+------------------------------------------------------------------------
+ ✔ Transition to GitHub completed (I'll be pushing the changes soon) but 
+   head is still 212f85cde21e3e942e62.
+ ✔ "parallel" namelist can be read from command line too, e.g.:
+   magic.exe n_procs_r=4 n_procs_theta=2 input.nml
+   will use n_procs_m from the parameter file and the n_procs_r n_procs_theta
+   from command line. Command line overrides input.nml, if both are present.
+ ✔ input file (e.g. input.nml) is now the ***last*** command line argument
+   when calling magic (because of the new command line arguments)
+ ✔ magic_wizard.py was updated to accept --extracmd argument, which passes
+   a string directly onto magic.exe, for the supracited purpose.
+
+This will make it easier to run diagnostics withouth having to consistently
+manipulate the various input.nml from samples directory.
+
+
 2017-04-24
 ------------------------------------------------------------------------
  ✔ there was a lot of trouble with the output. That is because multiple
@@ -24,9 +49,17 @@
 
 2017-04-19 and earlier
 ---------------------------------------------
-As we discussed last year in the Skype call, as a first step, I was planning to parallelize the environment "very inefficiently", by merely cloning everything for every theta and phi. So, a run with 32 processes partitioned as (r,θ,φ)=(8,2,2) would yield 4 copies of the same computation, and each copy would only communicated with the 8 processes in the r direction. Once that would be settled, we could work on doing the real parallelization.
+As we discussed last year in the Skype call, as a first step, I was planning 
+to parallelize the environment "very inefficiently", by merely cloning everything 
+for every theta and phi. So, a run with 32 processes partitioned as 
+(r,θ,φ)=(8,2,2) would yield 4 copies of the same computation, and each copy 
+would only communicated with the 8 processes in the r direction. Once that 
+would be settled, we could work on doing the real parallelization.
 
-1) I have noticed that there is a problem with your ms2time routine in timing.f90. It seems that the integers do not have enough bytes. I've changed the msecSecond, msecMinute and msecHour variables to integer(lip), and modified the function to:
+1) I have noticed that there is a problem with your ms2time routine in timing.f90. 
+It seems that the integers do not have enough bytes. I've changed the msecSecond, 
+msecMinute and msecHour variables to integer(lip), and modified the function to:
+
 hours   =int(mSeconds/msecHour)
 mSeconds=mSeconds-int(hours*msecHour,kind=lip)
 minutes =int(mSeconds/msecMinute)
@@ -34,12 +67,20 @@ mSeconds=mSeconds-int(minutes*msecMinute,kind=lip)
 seconds =int(mSeconds/msecSecond)
 mSeconds=mSeconds-int(seconds*msecSecond,kind=lip)
 
-2) which then seems to have the correct result. However, it prints things like 17000 days or more, and I have no idea if that is expected. If this doesn't look correct, then I'll doublecheck the result of MPI_Wtime.
+2) which then seems to have the correct result. However, it prints things like 17000 
+days or more, and I have no idea if that is expected. If this doesn't look correct, 
+then I'll doublecheck the result of MPI_Wtime.
 
-3) There are A LOT of temporary arrays being created as a result of the call to ZGETRS in algebra_lapack.f90 line 59. Have you looked into that?
+3) There are A LOT of temporary arrays being created as a result of the call to 
+ZGETRS in algebra_lapack.f90 line 59. Have you looked into that?
 
-4) There is quite a substantial amount of code which is executed only for process 0, if I understood it correctly, those are meant for diagnostics and checkpointing in most of the cases. Have you ever checked the loadbalance of this code?
+4) There is quite a substantial amount of code which is executed only for 
+process 0, if I understood it correctly, those are meant for diagnostics and 
+checkpointing in most of the cases. Have you ever checked the loadbalance of 
+this code?
 
-5) I don't fully understand what is going on with nLMBs_per_rank, set in blocking.f90. It seems that it is always set to 1, am I correct (lines 139 and 140)?
+5) I don't fully understand what is going on with nLMBs_per_rank, set in 
+blocking.f90. It seems that it is always set to 1, am I correct (lines 139 
+and 140)?
 
  
