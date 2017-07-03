@@ -1,3 +1,84 @@
+2017-06-21
+------------------------------------------------------------------------
+Module legendre_grid_to_spec will be dropped in favour of 
+legendre_parallel for MPI version. I'll copy the functions as they are
+needed and adapt them accordingly.
+
+legendre_spec_to_grid module is overcomplicated because of the blocking
+nThetaStart < nTheta < nThetaStart-1+sizeThetaB (implemented to favour 
+cache-hit). 
+
+Dunno if I should keep it or throw it all away. Cache-Hit will be 
+secondary if it incurs in extra allreduces, and if I understood 
+correctly, this is basically a whole bunch of inner-products (which 
+require an allreduce in parallel cases).
+
+Maybe for the MPI sake it would be better to group the leg_helper
+vectors into a matrix and assign them pointers e.g. 
+leg_helper%matrix(:,sR) instead of leg_helper%sR.
+
+This would turn lots of things into a simple matrix-vector product,
+and therefore linearly scalable. This is all speculation, maybe it will
+be better to keep current structure.
+
+
+
+2017-06-02
+------------------------------------------------------------------------
+The callstack for the do_iteration, starting from rIterThetaParallel is:
+
+⚪ do_iteration_ThetaParallel (rIterThetaParallel:450)
+⚪    loop                (rIterThetaParallel:557)
+⚪    this%transform_to_grid_space (rIterThetaParallel:154)
+⚪       legTFG           (legendre_spec_to_grid:27)
+⚪          leg_helper_t%__ATTRIBUTES__    
+⚪       loop             (legendre_spec_to_grid:181)
+⚪       legTFGnomag      (legendre_spec_to_grid:733)
+⚪          leg_helper_t%__ATTRIBUTES__    
+⚪       fft_thetab       (fft:156)
+⚪         fftJW          (fft:169)
+⚪           fft99aJW     (fft:383)
+⚪           wpass2JW     (fft:483)
+⚪           wpass3JW     (fft:518)
+⚪           wpass4JW     (fft:621)
+⚪           wpass5JW     (fft:729)
+⚪           fft99bJW     (fft:426)
+⚪       v_rigid_boundary (nonlinear_bcs:195)
+⚪    this%gsa%get_nl                      ?
+⚪    this%transform_to_lm_space           ?
+⚪    get_br_v_bcs                         ?
+⚪    get_lorentz_torque                   ?
+⚪    courant                              ?
+⚪    graphOut_mpi                         ?
+⚪    probe_out                            ?
+⚪    get_helicity                         ?
+⚪    get_visc_heat                        ?
+⚪    get_nlBLayers                        ?
+⚪    get_fluxes                           ?
+⚪    get_perpPar                          ?
+⚪    store_movie_frame                    ?
+⚪    get_dtBLM                            ?
+⚪    getTOnext                            ?
+⚪    getTO                                ?
+⚪    this%nl_lm%get_td                    ?
+⚪    getTOfinish                          ?
+⚪    get_dH_dtBLM                         ?
+
+
+
+2017-05-31
+------------------------------------------------------------------------
+ ✔ Adding rThetaParallel module; at the moment, it merely merges
+   rThetaBlocking with rThetaBlocking_seq. I will slowly adapt it from
+   now on
+ ✔ I'm validating the modifications with the following command
+      ./magic_wizard.py --use-mpi --mpicmd=srun --extracmd="n_procs_r=4 n_procs_theta=2 n_procs_m=2" --nranks=16
+   called from samples/ directory. The modules/environment variables are:
+      export FC=mpiifort
+      export CC=mpiicc
+      module purge && module load   git/2.8 impi/5.1.3  cmake/3.5  intel/16.0  anaconda/2
+
+
 2017-05-18
 ------------------------------------------------------------------------
  ✔ fixed a bug in output.f90 which would allocate the array with the 

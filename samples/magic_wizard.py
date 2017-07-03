@@ -42,6 +42,8 @@ def getParser():
                         help="Show program's version number and exit.")
     parser.add_argument('--level', action='store', dest='test_level', type=int,
                         default=-1, help='Test level, use -2 for more info')
+    parser.add_argument('--name', action='store', dest='test_name', type=str,
+                        default='all', help='Test name')
     parser.add_argument('--use-debug-flags', action='store_true', 
                         dest='use_debug_flags', 
                         default=False, help='Use compilation debug flags')
@@ -64,6 +66,8 @@ def getParser():
                         help='Specify the number of threads (hybrid version)')
     parser.add_argument('--mpicmd', action='store', dest='mpicmd', type=str,
                         default='mpirun', help='Specify the mpi executable')
+    parser.add_argument('--link', action='store_true', dest='link',
+                        default=False, help='Links executable from build/ directory instead of compiling it from source')
     parser.add_argument('--extracmd', action='store', dest='extracmd', type=str,
                         default='', 
                         help='extra command line arguments to be passed to magic.exe')
@@ -212,44 +216,52 @@ def clean_exec_dir(execDir):
     """
     shutil.rmtree(execDir)
 
-
 def getSuite(startdir, cmd, precision, args):
     """
     Construct test suite
     """
     suite = unittest.TestSuite()
+    
+    test_name = args.test_name
+    if args.test_name == 'all':
+       test_level = args.test_level
+    else:
+       test_level = -1
 
-    if args.test_level in [-1, 0]:
+    if test_level in [-1, 0]:
         # Initial state of the Boussinesq benchmark (non-conducting IC)
-        suite.addTest(dynamo_benchmark.unitTest.DynamoBenchmark('outputFileDiff',
-                                                  '%s/dynamo_benchmark' \
-                                                  % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'dynamo_benchmark':
+           suite.addTest(dynamo_benchmark.unitTest.DynamoBenchmark('outputFileDiff',
+                                                     '%s/dynamo_benchmark' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Variable properties
-        suite.addTest(varProps.unitTest.VariableProperties('outputFileDiff',
-                                                  '%s/varProps' % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
-
+        if test_name == 'all' or test_name == 'varProps':
+           suite.addTest(varProps.unitTest.VariableProperties('outputFileDiff',
+                                                     '%s/varProps' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
+           
         # Finite differences
-        suite.addTest(finite_differences.unitTest.FiniteDifferences('outputFileDiff',
-                                                  '%s/finite_differences' % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
-
+        if test_name == 'all' or test_name == 'finite_differences':
+           suite.addTest(finite_differences.unitTest.FiniteDifferences('outputFileDiff',
+                                                     '%s/finite_differences' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
+           
         # Saturated state of the Boussinesq benchmark (conducting IC)
-        suite.addTest(boussBenchSat.unitTest.BoussinesqBenchmarkTest(
-                                                  'outputFileDiff',
-                                                  '%s/boussBenchSat' % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'boussBenchSat':
+           suite.addTest(boussBenchSat.unitTest.BoussinesqBenchmarkTest(
+                                                     'outputFileDiff',
+                                                     '%s/boussBenchSat' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Double Diffusion
-        suite.addTest(doubleDiffusion.unitTest.DoubleDiffusion('outputFileDiff',
-                                                  '%s/doubleDiffusion'\
-                                                  % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'doubleDiffusion':
+           suite.addTest(doubleDiffusion.unitTest.DoubleDiffusion('outputFileDiff',
+                                                     '%s/doubleDiffusion' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Axisymmetric run (spherical Couette)
         suite.addTest(couetteAxi.unitTest.CouetteAxi('outputFileDiff',
                                                   '%s/couetteAxi'\
@@ -264,93 +276,97 @@ def getSuite(startdir, cmd, precision, args):
                                                   precision=precision))
     if args.test_level in [-1, 1]:
         # Test restart file capabilities
-        suite.addTest(testRestart.unitTest.TestRestart('outputFileDiff',
-                                                  '%s/testRestart' % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'testRestart':
+           suite.addTest(testRestart.unitTest.TestRestart('outputFileDiff',
+                                                     '%s/testRestart' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Test truncations
-        suite.addTest(testTruncations.unitTest.TestTruncations('outputFileDiff',
-                                                  '%s/testTruncations'\
-                                                  % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'testTruncations':
+           suite.addTest(testTruncations.unitTest.TestTruncations('outputFileDiff',
+                                                     '%s/testTruncations' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Test grid mapping capabilities
-        suite.addTest(testMapping.unitTest.TestMapping('outputFileDiff',
-                                                  '%s/testMapping' % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'testMapping':
+           suite.addTest(testMapping.unitTest.TestMapping('outputFileDiff',
+                                                     '%s/testMapping' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Check standard time series outputs
-        suite.addTest(testOutputs.unitTest.OutputTest('outputFileDiff',
-                                                  '%s/testOutputs' % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'testOutputs':
+           suite.addTest(testOutputs.unitTest.OutputTest('outputFileDiff',
+                                                     '%s/testOutputs' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Check radial profiles
-        suite.addTest(testRadialOutputs.unitTest.RadialOutputTest(
-                                                  'outputFileDiff',
-                                                  '%s/testRadialOutputs'\
-                                                  % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=1e-7))
-    if args.test_level in [-1, 2]:
+        if test_name == 'all' or test_name == 'testRadialOutputs':
+           suite.addTest(testRadialOutputs.unitTest.RadialOutputTest(
+                                                     'outputFileDiff',
+                                                     '%s/testRadialOutputs' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=1e-7))
+    if test_level in [-1, 2]:
         # Check the anelastic non-magnetic benchmark
-        suite.addTest(hydro_bench_anel.unitTest.AnelasticBenchmark(
-                                                  'outputFileDiff',
-                                                  '%s/hydro_bench_anel'\
-                                                  % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
-    if args.test_level in [-1, 3]:
+        if test_name == 'all' or test_name == 'hydro_bench_anel':
+           suite.addTest(hydro_bench_anel.unitTest.AnelasticBenchmark(
+                                                     'outputFileDiff',
+                                                     '%s/hydro_bench_anel' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
+    if test_level in [-1, 3]:
         # Check heat flux pattern in a Boussinesq model
-        suite.addTest(fluxPerturbation.unitTest.HeatFluxPattern(
-                                                  'outputFileDiff',
-                                                  '%s/fluxPerturbation'\
-                                                  % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'fluxPerturbation':
+           suite.addTest(fluxPerturbation.unitTest.HeatFluxPattern(
+                                                     'outputFileDiff',
+                                                     '%s/fluxPerturbation' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Check an anelastic case with a zero Gruneisen (isothermal) parameter
-        suite.addTest(isothermal_nrho3.unitTest.ZeroGruneisen(
-                                                  'outputFileDiff',
-                                                  '%s/isothermal_nrho3'\
-                                                  % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'isothermal_nrho3':
+           suite.addTest(isothermal_nrho3.unitTest.ZeroGruneisen(
+                                                     'outputFileDiff',
+                                                     '%s/isothermal_nrho3' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Check conducting and rotating IC
-        suite.addTest(dynamo_benchmark_condICrotIC.unitTest.ConductingRotatingIC(
-                                                  'outputFileDiff',
-                                                  '%s/dynamo_benchmark_condICrotIC'\
-                                                  % startdir,
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'dynamo_benchmark_condICrotIC':
+           suite.addTest(dynamo_benchmark_condICrotIC.unitTest.ConductingRotatingIC(
+                                                     'outputFileDiff',
+                                                     '%s/dynamo_benchmark_condICrotIC' % startdir,
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Check variable electrical conductivity
-        suite.addTest(varCond.unitTest.VariableConductivity('outputFileDiff',
-                                                  '%s/varCond' % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
-    if args.test_level in [-1, 4]:
+        if test_name == 'all' or test_name == 'varCond':
+           suite.addTest(varCond.unitTest.VariableConductivity('outputFileDiff',
+                                                     '%s/varCond' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
+    if test_level in [-1, 4]:
         # Check CMB and r coefficients
-        suite.addTest(testCoeffOutputs.unitTest.TestCoeffOutputs(
-                                                  'outputFileDiff',
-                                                  '%s/testCoeffOutputs'\
-                                                  % startdir, 
-                                                  execCmd=cmd))
+        if test_name == 'all' or test_name == 'testCoeffOutputs':
+           suite.addTest(testCoeffOutputs.unitTest.TestCoeffOutputs(
+                                                     'outputFileDiff',
+                                                     '%s/testCoeffOutputs' % startdir, 
+                                                     execCmd=cmd))
         # Check RMS force balance
-        suite.addTest(testRMSOutputs.unitTest.TestRMSOutputs('outputFileDiff',
-                                                  '%s/testRMSOutputs'\
-                                                  % startdir, 
-                                                  execCmd=cmd,
-                                                  precision=precision))
+        if test_name == 'all' or test_name == 'testRMSOutputs':
+           suite.addTest(testRMSOutputs.unitTest.TestRMSOutputs('outputFileDiff',
+                                                     '%s/testRMSOutputs' % startdir, 
+                                                     execCmd=cmd,
+                                                     precision=precision))
         # Check Graphic and Movie outputs
-        suite.addTest(testGraphMovieOutputs.unitTest.TestGraphicMovieOutputs(
-                                                  'outputFileDiff',
-                                                  '%s/testGraphMovieOutputs' \
-                                                  % startdir, 
-                                                  execCmd=cmd))
+        if test_name == 'all' or test_name == 'testGraphMovieOutputs':
+           suite.addTest(testGraphMovieOutputs.unitTest.TestGraphicMovieOutputs(
+                                                     'outputFileDiff',
+                                                     '%s/testGraphMovieOutputs' % startdir, 
+                                                     execCmd=cmd))
         # Check TO and Geos outputs
-        suite.addTest(testTOGeosOutputs.unitTest.TestTOGeosOutputs(
-                                                  'outputFileDiff',
-                                                  '%s/testTOGeosOutputs' \
-                                                  % startdir, 
-                                                  execCmd=cmd))
+        if test_name == 'all' or test_name == 'testTOGeosOutputs':
+           suite.addTest(testTOGeosOutputs.unitTest.TestTOGeosOutputs(
+                                                     'outputFileDiff',
+                                                     '%s/testTOGeosOutputs' % startdir, 
+                                                     execCmd=cmd))
 
     return suite
 
@@ -419,16 +435,29 @@ if __name__ == '__main__':
         printLevelInfo()
         sys.exit()
 
-# Run cmake
-    print('1. cmake configuration')
-    print('----------------------')
-    cmake(args, startdir, execDir)
+    ## Run cmake
+    if args.link:
+      print('1/2.    Linking       ')
+      print('----------------------\n')
+      try:
+         os.mkdir(execDir)
+      except:
+         pass
+      try:
+         os.unlink(execDir+'/magic.exe')
+      except:
+         pass
+      os.symlink( startdir + '/../build/magic.exe' , execDir+'/magic.exe' )
+    else:
+      print('1. cmake configuration')
+      print('----------------------')
+      cmake(args, startdir, execDir)
 
-    # Compile the code
-    print('2.    compilation     ')
-    print('----------------------')
-    compile()
-
+      # Compile the code
+      print('2.    compilation     ')
+      print('----------------------')
+      compile()
+    
     # Determine the execution command
     cmd = get_exec_cmd(args, execDir)
 

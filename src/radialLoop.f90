@@ -10,7 +10,7 @@ module radialLoop
        &            l_cond_ic, l_mag_kin, l_cond_ma, l_mag_nl,               &
        &            l_single_matrix, l_double_curl, l_chemical_conv
    use constants, only: zero
-   use parallel_mod, only: coord_r, n_procs_r, rank
+   use parallel_mod, only: coord_r, n_procs_r, n_procs_theta, rank
    use radial_data,only: nRstart,nRstop,n_r_cmb, nRstartMag, nRstopMag, &
        &                 n_r_icb
 #ifdef WITH_LIKWID
@@ -21,16 +21,18 @@ module radialLoop
 #ifdef WITH_SHTNS
    use rIterThetaBlocking_shtns_mod, only: rIterThetaBlocking_shtns_t
 #else
-#ifdef WITHOMP
-   use rIterThetaBlocking_OpenMP_mod, only: rIterThetaBlocking_OpenMP_t
-#else
-   use rIterThetaBlocking_seq_mod, only: rIterThetaBlocking_seq_t
-#endif
 #endif
 #ifdef WITH_MPI
    use graphOut_mod, only: graphOut_mpi_header
 #else
    use graphOut_mod, only: graphOut_header
+#endif
+
+   use rIterThetaParallel_mod, only: rIterThetaParallel_t
+#ifdef WITHOMP
+   use rIterThetaBlocking_OpenMP_mod, only: rIterThetaBlocking_OpenMP_t
+#else
+   use rIterThetaBlocking_seq_mod, only: rIterThetaBlocking_seq_t
 #endif
 
    implicit none
@@ -49,20 +51,34 @@ contains
       integer(lip) :: local_bytes_used
 
       local_bytes_used = bytes_allocated
+      
+      !>@TODO: This here is not right. If we ever need to use a combination of OpenMP 
+      !> and MPI, this will bring quite a lot of problems, because you need to disable 
+      !> WITHOMP flag to enable the ThetaParallel. I'd suggest to drop all of those 
+      !> ifdefs and have it decided either by parameter file, environment variables
+      !> or the structure of the parallelization itself. 
+      !>  - Lago 
 
 #ifdef WITH_SHTNS
       allocate( rIterThetaBlocking_shtns_t :: this_rIteration )
 #else
+      if (n_procs_theta > 1) then
+         allocate( rIterThetaParallel_t :: this_rIteration )
+      else
 #ifdef WITHOMP
-      allocate( rIterThetaBlocking_OpenMP_t :: this_rIteration )
+         allocate( rIterThetaBlocking_OpenMP_t :: this_rIteration )
 #else
-      allocate( rIterThetaBlocking_seq_t :: this_rIteration )
+         allocate( rIterThetaBlocking_seq_t :: this_rIteration )
 #endif
+      end if
 #endif
+
       this_type = this_rIteration%getType()
       if (rank == 0) write(*,"(2A)") "Using rIteration type: ",trim(this_type)
       call this_rIteration%initialize()
       select type (this_rIteration)
+         class is (rIterThetaParallel_t)
+           call this_rIteration%set_ThetaParallel(nThetaBs,sizeThetaB)
          class is (rIterThetaBlocking_t)
            call this_rIteration%set_ThetaBlocking(nThetaBs,sizeThetaB)
          class default

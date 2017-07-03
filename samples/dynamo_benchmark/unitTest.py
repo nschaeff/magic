@@ -27,7 +27,6 @@ def cleanDir(dir):
     if os.path.exists('%s/__pycache__' % dir):
         shutil.rmtree('%s/__pycache__' % dir)
 
-
 def readData(file):
     return np.loadtxt(file)
 
@@ -55,8 +54,8 @@ class DynamoBenchmark(unittest.TestCase):
         cleanDir(self.dir)
         os.chdir(self.dir)
         cmd = '%s %s/input.nml' % (self.execCmd, self.dir)
-        sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'),
-                stderr=open(os.devnull, 'wb'))
+        sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
+                stderr=open(self.dir + '/stderr.txt', 'wb'))
 
     def tearDown(self):
         # Cleaning when leaving

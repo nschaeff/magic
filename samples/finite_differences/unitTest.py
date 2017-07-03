@@ -65,9 +65,11 @@ class FiniteDifferences(unittest.TestCase):
         os.chdir(self.dir)
         # First run the Chebyshev case
         cmd = '%s %s/input.nml' % (self.execCmd, self.dir)
-        sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'))
+        sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
+                    stderr=open(self.dir + '/stderr.txt', 'wb'))
         cmd = 'cat e_kin.start e_mag_ic.start e_mag_oc.start > e_kin.test'
-        sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'))
+        sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
+                    stderr=open(self.dir + '/stderr.txt', 'wb'))
 
     def tearDown(self):
         # Cleaning when leaving

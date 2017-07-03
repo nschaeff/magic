@@ -82,8 +82,8 @@ class TestTruncations(unittest.TestCase):
 
             # Run MagIC
             cmd = '%s %s/input.nml' % (self.execCmd, self.dir)
-            sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'),
-                    stderr=open(os.devnull, 'wb'))
+            sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
+                    stderr=open(self.dir + '/stderr.txt', 'wb'))
 
             # Concatenate e_kin files
             str += 'e_kin.%s ' % tag

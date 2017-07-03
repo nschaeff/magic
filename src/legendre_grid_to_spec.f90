@@ -200,7 +200,7 @@ contains
            
          if ( sizeThetaB <= 4 ) return !RETURN
 
-       end if
+      end if
 
       !-- Loop over half of the thetas with step 2 unrolling:
       nThetaMin=1

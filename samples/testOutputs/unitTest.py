@@ -25,7 +25,7 @@ def cleanDir(dir):
     for f in glob.glob('%s/*.pyc' % dir):
         os.remove(f)
     if os.path.exists('%s/__pycache__' % dir):
-        shutil.rmtree('%s/__pycache__' % dir)
+        shutil.rmtree('%s/__pycache__' % dir)        
 
 def readStack(file):
     f = open(file, 'r')
@@ -64,10 +64,11 @@ class OutputTest(unittest.TestCase):
 
         os.chdir(self.dir)
         cmd = '%s %s/input.nml' % (self.execCmd, self.dir)
-        sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'),
-                stderr=open(os.devnull, 'wb'))
+        sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
+                    stderr=open(self.dir + '/stderr.txt', 'wb'))
         cmd = 'cat e_kin.start e_mag_oc.start e_mag_ic.start dipole.start heat.start par.start power.start u_square.start > e_kin.test'
-        sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'))
+        sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
+                    stderr=open(self.dir + '/stderr.txt', 'wb'))
 
     def tearDown(self):
         # Cleaning when leaving
