@@ -117,7 +117,7 @@ class MagicSpectrum(MagicSetup):
             self.ekin_polm = data[:, 2]
             self.ekin_torl = data[:, 3]
             self.ekin_torm = data[:, 4]
-        elif self.name == 'mag_spec_ave' or self.name == 'mag_spec_':
+        elif self.name == 'mag_spec_':
             self.emag_poll = data[:, 1]
             self.emag_polm = data[:, 2]
             self.emag_torl = data[:, 3]
@@ -129,6 +129,13 @@ class MagicSpectrum(MagicSetup):
             self.emagcmb_l = data[:, 9]
             self.emagcmb_m = data[:, 10]
             self.eCMB = data[:, 11]
+        elif self.name == 'mag_spec_ave':
+            self.emag_poll = data[:, 1]
+            self.emag_polm = data[:, 2]
+            self.emag_torl = data[:, 3]
+            self.emag_torm = data[:, 4]
+            self.emagcmb_l = data[:, 5]
+            self.emagcmb_m = data[:, 6]
         elif self.name == 'dtVrms_spec':
             self.dtVRms = data[:, 1]
             self.CorRms = data[:, 2]
