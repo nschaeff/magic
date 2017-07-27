@@ -54,7 +54,7 @@ contains
       !-- Name lists:
       integer :: runHours,runMinutes,runSeconds
       
-      namelist/parallel/n_procs_r,n_procs_theta,n_procs_m
+      namelist/parallel/n_procs_r,n_procs_theta
       
       namelist/grid/n_r_max,n_cheb_max,n_phi_tot,n_theta_axi, &
          &  n_r_ic_max,n_cheb_ic_max,minc,nalias,l_axi,       &
@@ -519,9 +519,9 @@ contains
       end if
       
       !-- Check if parallelization is consistent
-      if (n_procs_r * n_procs_m * n_procs_theta .NE. n_procs) then
+      if (n_procs_r * n_procs_theta .NE. n_procs) then
         call abortRun('! Invalid parallelization partition! Make sure that n_procs_r'//&
-                      '* n_procs_m * n_procs_theta equals the number of available processes!')
+                      '* n_procs_theta equals the number of available processes!')
       end if
       
 
@@ -759,7 +759,6 @@ contains
       write(n_out,*) " "
       write(n_out,*) "&parallel"
       write(n_out,'(''  n_procs_r        ='',i5,'','')') n_procs_r
-      write(n_out,'(''  n_procs_m        ='',i5,'','')') n_procs_m
       write(n_out,'(''  n_procs_theta    ='',i5,'','')') n_procs_theta
 
       write(n_out,*) " "
@@ -1132,7 +1131,6 @@ contains
       !----- Namelist parallel
       n_procs_r     = n_procs
       n_procs_theta = 1
-      n_procs_m     = 1
 
       !----- Namelist grid
       ! must be of form 4*integer+1

@@ -1,3 +1,110 @@
+2017-07-27
+------------------------------------------------------------------------
+Implemented the following functions:
+
+initialize_fft_phi  (fft_mkl.f90)
+fft_phi             (fft_mkl.f90)
+finalize_fft_phi    (fft_mkl.f90)
+
+spat_to_SH_parallel (shtns.f90)
+
+spat_to_SH_parallel in shtns.f90, calls the spat_to_SH, then calls the 
+spat_to_SH_ml in a loop and compare the results. At this moment this is 
+merely for debugging, but later I'll clean it up.
+
+fft_phi performs n_theta_max times a 1D DFT on an (n_phi_max,n_theta_max)
+input, with a (m_max, n_theta_max) output.
+
+The spat_to_SH_parallel is particularly verbose at the moment (output
+file is now 500MB more or less!!) but as mentioned, this is just for 
+debugging. In draco:
+
+srun -n 8 --label ${binary} n_procs_r=4 n_procs_theta=2 ${namelist_file}) > output.txt
+cat ./output.txt | grep "^0:" | head -n 1000
+
+
+2017-07-21
+------------------------------------------------------------------------
+Currently compiling SHtns with:
+./configure --enable-mkl --enable-magic-layout --disable-openmp --prefix=$HOME/local/
+make
+make install
+
+Use nm ~/local/lib/libshtns.a to see all the comprised functions.
+
+Currently compiling magIC with:
+cd build
+rm -Rf ./*
+cmake .. -DUSE_SHTNS=yes -DUSE_OMP=no
+make VERBOSE=1
+
+Test magIC with
+cd ./
+
+
+2017-07-20
+------------------------------------------------------------------------
+Functions from SHtns relevant for the parallelization (according to 
+Thomas):
+
+⚪ void spat_to_SH_ml (shtns_cfg, int im, cplx *Vr, cplx *Ql, int ltr)
+⚪ void SH_to_spat_ml (shtns_cfg, int im, cplx *Ql, cplx *Vr, int ltr)
+⚪ void spat_to_SHsphtor_ml (shtns_cfg, int im, cplx *Vt, cplx *Vp, cplx *Sl, cplx *Tl, int ltr)
+⚪ void SHsphtor_to_spat_ml (shtns_cfg, int im, cplx *Sl, cplx *Tl, cplx *Vt, cplx *Vp, int ltr)
+⚪ void SHsph_to_spat_ml (shtns_cfg, int im, cplx *Sl, cplx *Vt, cplx *Vp, int ltr)
+⚪ void SHtor_to_spat_ml (shtns_cfg, int im, cplx *Tl, cplx *Vt, cplx *Vp, int ltr)
+⚪ void spat_to_SHqst_ml (shtns_cfg, int im, cplx *Vr, cplx *Vt, cplx *Vp, cplx *Ql, cplx *Sl, cplx *Tl, int ltr)
+⚪ void SHqst_to_spat_ml (shtns_cfg, int im, cplx *Ql, cplx *Sl, cplx *Tl, cplx *Vr, cplx *Vt, cplx *Vp, int ltr)
+
+Currently called functions in magIC:
+⚪ void spat_to_SH (shtns_cfg shtns, double *Vr, cplx *Qlm)
+⚪ void SH_to_spat (shtns_cfg shtns, cplx *Qlm, double *Vr)
+⚪ void spat_to_SHsphtor (shtns_cfg, double *Vt, double *Vp, cplx *Slm, cplx *Tlm)
+⚪ void SHsphtor_to_spat (shtns_cfg, cplx *Slm, cplx *Tlm, double *Vt, double *Vp)
+⚪ void SHsph_to_spat (shtns_cfg, cplx *Slm, double *Vt, double *Vp)
+⚪ void SHtor_to_spat (shtns_cfg, cplx *Tlm, double *Vt, double *Vp)
+⚪ void spat_to_SHqst (shtns_cfg, double *Vr, double *Vt, double *Vp, cplx *Qlm, cplx *Slm, cplx *Tlm)
+⚪ void SHqst_to_spat (shtns_cfg, cplx *Qlm, cplx *Slm, cplx *Tlm, double *Vr, double *Vt, double *Vp)
+
+Function call is practically the same, except that second argument is 
+the m index (im), and the last argument is the ltr (which is lmax, 
+obtained from shtns_calc_nlm()). Also, the V, Q, S and T are all COMPLEX for the 
+_ml functions, because no FFT is performed for them.
+
+Relevant dimensions from magIC:
+⚫ lmP_max=lm_max + n_m_max                   @truncation:95
+⚫ nrp = n_phi_max  , used for real fields    @truncation:102 (for SHTNS only)
+⚫ ncp = n_phi_max/2, used for complex fields @truncation:106 (for SHTNS only) 
+⚫ nfs = n_theta_max                          @blocking:269   (for SHTNS only)
+
+Relevant fields from magIC:
+⚫ general_arrays_t%*  REAL  nrp×nfs     allocated@get_nl:79~93
+⚫ nonlinear_lm_t%*    CMPLX lmP_max     allocated@get_td:67~80
+
+Initialization of shtns:
+Config_0:
+⚫ call shtns_set_size(l_max  , m_max/minc, minc, SHT_ORTHONORMAL + SHT_NO_CS_PHASE)
+Config_1:
+⚫ call shtns_set_size(l_max+1, m_max/minc, minc, SHT_ORTHONORMAL + SHT_NO_CS_PHASE)
+
+Notation Conversion:
+✘ shtns's lmax => magIC's l_max (+1 for Config_1)
+✘ shtns's mmax => magIC's m_max/minc
+✘ shtns's mres => magIC's minc
+
+2017-07-18
+------------------------------------------------------------------------
+Total change of plans after last conversation with Thomas.
+
+The parallel implementation is to be taken from the _shtns version
+of the rIterTheta. SHtns library already supports the transforms
+to a specific m and a specific l range, meaning that it should be
+trivial to simply call those routines.
+
+So now rIterThetaParallel is a copy of rIterThetaBlocking_shtns
+merged with rIteration (to get rid of the transform_to_grid_space
+defined in the later module).
+
 2017-06-21
 ------------------------------------------------------------------------
 Module legendre_grid_to_spec will be dropped in favour of 
@@ -72,7 +179,7 @@ The callstack for the do_iteration, starting from rIterThetaParallel is:
    rThetaBlocking with rThetaBlocking_seq. I will slowly adapt it from
    now on
  ✔ I'm validating the modifications with the following command
-      ./magic_wizard.py --use-mpi --mpicmd=srun --extracmd="n_procs_r=4 n_procs_theta=2 n_procs_m=2" --nranks=16
+      ./magic_wizard.py --link --use-mpi --mpicmd=srun --extracmd="n_procs_r=4 n_procs_theta=2 n_procs_m=2" --nranks=16 --name=couetteAxi
    called from samples/ directory. The modules/environment variables are:
       export FC=mpiifort
       export CC=mpiicc

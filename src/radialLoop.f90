@@ -61,16 +61,15 @@ contains
 
 #ifdef WITH_SHTNS
       allocate( rIterThetaBlocking_shtns_t :: this_rIteration )
-#else
       if (n_procs_theta > 1) then
          allocate( rIterThetaParallel_t :: this_rIteration )
-      else
+      end if
+#else
 #ifdef WITHOMP
          allocate( rIterThetaBlocking_OpenMP_t :: this_rIteration )
 #else
          allocate( rIterThetaBlocking_seq_t :: this_rIteration )
 #endif
-      end if
 #endif
 
       this_type = this_rIteration%getType()

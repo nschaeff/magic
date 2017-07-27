@@ -7,3 +7,7 @@ magic.exe
 perf.*.xml
 TAGS
 *~
+
+samples/**/*.txt
+samples/**/*_BIS
+samples/**/*.test

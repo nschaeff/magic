@@ -13,8 +13,8 @@ module parallel_mod
 
    integer :: nThreads
    integer :: rank, n_procs
-   integer :: n_procs_r, n_procs_theta, n_procs_m
-   integer :: comm_cart, comm_r !, comm_m, comm_theta
+   integer :: n_procs_r, n_procs_theta
+   integer :: comm_cart, comm_r, comm_theta
    integer :: coord_r, coord_m, coord_theta
    integer :: nR_per_rank,nR_on_last_rank
    integer :: nLMBs_per_rank
@@ -49,33 +49,28 @@ contains
 !------------------------------------------------------------------------------
    subroutine initialize_cartesian
 #ifdef WITH_MPI
-      integer :: dims(3), coords(3), ierr, colour
-      logical :: periods(3)
-      dims    = (/n_procs_m, n_procs_theta, n_procs_r/)
-      periods = (/.true., .true., .false./)
+      integer :: dims(2), coords(2), ierr, colour
+      logical :: periods(2)
+      dims    = (/n_procs_theta, n_procs_r/)
+      periods = (/.true., .false./)
       
-      call MPI_Cart_Create(MPI_COMM_WORLD, 3, dims, periods, .true., comm_cart, ierr)
+      call MPI_Cart_Create(MPI_COMM_WORLD, 2, dims, periods, .true., comm_cart, ierr)
       call check_MPI_error(ierr)
       
       ! Overwrite "rank" ! Make sure later that 0 in MPI_COMM_WORLD is the same 0 as in this comm!
       call MPI_Comm_Rank(comm_cart, rank, ierr) 
       call check_MPI_error(ierr)
       
-      call MPI_Cart_Coords(comm_cart,rank,3,coords,ierr)
+      call MPI_Cart_Coords(comm_cart,rank,2,coords,ierr)
       call check_MPI_error(ierr)
       
-      coord_m     = coords(1)
-      coord_theta = coords(2)
-!       coord_r     = coords(3)
-      
-      colour = (coords(1)-1)*n_procs_theta + coords(2)
-      call MPI_Comm_Split(comm_cart, colour, coords(3), comm_r, ierr)
+      call MPI_Comm_Split(comm_cart, coords(1), rank, comm_r, ierr)
       call check_MPI_error(ierr)
-      
-      ! coord_r should be identical to coord(3),  but maybe in some weird MPI
-      ! implementations or some exotic configuratons it will not be. So just to 
-      ! be SURE, let's keep it like this - Lago
       call MPI_Comm_Rank(comm_r, coord_r, ierr) 
+      call check_MPI_error(ierr)
+      
+      call MPI_Comm_Split(comm_cart, coords(2), rank, comm_theta, ierr)
+      call MPI_Comm_Rank(comm_theta, coord_theta, ierr) 
       call check_MPI_error(ierr)
       
       if (rank .ne. 0) l_save_out = .false.
