@@ -436,6 +436,10 @@ program magic
    call finalize_LMLoop
    call finalize_radialLoop
 
+#ifdef WITH_SHTNS
+   call finalize_shtns
+#endif
+
    call finalize_der_arrays
 
    call finalize_horizontal_data

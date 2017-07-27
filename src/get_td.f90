@@ -31,7 +31,7 @@ module nonlinear_lm_mod
     
 
    implicit none
- 
+   
    type :: nonlinear_lm_t
       !----- Nonlinear terms in lm-space: 
       complex(cp), allocatable :: AdvrLM(:), AdvtLM(:), AdvpLM(:)

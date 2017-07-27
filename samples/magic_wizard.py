@@ -146,18 +146,19 @@ def cmake(args, startdir, execDir):
                                                 shtns_opt)
     print('  '+cmd)
     print('\n')
-    sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'))
+    sp.call(cmd, shell=True, stdout=open('./cmake_stdout.txt', 'wb'), 
+                             stderr=open('./cmake_stderr.txt', 'wb'),)
 
 
 def compile():
     """
     Compile the code
     """
-    cmd = 'make -j'
+    cmd = 'make -j VERBOSE=1'
     print('  '+cmd)
     print('\n')
-    sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'),
-            stderr=open(os.devnull, 'wb'))
+    sp.call(cmd, shell=True, stdout=open('./make_stdout.txt', 'wb'),
+            stderr=open('./make_stderr.txt', 'wb'))
 
 
 def get_env(args):

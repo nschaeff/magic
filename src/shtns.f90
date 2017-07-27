@@ -7,6 +7,7 @@ module shtns
    use horizontal_data, only: dLh, D_m, O_sin_theta_E2
    use radial_functions, only: or2
    use parallel_mod
+   use fft, only: init_fft_phi, finalize_fft_phi, fft_phi
 
    implicit none
 
@@ -15,8 +16,9 @@ module shtns
    private
 
    public :: init_shtns, scal_to_spat, scal_to_grad_spat, pol_to_grad_spat, &
-   &         torpol_to_spat, pol_to_curlr_spat, torpol_to_curl_spat,        &
-   &         torpol_to_dphspat, spat_to_SH, spat_to_sphertor
+             torpol_to_spat, pol_to_curlr_spat, torpol_to_curl_spat,        &
+             torpol_to_dphspat, spat_to_SH, spat_to_SH_parallel
+   public :: finalize_shtns
 
 contains
 
@@ -47,8 +49,19 @@ contains
       call shtns_save_cfg(1)
 
       call shtns_load_cfg(0)
-
+      
+      ! Might want to add a condition for initializing this only if necessary
+      call init_fft_phi
+      
    end subroutine
+!------------------------------------------------------------------------------
+   subroutine finalize_shtns
+!@>author Rafael Lago, MPCDF, July 2017
+!------------------------------------------------------------------------------
+
+      call finalize_fft_phi
+
+   end subroutine finalize_shtns
 !------------------------------------------------------------------------------
    subroutine scal_to_spat(Slm, fieldc)
       ! transform a spherical harmonic field into grid space
@@ -185,6 +198,86 @@ contains
       call shtns_load_cfg(0)
 
    end subroutine spat_to_SH
+! !------------------------------------------------------------------------------
+!    subroutine spat_to_SH_ml(m_idx, f, fLM, len_fLM)
+! !
+! !@>details Calls SHtns function to perform the Legendre transform (no FFT)
+! !> only for a given m. len_fLM is the expected size of the output array, 
+! !> which depends on m.
+! !> 
+! !@>params f(n_θ,n_φ): this should be the field after the FFT and the 
+! !> transposition (hence the flipped dimensions).
+! !
+! !
+! !>@bug if you pass f as a real argument converted to complex, e.g.
+! !> call spat_to_SH_ml(1, cmplx(f,kind=cp), fLM, 10)
+! !> then C will do something silly with the memory addresses and overwrite
+! !> m_idx (which is, theoretically, read-only). These on-the-fly conversion 
+! !> are discouraged anyway.
+! ! 
+! !@>author Rafael Lago (MPCDF) July 2017
+! !------------------------------------------------------------------------------
+!       integer    , intent(in)  :: m_idx, len_fLM
+!       complex(cp), intent(in)  :: f(n_theta_max, n_phi_max) 
+!       complex(cp), intent(out) :: fLM(len_fLM)
+! 
+!       call shtns_load_cfg(1)
+!       call shtns_spat_to_sh_ml(m_idx, f, fLM, len_fLM)
+!       call shtns_load_cfg(0)
+! 
+!    end subroutine spat_to_SH_ml
+!------------------------------------------------------------------------------
+   subroutine spat_to_SH_parallel(f, fLM, name)
+
+      real(cp),     intent(inout) :: f(n_phi_max, n_theta_max)
+      complex(cp),  intent(inout) :: fLM(lm_max)
+      character(len=*), intent(in) :: name
+      
+      complex(cp) :: f_phi_theta(n_phi_max,n_theta_max)
+      complex(cp) :: f_m_theta(m_max,n_theta_max)
+      complex(cp) :: f_theta_m(n_theta_max, m_max)
+      complex(cp) :: ref_fLM(lm_max)
+      integer :: m_idx, lm_s, lm_e
+      real    :: norm_diff
+      
+!       allocate(f_phi_theta(n_phi_max, n_theta_max))
+!       allocate(f_theta_m(n_theta_max, m_max)      )
+!       allocate(f_m_theta(m_max, n_theta_max)      )
+!       allocate(ref_fLM(lm_max)                    )
+      
+      call shtns_load_cfg(1)
+      
+      f_phi_theta = cmplx(f, 0.0_cp, kind=cp)
+      call spat_to_SH(f, fLM)
+      
+      call fft_phi(f_phi_theta, f_m_theta, 1)
+      f_theta_m = transpose(f_m_theta)
+      
+      ! Now do it using the new function in a loop
+      do m_idx = 0, m_max-minc, minc
+        call shtns_lmidx(lm_s, 0, m_idx) 
+        call shtns_lmidx(lm_e, 0, m_idx+1)
+        call shtns_spat_to_sh_ml(m_idx, f_theta_m(:,m_idx+1), ref_fLM(lm_s:lm_e-1), lm_e-lm_s)
+      end do
+      call shtns_spat_to_sh_ml(m_idx, f_theta_m(:,m_max), ref_fLM(lm_e:lm_e+1), 1)
+      
+      call shtns_load_cfg(0)
+      
+      norm_diff = NORM2(real(fLM) - real(ref_fLM))/real(lm_max)
+      
+      if (norm_diff > 1e-10) then
+        print *, "Conversion for  ", name, " doesn't match! Norm: ", norm_diff
+        print *, fLM(1:10)
+        print *, "~~~~~~~"
+        print *, ref_fLM(1:10)
+      else
+        if (rank == 0 ) then
+          print *, name, "Norm:", norm_diff
+        end if
+      end if
+      
+
+   end subroutine spat_to_SH_parallel
 !------------------------------------------------------------------------------
    subroutine spat_to_sphertor(f,g,fLM,gLM)
 

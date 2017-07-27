@@ -5,7 +5,7 @@ module fft
 
    use precision_mod
    use constants, only: one
-   use truncation, only: nrp, ncp, n_phi_max
+   use truncation, only: nrp, ncp, n_phi_max, n_theta_max, m_max
    use blocking, only: nfs
    !use parallel_mod, only: nThreads
    use mkl_dfti
@@ -17,9 +17,13 @@ module fft
    !----------- MKL specific variables -------------
    integer :: status
    type(DFTI_DESCRIPTOR), pointer :: c2r_handle, r2c_handle
+   type(DFTI_DESCRIPTOR), pointer :: phi2m_handle, m2phi_handle
    !----------- END MKL specific variables
  
    public :: fft_thetab, init_fft, fft_to_real, finalize_fft
+#ifdef WITH_SHTNS
+   public :: init_fft_phi, finalize_fft_phi, fft_phi, m2phi_handle, phi2m_handle
+#endif
 
 contains
 
@@ -68,8 +72,55 @@ contains
                              one/real(number_of_points,cp) )
       !status = DftiSetValue( r2c_handle, DFTI_NUMBER_OF_USER_THREADS, nThreads)
       status = DftiCommitDescriptor( r2c_handle )
-
+      
    end subroutine init_fft
+#ifdef WITH_SHTNS
+!------------------------------------------------------------------------------
+  subroutine init_fft_phi
+!>@author Rafael Lago, MPCDF, July 2017
+!------------------------------------------------------------------------------
+    integer :: status
+    
+    status = DftiCreateDescriptor( phi2m_handle, DFTI_DOUBLE, DFTI_COMPLEX, 1, n_phi_max )
+    status = DftiSetValue( phi2m_handle, DFTI_NUMBER_OF_TRANSFORMS, n_theta_max)
+    status = DftiSetValue( phi2m_handle, DFTI_INPUT_DISTANCE, n_phi_max )
+    status = DftiSetValue( phi2m_handle, DFTI_OUTPUT_DISTANCE, m_max )
+    status = DftiSetValue( phi2m_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE )
+    status = DftiSetValue( phi2m_handle, DFTI_FORWARD_SCALE, 1.0_cp/real(n_phi_max,cp) )
+    status = DftiSetValue( phi2m_handle, DFTI_BACKWARD_SCALE, 1.0_cp/real(m_max,cp) )
+    status = DftiCommitDescriptor( phi2m_handle )
+    
+  end subroutine
+
+!------------------------------------------------------------------------------
+  subroutine finalize_fft_phi
+!>@author Rafael Lago, MPCDF, July 2017
+!------------------------------------------------------------------------------
+    integer :: status
+    
+    status = DftiFreeDescriptor(phi2m_handle)
+    status = DftiFreeDescriptor(m2phi_handle)
+  end subroutine
+  
+!------------------------------------------------------------------------------
+  subroutine fft_phi(f, g, dir)
+!>@author Rafael Lago, MPCDF, July 2017
+!------------------------------------------------------------------------------
+    complex(cp), intent(inout)  :: f(n_phi_max*n_theta_max)
+    complex(cp), intent(inout)  :: g(m_max*n_theta_max)
+    integer,     intent(in)     :: dir
+    integer :: status
+    
+    if (dir == 1) then
+      status  = DftiComputeForward(  phi2m_handle, f, g )
+    else if (dir == -1) then
+      status  = DftiComputeBackward( phi2m_handle, g, f )
+    else
+      print *, "Unknown direction in fft_phi: ", dir
+    end if
+    
+  end subroutine
+#endif
 !------------------------------------------------------------------------------
    subroutine finalize_fft
 
