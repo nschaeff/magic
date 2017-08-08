@@ -74,20 +74,23 @@ contains
       status = DftiCommitDescriptor( r2c_handle )
       
    end subroutine init_fft
+
 #ifdef WITH_SHTNS
 !------------------------------------------------------------------------------
   subroutine init_fft_phi
+!>@details Initializer for the handler used in fft_phi
 !>@author Rafael Lago, MPCDF, July 2017
 !------------------------------------------------------------------------------
     integer :: status
     
     status = DftiCreateDescriptor( phi2m_handle, DFTI_DOUBLE, DFTI_COMPLEX, 1, n_phi_max )
+    status = DftiSetValue( phi2m_handle, DFTI_COMPLEX_STORAGE, DFTI_COMPLEX_COMPLEX)
     status = DftiSetValue( phi2m_handle, DFTI_NUMBER_OF_TRANSFORMS, n_theta_max)
     status = DftiSetValue( phi2m_handle, DFTI_INPUT_DISTANCE, n_phi_max )
-    status = DftiSetValue( phi2m_handle, DFTI_OUTPUT_DISTANCE, m_max )
+    status = DftiSetValue( phi2m_handle, DFTI_OUTPUT_DISTANCE, m_max + 1 )
     status = DftiSetValue( phi2m_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE )
     status = DftiSetValue( phi2m_handle, DFTI_FORWARD_SCALE, 1.0_cp/real(n_phi_max,cp) )
-    status = DftiSetValue( phi2m_handle, DFTI_BACKWARD_SCALE, 1.0_cp/real(m_max,cp) )
+    status = DftiSetValue( phi2m_handle, DFTI_BACKWARD_SCALE, 1.0_cp/real(m_max + 1,cp) )
     status = DftiCommitDescriptor( phi2m_handle )
     
   end subroutine
@@ -104,17 +107,22 @@ contains
   
 !------------------------------------------------------------------------------
   subroutine fft_phi(f, g, dir)
+!>@details Performs nθ FFTs, converting the entries in φ to m.
+!> This will output a (n_max+1, n_theta) matrix (or a vectorized matrix, to 
+!> exploit the symmetry) which should be later used to convert to full (l,m)
+!> space. Note that this is n_max+1 because the Legendre polynomial is computed
+!> for m from 0 to Nm.
 !>@author Rafael Lago, MPCDF, July 2017
 !------------------------------------------------------------------------------
     complex(cp), intent(inout)  :: f(n_phi_max*n_theta_max)
-    complex(cp), intent(inout)  :: g(m_max*n_theta_max)
+    complex(cp), intent(inout)  :: g((m_max+1)*n_theta_max)
     integer,     intent(in)     :: dir
     integer :: status
     
     if (dir == 1) then
-      status  = DftiComputeForward(  phi2m_handle, f, g )
+      status  = DftiComputeForward(  phi2m_handle, f(:), g(:) )
     else if (dir == -1) then
-      status  = DftiComputeBackward( phi2m_handle, g, f )
+      status  = DftiComputeBackward( phi2m_handle, g(:), f(:) )
     else
       print *, "Unknown direction in fft_phi: ", dir
     end if
