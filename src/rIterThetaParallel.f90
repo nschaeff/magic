@@ -8,7 +8,7 @@ module rIterThetaParallel_mod
        &                 n_phi_maxStr, n_theta_maxStr, n_r_maxStr, &
        &                 lm_maxMag, l_axi, n_theta_max, n_phi_max, &
        &                 nrp, n_r_max, m_max, minc
-   use blocking, only: nfs
+   use blocking, only: nfs, lm2
    use logic, only: l_mag, l_conv, l_mag_kin, l_heat, l_ht, l_anel,  &
        &            l_mag_LF, l_conv_nl, l_mag_nl, l_b_nl_cmb,       &
        &            l_b_nl_icb, l_rot_ic, l_cond_ic, l_rot_ma,       &
@@ -606,10 +606,6 @@ subroutine allocate_common_arrays(this)
    end subroutine transform_to_grid_space
 !-------------------------------------------------------------------------------
    subroutine transform_to_lm_space(this, gsa, nl_lm)
-!>@details Performs the following transform (for several fields):
-!> DFT(u(φ,θ)) -> ũ(m,θ)       
-!>
-!
 !>@author Rafael Lago, MPCDF
 !-------------------------------------------------------------------------------
 
@@ -617,12 +613,15 @@ subroutine allocate_common_arrays(this)
       type(grid_space_arrays_t) :: gsa
       type(nonlinear_lm_t) :: nl_lm
       
+      
       ! Local variables
       integer :: nTheta, nPhi
+      real(cp)    :: f(n_phi_max, n_theta_max)
+      logical :: passed(29)
       
-      integer :: status
+      integer :: status, lm_s, lm_e, m_idx, tmp_i, i, j, k
 
-      call shtns_load_cfg(1)
+      passed = .true.
 
       if ( (.not.this%isRadialBoundaryPoint .or. this%lRmsCalc) &
             .and. ( l_conv_nl .or. l_mag_LF ) ) then
@@ -658,77 +657,77 @@ subroutine allocate_common_arrays(this)
          end if
         
          ! Computes the transform
-         call spat_to_SH_parallel(gsa%Advr, nl_lm%AdvrLM, "Advr")
-         call spat_to_SH_parallel(gsa%Advt, nl_lm%AdvtLM, "Advt")
-         call spat_to_SH_parallel(gsa%Advp, nl_lm%AdvpLM, "Advp")
+         call spat_to_SH_parallel(gsa%Advr, nl_lm%AdvrLM, "Advr",passed(1))
+         call spat_to_SH_parallel(gsa%Advt, nl_lm%AdvtLM, "Advt",passed(2))
+         call spat_to_SH_parallel(gsa%Advp, nl_lm%AdvpLM, "Advp",passed(3))
 
          if ( this%lRmsCalc .and. l_mag_LF .and. this%nR>n_r_LCR ) then
             ! LF treated extra:
-            call spat_to_SH_parallel(gsa%LFr, nl_lm%LFrLM, "LFr")
-            call spat_to_SH_parallel(gsa%LFt, nl_lm%LFtLM, "LFt")
-            call spat_to_SH_parallel(gsa%LFp, nl_lm%LFpLM, "LFp")
+            call spat_to_SH_parallel(gsa%LFr, nl_lm%LFrLM, "LFr",passed(4))
+            call spat_to_SH_parallel(gsa%LFt, nl_lm%LFtLM, "LFt",passed(5))
+            call spat_to_SH_parallel(gsa%LFp, nl_lm%LFpLM, "LFp",passed(6))
          end if
          !PERFOFF
       end if
       if ( (.not.this%isRadialBoundaryPoint) .and. l_heat ) then
          !PERFON('inner2')
-         call spat_to_SH_parallel(gsa%VSr, nl_lm%VSrLM, "VSr")
-         call spat_to_SH_parallel(gsa%VSt, nl_lm%VStLM, "VSt")
-         call spat_to_SH_parallel(gsa%VSp, nl_lm%VSpLM, "VSp")
+         call spat_to_SH_parallel(gsa%VSr, nl_lm%VSrLM, "VSr",passed(7))
+         call spat_to_SH_parallel(gsa%VSt, nl_lm%VStLM, "VSt",passed(8))
+         call spat_to_SH_parallel(gsa%VSp, nl_lm%VSpLM, "VSp",passed(9))
 
          if (l_anel) then ! anelastic stuff
             if ( l_mag_nl .and. this%nR>n_r_LCR ) then
-               call spat_to_SH_parallel(gsa%ViscHeat, nl_lm%ViscHeatLM, "ViscHeat")
-               call spat_to_SH_parallel(gsa%OhmLoss, nl_lm%OhmLossLM, "OhmLoss")
+               call spat_to_SH_parallel(gsa%ViscHeat, nl_lm%ViscHeatLM, "ViscHeat",passed(10))
+               call spat_to_SH_parallel(gsa%OhmLoss, nl_lm%OhmLossLM, "OhmLoss",passed(11))
             else
-               call spat_to_SH_parallel(gsa%ViscHeat, nl_lm%ViscHeatLM, "ViscHeat")
+               call spat_to_SH_parallel(gsa%ViscHeat, nl_lm%ViscHeatLM, "ViscHeat",passed(12))
             end if
          end if
          !PERFOFF
       end if
       if ( (.not.this%isRadialBoundaryPoint) .and. l_TP_form ) then
          !PERFON('inner2')
-         call spat_to_SH_parallel(gsa%VPr, nl_lm%VPrLM, "VPr")
+         call spat_to_SH_parallel(gsa%VPr, nl_lm%VPrLM, "VPr",passed(13))
          !PERFOFF
       end if
       if ( (.not.this%isRadialBoundaryPoint) .and. l_chemical_conv ) then
          !PERFON('inner2')
-         call spat_to_SH_parallel(gsa%VXir, nl_lm%VXirLM, "VXir")
-         call spat_to_SH_parallel(gsa%VXit, nl_lm%VXitLM, "VXit")
-         call spat_to_SH_parallel(gsa%VXip, nl_lm%VXipLM, "VXip")
+         call spat_to_SH_parallel(gsa%VXir, nl_lm%VXirLM, "VXir",passed(14))
+         call spat_to_SH_parallel(gsa%VXit, nl_lm%VXitLM, "VXit",passed(15))
+         call spat_to_SH_parallel(gsa%VXip, nl_lm%VXipLM, "VXip",passed(16))
          !PERFOFF
       end if
       if ( l_mag_nl ) then
          !PERFON('mag_nl')
          if ( .not.this%isRadialBoundaryPoint .and. this%nR>n_r_LCR ) then
-            call spat_to_SH_parallel(gsa%VxBr, nl_lm%VxBrLM, "VxBr")
-            call spat_to_SH_parallel(gsa%VxBt, nl_lm%VxBtLM, "VxBt")
-            call spat_to_SH_parallel(gsa%VxBp, nl_lm%VxBpLM, "VxBp")
+            call spat_to_SH_parallel(gsa%VxBr, nl_lm%VxBrLM, "VxBr",passed(17))
+            call spat_to_SH_parallel(gsa%VxBt, nl_lm%VxBtLM, "VxBt",passed(18))
+            call spat_to_SH_parallel(gsa%VxBp, nl_lm%VxBpLM, "VxBp",passed(19))
          else
             !write(*,"(I4,A,ES20.13)") this%nR,", VxBt = ",sum(VxBt*VxBt)
-            call spat_to_SH_parallel(gsa%VxBt, nl_lm%VxBtLM, "VxBt")
-            call spat_to_SH_parallel(gsa%VxBp, nl_lm%VxBpLM, "VxBp")
+            call spat_to_SH_parallel(gsa%VxBt, nl_lm%VxBtLM, "VxBt",passed(20))
+            call spat_to_SH_parallel(gsa%VxBp, nl_lm%VxBpLM, "VxBp",passed(21))
          end if
          !PERFOFF
       end if
 
       if ( this%lRmsCalc ) then
-         call spat_to_SH_parallel(gsa%p1, nl_lm%p1LM, "p1")
-         call spat_to_SH_parallel(gsa%p2, nl_lm%p2LM, "p2")
-         call spat_to_SH_parallel(gsa%CFt2, nl_lm%CFt2LM, "CFt2")
-         call spat_to_SH_parallel(gsa%CFp2, nl_lm%CFp2LM, "CFp2")
+         call spat_to_SH_parallel(gsa%p1, nl_lm%p1LM, "p1",passed(22))
+         call spat_to_SH_parallel(gsa%p2, nl_lm%p2LM, "p2",passed(23))
+         call spat_to_SH_parallel(gsa%CFt2, nl_lm%CFt2LM, "CFt2",passed(24))
+         call spat_to_SH_parallel(gsa%CFp2, nl_lm%CFp2LM, "CFp2",passed(25))
          if ( l_conv_nl ) then
-            call spat_to_SH_parallel(gsa%Advt2, nl_lm%Advt2LM, "Advt2")
-            call spat_to_SH_parallel(gsa%Advp2, nl_lm%Advp2LM, "Advp2")
+            call spat_to_SH_parallel(gsa%Advt2, nl_lm%Advt2LM, "Advt2",passed(26))
+            call spat_to_SH_parallel(gsa%Advp2, nl_lm%Advp2LM, "Advp2",passed(27))
          end if
          if ( l_mag_nl .and. this%nR>n_r_LCR ) then
-            call spat_to_SH_parallel(gsa%LFt2, nl_lm%LFt2LM, "LFt2")
-            call spat_to_SH_parallel(gsa%LFp2, nl_lm%LFp2LM, "LFp2")
+            call spat_to_SH_parallel(gsa%LFt2, nl_lm%LFt2LM, "LFt2",passed(28))
+            call spat_to_SH_parallel(gsa%LFp2, nl_lm%LFp2LM, "LFp2",passed(29))
          end if
       end if
       
-      call shtns_load_cfg(0)
-
+      if (any(.not. passed)) stop
+      
    end subroutine transform_to_lm_space
 !-------------------------------------------------------------------------------
 end module rIterThetaParallel_mod
