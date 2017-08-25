@@ -21,6 +21,7 @@ module parallel_mod
    integer :: rank_with_l1m0
    integer :: chunksize
    integer :: ierr
+   
 
 contains
 
@@ -49,7 +50,7 @@ contains
 !------------------------------------------------------------------------------
    subroutine initialize_cartesian
 #ifdef WITH_MPI
-      integer :: dims(2), coords(2), ierr, colour
+      integer :: dims(2), coords(2), colour
       logical :: periods(2)
       dims    = (/n_procs_theta, n_procs_r/)
       periods = (/.true., .false./)
@@ -75,7 +76,6 @@ contains
       
       if (rank .ne. 0) l_save_out = .false.
       if (rank .ne. 0) lVerbose   = .false.
-      
 #endif WITH_MPI
    end subroutine initialize_cartesian
 !------------------------------------------------------------------------------
