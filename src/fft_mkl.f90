@@ -5,7 +5,7 @@ module fft
 
    use precision_mod
    use constants, only: one
-   use truncation, only: nrp, ncp, n_phi_max, n_theta_max, m_max
+   use truncation, only: nrp, ncp, n_phi_max, n_theta_max, m_max, n_theta_loc
    use blocking, only: nfs
    !use parallel_mod, only: nThreads
    use mkl_dfti
@@ -17,12 +17,12 @@ module fft
    !----------- MKL specific variables -------------
    integer :: status
    type(DFTI_DESCRIPTOR), pointer :: c2r_handle, r2c_handle
-   type(DFTI_DESCRIPTOR), pointer :: phi2m_handle, m2phi_handle
+   type(DFTI_DESCRIPTOR), pointer :: phi2m_handle, phi2m_dist_handle
    !----------- END MKL specific variables
  
    public :: fft_thetab, init_fft, fft_to_real, finalize_fft
 #ifdef WITH_SHTNS
-   public :: init_fft_phi, finalize_fft_phi, fft_phi, m2phi_handle, phi2m_handle
+   public :: init_fft_phi, finalize_fft_phi, fft_phi, fft_phi_dist, phi2m_handle, phi2m_dist_handle
 #endif
 
 contains
@@ -83,6 +83,8 @@ contains
 !------------------------------------------------------------------------------
     integer :: status
     
+    !>@TODO this is complex to complex, but only needs to be real to complex
+    
     status = DftiCreateDescriptor( phi2m_handle, DFTI_DOUBLE, DFTI_COMPLEX, 1, n_phi_max )
     status = DftiSetValue( phi2m_handle, DFTI_COMPLEX_STORAGE, DFTI_COMPLEX_COMPLEX)
     status = DftiSetValue( phi2m_handle, DFTI_NUMBER_OF_TRANSFORMS, n_theta_max)
@@ -93,6 +95,18 @@ contains
     status = DftiSetValue( phi2m_handle, DFTI_BACKWARD_SCALE, 1.0_cp/real(m_max + 1,cp) )
     status = DftiCommitDescriptor( phi2m_handle )
     
+    ! The difference between phi2m_dist and phi2m_dist_handle is that the later
+    ! will repeat only for n_theta_loc instead of n_theta_max
+    status = DftiCreateDescriptor( phi2m_dist_handle, DFTI_DOUBLE, DFTI_COMPLEX, 1, n_phi_max )
+    status = DftiSetValue( phi2m_dist_handle, DFTI_COMPLEX_STORAGE, DFTI_COMPLEX_COMPLEX)
+    status = DftiSetValue( phi2m_dist_handle, DFTI_NUMBER_OF_TRANSFORMS, n_theta_loc)
+    status = DftiSetValue( phi2m_dist_handle, DFTI_INPUT_DISTANCE, n_phi_max )
+    status = DftiSetValue( phi2m_dist_handle, DFTI_OUTPUT_DISTANCE, m_max + 1 )
+    status = DftiSetValue( phi2m_dist_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE )
+    status = DftiSetValue( phi2m_dist_handle, DFTI_FORWARD_SCALE, 1.0_cp/real(n_phi_max,cp) )
+    status = DftiSetValue( phi2m_dist_handle, DFTI_BACKWARD_SCALE, 1.0_cp/real(m_max + 1,cp) )
+    status = DftiCommitDescriptor( phi2m_dist_handle )
+    
   end subroutine
 
 !------------------------------------------------------------------------------
@@ -102,7 +116,8 @@ contains
     integer :: status
     
     status = DftiFreeDescriptor(phi2m_handle)
-    status = DftiFreeDescriptor(m2phi_handle)
+    status = DftiFreeDescriptor(phi2m_dist_handle)
+    
   end subroutine
   
 !------------------------------------------------------------------------------
@@ -128,6 +143,26 @@ contains
     end if
     
   end subroutine
+
+!------------------------------------------------------------------------------
+  subroutine fft_phi_dist(f, g, dir)
+!>@details Like the previous function, but for nΘ_loc instead of nΘ
+!>@author Rafael Lago, MPCDF, August 2017
+!------------------------------------------------------------------------------
+    complex(cp), intent(inout)  :: f(n_phi_max*n_theta_loc)
+    complex(cp), intent(inout)  :: g((m_max+1)*n_theta_loc)
+    integer,     intent(in)     :: dir
+    integer :: status
+    
+    if (dir == 1) then
+      status  = DftiComputeForward(  phi2m_dist_handle, f(:), g(:) )
+    else if (dir == -1) then
+      status  = DftiComputeBackward( phi2m_dist_handle, g(:), f(:) )
+    else
+      print *, "Unknown direction in fft_phi_dist: ", dir
+    end if
+    
+  end subroutine fft_phi_dist
 #endif
 !------------------------------------------------------------------------------
    subroutine finalize_fft

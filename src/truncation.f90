@@ -4,8 +4,10 @@ module truncation
    !
 
    use precision_mod, only: cp
-   use logic, only: l_finite_diff
+   use logic, only: l_finite_diff, lVerbose
    use useful, only: abortRun
+   use parallel_mod, only: rank, coord_r, coord_theta, n_procs_theta
+   use mpi
 
    implicit none
 
@@ -58,6 +60,37 @@ module truncation
    integer :: n_r_maxStr     ! Number of radial points for stress output
    integer :: n_theta_maxStr ! Number of theta points for stress output
    integer :: n_phi_maxStr   ! Number of phi points for stress output
+   
+   !--- Distributed domain - for n_procs_theta > 1
+   ! lmP_dist - (n_procs_theta, 2)
+   ! n_theta_dist(i,1): first theta point in the i-th rank
+   ! n_theta_dist(i,2): last theta ppoint in the i-th rank
+   ! n_theta_beg: shortcut to n_theta_dist(coord_theta,1)
+   ! n_theta_end: shortcut to n_theta_dist(coord_theta,2)
+   ! n_theta_loc: number of theta points in the local rank
+   !-------------------------------------------------------------
+   ! lmP_dist - (n_procs_theta, n_m_ext, 4)
+   ! lmP_dist(i,j,1): value of the j-th "m" in the i-th rank
+   ! lmP_dist(i,j,2): length of the j-th row in fLM
+   ! lmP_dist(i,j,3): where the j-th row begins in fLM
+   ! lmP_dist(i,j,4): where the j-th row ends in fLM
+   !-------------------------------------------------------------
+   ! n_m_ext: number of m points in the local rank, +1. The extra
+   !          point comes in when m_max + 1 is not divisible by the 
+   !          number of ranks. If the extra point is "not in use"
+   !          in the j-th rank, then lmP_dist(j,n_m_ext,:) = -1,
+   !          and lmP_dist(j,n_m_ext,2) = 0
+   !          This is useful mostly for looping over lmP_dist
+   ! n_m_loc: number of points in the local rank. This coincides with
+   !          n_m_ext in the ranks with extra points.
+   ! 
+   ! lmP_loc: shortcut to sum(lmP_dist(coord_theta,:,2))
+   ! 
+   ! - Lago
+   integer :: n_theta_beg, n_theta_end, n_theta_loc
+   integer :: n_m_ext, n_m_loc, lmP_loc
+   integer, allocatable :: n_theta_dist(:,:), lmP_dist(:,:,:)
+!    type(mpi_datatype) :: m_theta_types(:)
  
 contains
 
@@ -139,8 +172,98 @@ contains
       n_r_maxStr    =max(n_r_maxSL,1)
       n_theta_maxStr=max(n_theta_maxSL,1)
       n_phi_maxStr  =max(n_phi_maxSL,1)
-
    end subroutine initialize_truncation
+
+!--------------------------------------------------------------------------------   
+   subroutine distribute_truncation(lmP2)
+!@>details Divides the number of points in theta direction evenly amongst the 
+!> ranks; if the number of point is not round, the last first receive one extra 
+!> point. 
+!
+!@>TODO load imbalance; load imbalance everywhere. I won't mind that now, because
+!> the ordering will be much more complicated anyway, I'll worry about that later
+!
+!@>TODO deallocate the arrays allocated here
+!
+!@>author Rafael Lago, MPCDF, July 2017
+!-----------------------------------------------------------------------
+      integer, intent(in) :: lmP2(0:l_max+1,0:l_max+1)
+      integer :: i, j, itmp, pos, loc
+      
+      
+      loc = n_theta_max/n_procs_theta
+      itmp = n_theta_max - loc*n_procs_theta
+      allocate(n_theta_dist(0:n_procs_theta-1,2))
+      do i=0,n_procs_theta-1
+         n_theta_dist(i,1) = loc*i + min(i,itmp) + 1
+         n_theta_dist(i,2) = loc*(i+1) + min(i+1,itmp)
+      end do
+      n_theta_beg = n_theta_dist(coord_theta,1)
+      n_theta_end = n_theta_dist(coord_theta,2)
+      n_theta_loc = n_theta_dist(coord_theta,2) - n_theta_dist(coord_theta,1) + 1
+      
+      
+      ! --------------------------------------------------------------------------
+      ! This will try to create a balanced workload, by assigning to each rank
+      ! non-consecutive m points. For instance, if we have m_max=16 and 
+      ! 4 processes in the theta direction, we will have:
+      ! rank 0: 0, 4,  8, 12, 16
+      ! rank 1: 1, 5,  9, 13
+      ! rank 2: 2, 6, 10, 14
+      ! rank 3: 3, 7, 11, 15
+      ! 
+      !>@TODO none of this will work in case minc =/= 1
+      ! -------------------------------------------------------------------------- 
+      n_m_ext = ceiling(real(m_max+1)/real(n_procs_theta))
+      allocate(lmP_dist(0:n_procs_theta-1, n_m_ext, 4))
+      lmP_dist        = -1
+      lmP_dist(:,:,2) =  0
+      do i=0, n_procs_theta-1
+         j    = 1
+         pos  = 1
+         itmp = i
+         do while (itmp <= m_max)
+            !-------------------------------------------------------------
+            ! lmP_dist(i,j,1): value of the j-th m in the i-th rank
+            ! lmP_dist(i,j,2): length of the m-th row in fLM
+            ! lmP_dist(i,j,3): where the m-th row begins in fLM
+            ! lmP_dist(i,j,4): where the m-th row ends in fLM
+            !-------------------------------------------------------------
+            lmP_dist(i,j,1) = itmp         
+            !>@TODO The line below can probably be replaced by l_max+2-itmp or something like that
+            !>      but I better ask Thomas before, just to make sure
+            lmP_dist(i,j,2) = lmP2(l_max+1,itmp) - lmP2(itmp, itmp) + 1
+            lmP_dist(i,j,3) = pos
+            lmP_dist(i,j,4) = pos + lmP_dist(i,j,2) - 1
+            pos = lmP_dist(i,j,4) + 1
+            itmp = itmp + n_procs_theta
+            j = j + 1
+         end do
+      end do
+      
+      n_m_loc = n_m_ext - 1
+      if (lmP_dist(coord_theta,n_m_ext,1) > -1) n_m_loc = n_m_ext
+      lmP_loc = sum(lmP_dist(coord_theta,:,2))
+      
+      if (rank == 0) then
+         print "('θ partition in rank ', I3, ': ', I5, I5, I5, ' points')", &
+               0, n_theta_dist(0,1), n_theta_dist(0,2), n_theta_dist(0,2) - n_theta_dist(0,1) + 1
+         do i=1, n_procs_theta-1
+            print "('               rank ', I3, ': ', I5, I5, I5, ' points')", &
+                  i, n_theta_dist(i,1), n_theta_dist(i,2), n_theta_dist(i,2) - n_theta_dist(i,1) + 1
+         end do
+
+         do i=0, n_procs_theta-1
+            do j=1, n_m_ext
+               print "('m partition in rank ', I3, ': ', I5, I5, I5, I5)", i, lmP_dist(i,j,1:4)
+            end do
+            print "('length in rank ', I3, ' is ', I5)", i, sum(lmP_dist(i,:,2))
+         end do
+         
+      end if
+      
+   end subroutine distribute_truncation
+
 !--------------------------------------------------------------------------------
    subroutine checkTruncation
       !  This function checks truncations and writes it

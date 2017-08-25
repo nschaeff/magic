@@ -2,14 +2,13 @@ module shtns
 
    use precision_mod, only: cp
    use constants, only: ci
-   use truncation, only: m_max, l_max, n_theta_max, n_phi_max, &
-                         minc, lm_max, n_m_max, nrp, lmP_max
+   use truncation
    use horizontal_data, only: dLh, gauss, theta_ord, D_m, O_sin_theta_E2
    use radial_functions, only: r
    use parallel_mod
-   use fft, only: init_fft_phi, finalize_fft_phi, fft_phi;
+   use fft, only: init_fft_phi, finalize_fft_phi, fft_phi, fft_phi_dist
    use blocking, only: lm2, lmP2
-
+   
    implicit none
 
    include "shtns.f"
@@ -24,8 +23,6 @@ module shtns
 contains
 
    subroutine init_shtns()
-
-      integer :: nlm
       integer :: norm
 
       if ( rank == 0 ) then
@@ -203,7 +200,7 @@ contains
    end subroutine spat_to_SH
 
 !------------------------------------------------------------------------------
-   subroutine spat_to_SH_parallel(f, fLM, name, passed)
+   subroutine spat_to_SH_parallel(f, fLM)
 !@>details Computes the FFT and Legendre transform for distributed θ and m.
 !> It will take the f in (φ,θ) space, and then apply FFT nθ times, to obtain 
 !> \hat f in (m,θ) space. 
@@ -225,60 +222,127 @@ contains
 !------------------------------------------------------------------------------
 
       real(cp),     intent(inout) :: f(n_phi_max, n_theta_max)
-      complex(cp),  intent(inout) :: fLM(lmP_max)
-      character(len=*), intent(in) :: name
-      logical :: passed
+      complex(cp),  intent(out)   :: fLM(lmP_max)
       
-      complex(cp) :: f_phi_theta(n_phi_max,n_theta_max)
-      complex(cp) :: f_m_theta(m_max+1,n_theta_max)
-      complex(cp) :: f_theta_m(n_theta_max, m_max+1)
-      complex(cp) :: new_fLM(lmP_max)
-      integer :: m_idx, lm_s, lm_e
-      real    :: norm_diff, norm_fLM, norm_new, cosfLM
+      complex(cp) :: f_phi_theta_loc(n_phi_max,n_theta_loc)
+      complex(cp) :: f_m_theta_loc(m_max+1,n_theta_loc)
+      complex(cp) :: f_theta_m_loc(n_theta_max, n_m_loc)
+      
+      complex(cp) :: dist_fLM(lmP_loc)
+      integer :: m_idx, lm_s, lm_e, i, ierr
       
       
       call shtns_load_cfg(1)
-      f_phi_theta = cmplx(f, 0.0_cp, kind=cp)
-      f_theta_m = 0.0_cp
-      f_m_theta = 0.0_cp
-      new_fLM = 0.0_cp
+      f_phi_theta_loc = cmplx(f(:,n_theta_beg:n_theta_end), 0.0_cp, kind=cp)
       
-      call shtns_spat_to_sh(f, fLM)
-      
-      call fft_phi(f_phi_theta, f_m_theta, 1)
-      f_theta_m = transpose(f_m_theta)
+      !>@TODO have f_phi_theta_loc as REAL, and use REAL2CMLX transform from mkl
+      call fft_phi_dist(f_phi_theta_loc, f_m_theta_loc, 1)
+      call transpose_m_theta(f_m_theta_loc,f_theta_m_loc)
       
       ! Now do it using the new function in a loop
-      do m_idx = 0, m_max, minc
-        lm_s = lmP2(m_idx  ,m_idx)
-        lm_e = lmP2(l_max+1,m_idx)
-        call shtns_spat_to_sh_ml(m_idx, f_theta_m(:,m_idx+1), new_fLM(lm_s:lm_e), l_max+1) !l_max - m_idx + 1)
+      do i = 1, n_m_loc
+        m_idx = lmP_dist(coord_theta, i, 1)
+        lm_s  = lmP_dist(coord_theta, i, 3)
+        lm_e  = lmP_dist(coord_theta, i, 4)
+        call shtns_spat_to_sh_ml(m_idx, f_theta_m_loc(:,i), dist_fLM(lm_s:lm_e), l_max+1)
       end do
       
-      
-      ! These norms, cosine and prints are only for the debugging version.
-      norm_fLM = NORM2(real(fLM))
-      norm_new = NORM2(real(new_fLM))
-      if (norm_new == 0.0_cp) norm_new = 1.0_cp
-      if (norm_fLM == 0.0_cp) norm_fLM = 1.0_cp
-      norm_diff = NORM2(real(new_fLM) - real(fLM))/real(lmP_max)
-      cosfLM = dot_product(real(new_fLM),real(fLM))/(norm_fLM*norm_new)
-      
-      if (norm_diff > 1e-10) then
-        print *, "Conversion for  ", name, " doesn't match! Norm: ", norm_diff, " cos:", cosfLM
-        print *, fLM(1:10)
-        print *, "~~~~~~~"
-        print *, new_fLM(1:10)
-        passed = .false.
-      else
-        if (rank == 0 ) then
-          print *, name, "'s Norm:", norm_diff, " cos:", cosfLM
-        end if
-        passed = .true.
-      end if
+      call gather_fLM(dist_fLM, fLM)
       
       call shtns_load_cfg(0)
 
    end subroutine spat_to_SH_parallel
 !------------------------------------------------------------------------------
+   subroutine gather_fLM(fLM_local, fLM_global)
+!@>details Gathers the fLM which was computed in a distributed fashion.
+!> Mostly used for debugging. This function may not be performant at all.
+!
+!@>TODO this with mpi_allgatherv
+!@>author Rafael Lago (MPCDF) August 2017
+!------------------------------------------------------------------------------
+      complex(cp),  intent(inout) :: fLM_local(lmP_loc)
+      complex(cp),  intent(out)   :: fLM_global(lmP_max)
+      
+      complex(cp) ::  buffer(lmP_max)
+      integer :: i, j, m_idx, lm_s_local, lm_e_local, lm_s_global, lm_e_global
+      integer :: pos, ilen, Rq(n_procs_theta), ierr
+      
+      ! buffer will receive all messages, but they are ordered by ranks,
+      ! not by m.
+      
+!       buffer = 0.0
+      pos = 1
+      do i=0,n_procs_theta-1
+         ilen = sum(lmP_dist(i,:,2))
+         if (coord_theta == i) buffer(pos:pos+ilen-1) = fLM_local(1:lmP_loc)
+         CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, i, comm_theta, Rq(i+1), ierr)
+         pos = pos + ilen
+      end do
+      
+      CALL MPI_WAITALL(n_procs_theta, Rq, MPI_STATUSES_IGNORE, ierr)
+      
+      ! This basically re-orders the buffer 
+      pos = 0
+      do i=0,n_procs_theta-1
+         do j = 1, n_m_ext
+            m_idx = lmP_dist(i, j, 1)
+            if (m_idx < 0) exit
+            lm_s_local  = pos + lmP_dist(i, j, 3)
+            lm_e_local  = pos + lmP_dist(i, j, 4)
+            lm_s_global = lmP2(m_idx  ,m_idx)
+            lm_e_global = lmP2(l_max+1,m_idx)
+            fLM_global(lm_s_global:lm_e_global) = buffer(lm_s_local:lm_e_local)
+         end do
+         pos = pos + sum(lmP_dist(i,:,2))
+      end do
+      
+   end subroutine gather_fLM
+!------------------------------------------------------------------------------
+   subroutine transpose_m_theta(f_m_theta, f_theta_m)
+!@>details Does the transposition using alltoallv.
+!
+!@>TODO this with mpi_type to stride the data
+!@>author Rafael Lago (MPCDF) August 2017
+!------------------------------------------------------------------------------
+      complex(cp), intent(inout) :: f_m_theta(m_max+1,n_theta_loc)
+      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
+      
+      complex(cp) :: sendbuf((m_max+1)*n_theta_loc)
+      complex(cp) :: recvbuf(n_m_loc, n_theta_max)
+      
+      integer :: sendcount(0:n_procs_theta-1)
+      integer :: recvcount(0:n_procs_theta-1)
+      integer :: senddispl(0:n_procs_theta-1)
+      integer :: recvdispl(0:n_procs_theta-1)
+      integer :: i, j, k, m_idx, pos, n_theta
+      
+      pos = 1
+      do i=0,n_procs_theta-1
+         ! Copy each m which belongs to the i-th rank into the send buffer
+         ! column-wise. That will simplify a lot things later
+         !
+         !>@TODO check performance of this; implementing this with mpi_type
+         !> striding the data will probably be faster
+         senddispl(i) = pos-1
+         do k=1,n_theta_loc
+            do j=1,n_m_ext
+               if (lmP_dist(i,j,1) < 0) exit
+               m_idx = lmP_dist(i,j,1)
+               sendbuf(pos) = f_m_theta(m_idx+1,k)
+               pos = pos + 1
+            end do
+         end do
+         sendcount(i) = pos - senddispl(i) - 1
+         n_theta = n_theta_dist(i,2) - n_theta_dist(i,1) + 1
+         recvdispl(i) = i*n_m_loc*n_theta
+         recvcount(i) = n_m_loc*n_theta
+      end do
+      
+      call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
+                         recvbuf, recvcount, recvdispl, MPI_DOUBLE_COMPLEX, &
+                         comm_theta, i)
+      f_theta_m = transpose(recvbuf)
+      
+   end subroutine transpose_m_theta
 end module shtns
+
