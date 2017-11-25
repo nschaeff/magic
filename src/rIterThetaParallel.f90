@@ -495,13 +495,13 @@ subroutine allocate_common_arrays(this)
 
       class(rIterThetaParallel_t) :: this
       type(grid_space_arrays_t) :: gsa
-
+      
       integer :: nR
       nR = this%nR
 
       if ( l_conv .or. l_mag_kin ) then
          if ( l_heat ) then
-            call scal_to_spat(s_Rloc(:, nR), gsa%sc)
+            call scal_to_spat_parallel(s_Rloc(:, nR), gsa%sc)
             if ( this%lViscBcCalc ) then
                call scal_to_grad_spat(s_Rloc(:, nR), gsa%dsdtc, &
                                       gsa%dsdpc)
@@ -517,15 +517,15 @@ subroutine allocate_common_arrays(this)
          end if
 
          if ( this%lPressCalc ) then ! Pressure
-            call scal_to_spat(p_Rloc(:, nR), gsa%pc)
+            call scal_to_spat_parallel(p_Rloc(:, nR), gsa%pc)
          end if
 
          if ( l_chemical_conv ) then ! Chemical composition
-            call scal_to_spat(xi_Rloc(:, nR), gsa%xic)
+            call scal_to_spat_parallel(xi_Rloc(:, nR), gsa%xic)
          end if
 
          if ( l_HT .or. this%lViscBcCalc ) then
-            call scal_to_spat(ds_Rloc(:, nR), gsa%drsc)
+            call scal_to_spat_parallel(ds_Rloc(:, nR), gsa%drsc)
          endif
          if ( this%nBc == 0 ) then
             call torpol_to_spat(w_Rloc(:, nR), dw_Rloc(:, nR),  z_Rloc(:, nR), &

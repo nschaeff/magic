@@ -6,7 +6,7 @@ module shtns
    use horizontal_data, only: dLh, gauss, theta_ord, D_m, O_sin_theta_E2
    use radial_functions, only: r
    use parallel_mod
-   use fft, only: init_fft_phi, finalize_fft_phi, fft_phi, fft_phi_dist
+   use fft, only: init_fft_phi, finalize_fft_phi, fft_phi_loc
    use blocking, only: lm2, lmP2
    
    implicit none
@@ -17,7 +17,8 @@ module shtns
 
    public :: init_shtns, scal_to_spat, scal_to_grad_spat, pol_to_grad_spat, &
              torpol_to_spat, pol_to_curlr_spat, torpol_to_curl_spat,        &
-             torpol_to_dphspat, spat_to_SH, spat_to_SH_parallel
+             torpol_to_dphspat, spat_to_SH,&
+             spat_to_SH_parallel, scal_to_spat_parallel
    public :: finalize_shtns
 
 contains
@@ -58,9 +59,7 @@ contains
    subroutine finalize_shtns
 !@>author Rafael Lago, MPCDF, July 2017
 !------------------------------------------------------------------------------
-
       call finalize_fft_phi
-
    end subroutine finalize_shtns
 !------------------------------------------------------------------------------
    subroutine scal_to_spat(Slm, fieldc)
@@ -198,64 +197,132 @@ contains
       call shtns_load_cfg(0)
 
    end subroutine spat_to_SH
-
 !------------------------------------------------------------------------------
    subroutine spat_to_SH_parallel(f, fLM)
 !@>details Computes the FFT and Legendre transform for distributed θ and m.
-!> It will take the f in (φ,θ) space, and then apply FFT nθ times, to obtain 
-!> \hat f in (m,θ) space. 
+!> It will take the f(φ,θ) and apply FFT nθ times, to obtain g(m,θ). 
 !> Following, it will redistribute the data such that every m has access to all 
-!> of its respective θ points - obtaining \bar f in (θ,m)
+!> of its respective θ points - obtaining \bar gT(θ,m)
 !> Then it will loop over m, applying the Legendre transform to obtain the 
 !> field fLM in (l,m) coordinates.
 !> 
 !> This uses SHtns.
-!> 
-!
-!>@bug if you pass f as a real argument converted to complex, e.g.
-!> call spat_to_SH_ml(1, cmplx(f,kind=cp), fLM, 10)
-!> then C will do something silly with the memory addresses and overwrite
-!> m_idx (which is, theoretically, read-only). These on-the-fly conversion 
-!> are discouraged anyway.
+!>
+!> Notation: 
+!> ---------
+!>       f: function in the real domain
+!>       g: f in Fourier domain
+!>      gT: the transpose of g
+!>     fLM: f in LM-domain. This is the same as gT after applying the Legendre 
+!>          polynomials
+!>    _loc: local version of the supracited variables. In the LM-domain, the 
+!>    ms are distributed amonst n_procs_theta MPI ranks. In the other domains, 
+!>    the θs are distributed amonsts the n_procs_theta MPI ranks.
 !
 !@>author Rafael Lago (MPCDF) July 2017
 !------------------------------------------------------------------------------
-
       real(cp),     intent(inout) :: f(n_phi_max, n_theta_max)
       complex(cp),  intent(out)   :: fLM(lmP_max)
       
-      complex(cp) :: f_phi_theta_loc(n_phi_max,n_theta_loc)
-      complex(cp) :: f_m_theta_loc(m_max+1,n_theta_loc)
-      complex(cp) :: f_theta_m_loc(n_theta_max, n_m_loc)
+      real(cp) :: f_loc(n_phi_max,n_theta_loc)
+      complex(cp) :: gT_loc(n_theta_max,n_m_loc)
+      complex(cp) ::  g_loc(m_max+1,n_theta_loc)
+      complex(cp) ::  tmp_loc(n_phi_max/2+1,n_theta_loc)
       
-      complex(cp) :: dist_fLM(lmP_loc)
-      integer :: m_idx, lm_s, lm_e, i, ierr
+      complex(cp) :: fLM_loc(lmP_loc)
+      integer :: m_idx, lm_s, lm_e, i
       
       
       call shtns_load_cfg(1)
-      f_phi_theta_loc = cmplx(f(:,n_theta_beg:n_theta_end), 0.0_cp, kind=cp)
       
-      !>@TODO have f_phi_theta_loc as REAL, and use REAL2CMLX transform from mkl
-      call fft_phi_dist(f_phi_theta_loc, f_m_theta_loc, 1)
-      call transpose_m_theta(f_m_theta_loc,f_theta_m_loc)
+      ! Copies global array's data into local array
+      !>@TODO receive f_loc as argument instead of f
+      f_loc = f(:,n_theta_beg:n_theta_end)
       
-      ! Now do it using the new function in a loop
+      !@>TODO: The FFT must be performed for an array with the dimensions of tmp_loc
+      !> which may end up paded with zeroes.
+      !> Is there any way to tell MKL to perform a "truncated" FFT?
+      !@>TODO: Terrible performance here!
+      call fft_phi_loc(f_loc, tmp_loc, 1)
+      g_loc = tmp_loc(1:m_max+1,1:n_theta_loc)
+      
+      call transpose_m_theta(g_loc, gT_loc)
+      
+      ! Now do the Legendre transform using the new function in a loop
       do i = 1, n_m_loc
         m_idx = lmP_dist(coord_theta, i, 1)
         lm_s  = lmP_dist(coord_theta, i, 3)
         lm_e  = lmP_dist(coord_theta, i, 4)
-        call shtns_spat_to_sh_ml(m_idx, f_theta_m_loc(:,i), dist_fLM(lm_s:lm_e), l_max+1)
+        call shtns_spat_to_sh_ml(m_idx, gT_loc(:,i), fLM_loc(lm_s:lm_e), l_max+1)
       end do
       
-      call gather_fLM(dist_fLM, fLM)
+      ! Gathers the transform computed in every process in this process
+      !>@TODO receive return fLM_loc instead of fLM
+      call gather_fLM(fLM_loc, fLM)
       
       call shtns_load_cfg(0)
 
    end subroutine spat_to_SH_parallel
 !------------------------------------------------------------------------------
+   subroutine scal_to_spat_parallel(fLM, f)
+!@>details Does the reverse of the routine above.
+!> 
+!> Notice that here we use [lm_dist] and NOT lmP_dist. We assume that there 
+!> are (m_max+1)*(l_max) modes.
+!> 
+!@>author Rafael Lago (MPCDF) August 2017
+!------------------------------------------------------------------------------
+      complex(cp),  intent(inout)   :: fLM(lm_max)
+      real(cp),     intent(out)     :: f(n_phi_max, n_theta_max)
+      
+      complex(cp) :: fLM_loc(lm_loc)
+      complex(cp) :: gT_loc(n_theta_max,n_m_loc)
+      complex(cp) ::  g_loc(m_max+1,n_theta_loc)
+      complex(cp) ::  tmp_loc(n_phi_max/2+1,n_theta_loc)
+      real(cp)    ::  f_loc(n_phi_max, n_theta_loc)
+      
+      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
+      
+      ! Copies fLM into fLM_loc
+      !>@TODO receive fLM_loc as argument instead of fLM
+      do i = 1, n_m_loc
+        m_idx = lm_dist(coord_theta, i, 1)
+        lm_s  = lm_dist(coord_theta, i, 3)
+        lm_e  = lm_dist(coord_theta, i, 4)
+        call shtns_lmidx(lm_gs, m_idx, m_idx)
+        call shtns_lmidx(lm_ge, l_max, m_idx)
+        fLM_loc(lm_s:lm_e) = fLM(lm_gs:lm_ge)
+      end do
+      
+      do i = 1, n_m_loc
+        m_idx = lm_dist(coord_theta, i, 1)
+        lm_s  = lm_dist(coord_theta, i, 3)
+        lm_e  = lm_dist(coord_theta, i, 4)
+        call shtns_sh_to_spat_ml(m_idx, fLM_loc(lm_s:lm_e), gT_loc(:,i), l_max)
+      end do
+      
+      call transpose_theta_m(gT_loc, g_loc)
+      
+      !@>TODO: The FFT must be performed for an array with the dimensions of tmp_loc
+      !> which may end up paded with zeroes.
+      !> Is there any way to tell MKL to perform a "truncated" FFT?
+      !@>TODO: Terrible performance here!
+      tmp_loc = 0.0
+      tmp_loc(1:m_max+1,1:n_theta_loc) = g_loc
+      
+      call fft_phi_loc(f_loc, tmp_loc, -1)
+      
+      call gather_f(f_loc, f)
+            
+   end subroutine
+
+!------------------------------------------------------------------------------
    subroutine gather_fLM(fLM_local, fLM_global)
 !@>details Gathers the fLM which was computed in a distributed fashion.
 !> Mostly used for debugging. This function may not be performant at all.
+!> 
+!> Notice that here we use [lmP_dist] and NOT lm_dist. We assume that there 
+!> are (m_max+1)*(l_max+1) modes.
 !
 !@>TODO this with mpi_allgatherv
 !@>author Rafael Lago (MPCDF) August 2017
@@ -270,7 +337,6 @@ contains
       ! buffer will receive all messages, but they are ordered by ranks,
       ! not by m.
       
-!       buffer = 0.0
       pos = 1
       do i=0,n_procs_theta-1
          ilen = sum(lmP_dist(i,:,2))
@@ -297,6 +363,33 @@ contains
       end do
       
    end subroutine gather_fLM
+!------------------------------------------------------------------------------
+   subroutine gather_f(f_local, f_global)
+!@>details Gathers the fLM which was computed in a distributed fashion.
+!> Mostly used for debugging. This function may not be performant at all.
+!
+!@>TODO this with mpi_allgatherv
+!@>author Rafael Lago (MPCDF) August 2017
+!------------------------------------------------------------------------------
+      real(cp),  intent(inout) :: f_local(n_phi_max, n_theta_loc)
+      real(cp),  intent(out)   :: f_global(n_phi_max, n_theta_max)
+      
+      integer :: i, nt, ierr
+      integer :: Rq(n_procs_theta) 
+      
+      ! Copies local content to f_global
+      f_global = 0.0
+      f_global(:,n_theta_beg:n_theta_end) = f_local
+      
+      do i=0,n_procs_theta-1
+         nt = n_theta_dist(i,2) - n_theta_dist(i,1) + 1
+         CALL MPI_IBCAST(f_global(1:n_phi_max,n_theta_dist(i,1):n_theta_dist(i,2)), &
+                         n_phi_max*nt, MPI_DOUBLE_PRECISION, i, comm_theta, Rq(i+1), ierr)
+      end do
+      
+      CALL MPI_WAITALL(n_procs_theta, Rq, MPI_STATUSES_IGNORE, ierr)
+      
+   end subroutine gather_f
 !------------------------------------------------------------------------------
    subroutine transpose_m_theta(f_m_theta, f_theta_m)
 !@>details Does the transposition using alltoallv.
@@ -344,5 +437,69 @@ contains
       f_theta_m = transpose(recvbuf)
       
    end subroutine transpose_m_theta
+!------------------------------------------------------------------------------
+   subroutine transpose_theta_m(f_theta_m, f_m_theta)
+!@>details Does the transposition using alltoallv.
+!
+!@>TODO this with mpi_type to stride the data
+!@>author Rafael Lago (MPCDF) August 2017
+!------------------------------------------------------------------------------
+      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
+      complex(cp), intent(inout) :: f_m_theta(m_max+1,n_theta_loc)
+      
+      complex(cp) :: sendbuf(n_m_loc*n_theta_max)
+      complex(cp) :: recvbuf(n_theta_loc,m_max+1)
+      
+      integer :: sendcount(0:n_procs_theta-1)
+      integer :: recvcount(0:n_procs_theta-1)
+      integer :: senddispl(0:n_procs_theta-1)
+      integer :: recvdispl(0:n_procs_theta-1)
+      integer :: i, j, pos, n_theta, s_theta, e_theta
+      integer :: m_idx(n_procs_theta*n_m_ext)
+      
+      recvcount = 0
+      pos = 1
+      do i=0,n_procs_theta-1
+         ! Copy each theta chunk so that the send buffer is contiguous
+         !
+         !>@TODO check performance of this; implementing this with mpi_type
+         !> striding the data will probably be faster
+         senddispl(i) = pos-1
+         s_theta = n_theta_dist(i,1)
+         e_theta = n_theta_dist(i,2)
+         n_theta = e_theta - s_theta + 1
+         do j=1, n_m_loc
+            sendbuf(pos:pos + n_theta - 1) = f_theta_m(s_theta:e_theta,j)
+            pos = pos + n_theta
+         end do
+         sendcount(i) = pos - senddispl(i) - 1
+         
+         recvdispl(i) = sum(recvcount)
+         recvcount(i) = (n_m_ext-1) * n_theta
+         if (lmP_dist(i,n_m_ext,1) > -1) then
+            recvcount(i) = recvcount(i) + n_theta
+         end if
+      end do
+      
+      call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
+                         recvbuf, recvcount, recvdispl, MPI_DOUBLE_COMPLEX, &
+                         comm_theta, i)
+      
+      ! Now we reorder the receiver buffer. If the m distribution looks like:
+      ! rank 0: 0, 4,  8, 12, 16
+      ! rank 1: 1, 5,  9, 13
+      ! rank 2: 2, 6, 10, 14
+      ! rank 3: 3, 7, 11, 15
+      ! then the columns of recvbuf are ordered as 0,4,8,12,16,1,5,9,13(...)
+      ! and so forth. m_idx will contain this ordering (+1):
+      m_idx = reshape(transpose(lmP_dist(:,:,1)),(/n_procs_theta*n_m_ext/)) + 1
+      j = 1
+      do i = 1, n_procs_theta*n_m_ext
+         if (m_idx(i) == 0) cycle
+         f_m_theta(m_idx(i),:) = recvbuf(:,j)
+         j = j + 1
+      end do
+      
+   end subroutine transpose_theta_m
 end module shtns
 
