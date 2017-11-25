@@ -62,7 +62,6 @@ module truncation
    integer :: n_phi_maxStr   ! Number of phi points for stress output
    
    !--- Distributed domain - for n_procs_theta > 1
-   ! lmP_dist - (n_procs_theta, 2)
    ! n_theta_dist(i,1): first theta point in the i-th rank
    ! n_theta_dist(i,2): last theta ppoint in the i-th rank
    ! n_theta_beg: shortcut to n_theta_dist(coord_theta,1)
@@ -71,9 +70,11 @@ module truncation
    !-------------------------------------------------------------
    ! lmP_dist - (n_procs_theta, n_m_ext, 4)
    ! lmP_dist(i,j,1): value of the j-th "m" in the i-th rank
-   ! lmP_dist(i,j,2): length of the j-th row in fLM
-   ! lmP_dist(i,j,3): where the j-th row begins in fLM
-   ! lmP_dist(i,j,4): where the j-th row ends in fLM
+   ! lmP_dist(i,j,2): length of the j-th row in fLM_loc
+   ! lmP_dist(i,j,3): where the j-th row begins in fLM_loc
+   ! lmP_dist(i,j,4): where the j-th row ends in fLM_loc
+   !-------------------------------------------------------------
+   ! lm_dist(i,j,k) : same as above, but for lm_max instead of lmP_max
    !-------------------------------------------------------------
    ! n_m_ext: number of m points in the local rank, +1. The extra
    !          point comes in when m_max + 1 is not divisible by the 
@@ -88,9 +89,8 @@ module truncation
    ! 
    ! - Lago
    integer :: n_theta_beg, n_theta_end, n_theta_loc
-   integer :: n_m_ext, n_m_loc, lmP_loc
-   integer, allocatable :: n_theta_dist(:,:), lmP_dist(:,:,:)
-!    type(mpi_datatype) :: m_theta_types(:)
+   integer :: n_m_ext, n_m_loc, lmP_loc, lm_loc
+   integer, allocatable :: n_theta_dist(:,:), lmP_dist(:,:,:), lm_dist(:,:,:)
  
 contains
 
@@ -216,8 +216,11 @@ contains
       ! -------------------------------------------------------------------------- 
       n_m_ext = ceiling(real(m_max+1)/real(n_procs_theta))
       allocate(lmP_dist(0:n_procs_theta-1, n_m_ext, 4))
+      allocate(lm_dist(0:n_procs_theta-1, n_m_ext, 4))
+      lm_dist         = -1
       lmP_dist        = -1
       lmP_dist(:,:,2) =  0
+      lm_dist( :,:,2) =  0
       do i=0, n_procs_theta-1
          j    = 1
          pos  = 1
@@ -241,9 +244,24 @@ contains
          end do
       end do
       
+      lm_dist = lmP_dist ! Worry not; I'll overwrite the values now
+      do i=0, n_procs_theta-1
+         do j=1, n_m_ext-1
+            lm_dist(i,j,2) = lm_dist(i,j,2) - 1
+            lm_dist(i,j,3) = lm_dist(i,j,3) - j + 1
+            lm_dist(i,j,4) = lm_dist(i,j,4) - j
+         end do
+         if (lm_dist(i,n_m_ext,2)>0) then
+            lm_dist(i,n_m_ext,2) = lm_dist(i,n_m_ext,2) - 1
+            lm_dist(i,n_m_ext,3) = lm_dist(i,n_m_ext,3) - n_m_ext + 1
+            lm_dist(i,n_m_ext,4) = lm_dist(i,n_m_ext,4) - n_m_ext
+         end if
+      end do
+      
       n_m_loc = n_m_ext - 1
       if (lmP_dist(coord_theta,n_m_ext,1) > -1) n_m_loc = n_m_ext
       lmP_loc = sum(lmP_dist(coord_theta,:,2))
+      lm_loc  = sum(lm_dist(coord_theta,:,2))
       
       if (rank == 0) then
          print "('θ partition in rank ', I3, ': ', I5, I5, I5, ' points')", &
@@ -255,7 +273,7 @@ contains
 
          do i=0, n_procs_theta-1
             do j=1, n_m_ext
-               print "('m partition in rank ', I3, ': ', I5, I5, I5, I5)", i, lmP_dist(i,j,1:4)
+               print "('lmP partition in rank ', I3, ': ', I5, I5, I5, I5)", i, lmP_dist(i,j,1:4)
             end do
             print "('length in rank ', I3, ' is ', I5)", i, sum(lmP_dist(i,:,2))
          end do
