@@ -80,7 +80,7 @@ contains
       call this%gsa%initialize()
       if ( l_TO ) call this%TO_arrays%initialize()
       call this%dtB_arrays%initialize()
-      call this%nl_lm%initialize(lmP_max)
+      call this%nl_lm%initialize()
 
    end subroutine initialize_rIterThetaBlocking_shtns
 !------------------------------------------------------------------------------

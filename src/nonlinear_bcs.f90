@@ -1,7 +1,8 @@
 module nonlinear_bcs
 
    use precision_mod
-   use truncation, only: nrp, lmP_max, n_phi_max, l_axi
+   use truncation, only: nrp, lmP_max, n_phi_max, l_axi, &
+                         n_theta_beg, n_theta_end
    use radial_data, only: n_r_cmb, n_r_icb
    use radial_functions, only: r_cmb, r_icb, rho0
    use blocking, only: lm2l, lm2m, lm2lmP, lmP2lmPS, lmP2lmPA, nfs, &
@@ -21,7 +22,7 @@ module nonlinear_bcs
 
    private
 
-   public :: get_br_v_bcs, get_b_nl_bcs, v_rigid_boundary
+   public :: get_br_v_bcs, get_b_nl_bcs, v_rigid_boundary, v_rigid_boundary_dist
 
 contains
 
@@ -257,5 +258,69 @@ contains
       end do
 
    end subroutine v_rigid_boundary
+   
+!-------------------------------------------------------------------------
+   subroutine v_rigid_boundary_dist(nR,omega,lDeriv,vrr,vtr,vpr,      &
+            &                  cvrr,dvrdtr,dvrdpr,dvtdpr,dvpdpr)
+!@>details Distributed version of the v_rigid_boundary; the difference is 
+!> basically the size of the data and the indexes. I've removed nThetaStart
+!> argument, though, 'cause I didn't understand what was its purpose 
+!> (it is always called with nThetaStart=1 anyway)
+!
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+
+      !-- Input of variables:
+      integer,  intent(in) :: nR            ! no of radial grid point
+      logical,  intent(in) :: lDeriv        ! derivatives required ?
+              
+      !-- Input of boundary rotation rate
+      real(cp), intent(in) :: omega
+
+      !-- output:
+      real(cp), intent(out) :: vrr(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp), intent(out) :: vpr(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp), intent(out) :: vtr(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp), intent(out) :: cvrr(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp), intent(out) :: dvrdtr(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp), intent(out) :: dvrdpr(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp), intent(out) :: dvtdpr(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp), intent(out) :: dvpdpr(n_phi_max,n_theta_beg:n_theta_end)
+
+      !-- Local variables:
+      real(cp) :: r2
+      integer :: nThetaCalc,nThetaNHS
+      integer :: i, j
+
+      if ( nR == n_r_cmb ) then
+         r2=r_cmb*r_cmb
+      else if ( nR == n_r_icb ) then
+         r2=r_icb*r_icb
+      else
+         write(*,*)
+         write(*,*) '! v_rigid boundary called for a grid'
+         write(*,*) '! points which is not a boundary !  '
+         return
+      end if
+
+      nThetaCalc=n_theta_beg-1
+      do j=n_theta_beg,n_theta_end
+         nThetaCalc=nThetaCalc+1
+         nThetaNHS =(nThetaCalc+1)/2 ! northern hemisphere=odd n_theta
+         do i=1,n_phi_max
+            vrr(i,j)=0.0_cp
+            vtr(i,j)=0.0_cp
+            vpr(i,j)=r2*rho0(nR)*sn2(nThetaNHS)*omega
+            if ( lDeriv ) then
+               cvrr(i,j)  =r2*rho0(nR)*two*cosTheta(nThetaCalc)*omega
+               dvrdtr(i,j)=0.0_cp
+               dvrdpr(i,j)=0.0_cp
+               dvtdpr(i,j)=0.0_cp
+               dvpdpr(i,j)=0.0_cp
+            end if
+         end do
+      end do
+
+   end subroutine v_rigid_boundary_dist
 !-------------------------------------------------------------------------
 end module nonlinear_bcs

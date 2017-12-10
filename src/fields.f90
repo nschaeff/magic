@@ -6,11 +6,11 @@ module fields
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use truncation, only: lm_max, n_r_max, lm_maxMag, n_r_maxMag, &
-       &                 n_r_ic_maxMag
+       &                 n_r_ic_maxMag, lm_loc
    use logic, only: l_chemical_conv
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag
    use radial_data, only: nRstart, nRstop
-   use parallel_mod, only: coord_r
+   use parallel_mod, only: coord_r, n_procs_theta
  
    implicit none
 
@@ -67,6 +67,23 @@ module fields
    complex(cp), public, allocatable :: ddj_ic_LMloc(:,:)
 
    complex(cp), public, allocatable :: work_LMloc(:,:) ! Needed in update routines
+   
+   !-- Distributed counterpart of some of the fields above
+   complex(cp), public, allocatable :: s_dist  (:,:)
+   complex(cp), public, allocatable :: ds_dist (:,:)
+   complex(cp), public, allocatable :: z_dist  (:,:)
+   complex(cp), public, allocatable :: dz_dist (:,:)
+   complex(cp), public, allocatable :: p_dist  (:,:)
+   complex(cp), public, allocatable :: dp_dist (:,:)
+   complex(cp), public, allocatable :: b_dist  (:,:)
+   complex(cp), public, allocatable :: db_dist (:,:)
+   complex(cp), public, allocatable :: ddb_dist(:,:)
+   complex(cp), public, allocatable :: aj_dist (:,:)
+   complex(cp), public, allocatable :: dj_dist (:,:)
+   complex(cp), public, allocatable :: w_dist  (:,:)
+   complex(cp), public, allocatable :: dw_dist (:,:)
+   complex(cp), public, allocatable :: ddw_dist(:,:)
+   complex(cp), public, allocatable :: xi_dist (:,:)
  
    !-- Rotation rates:
    real(cp), public :: omega_ic,omega_ma
@@ -162,6 +179,8 @@ contains
       aj_LMloc(llmMag:ulmMag,1:n_r_maxMag)  => field_LMloc_container(:,:,4)
       dj_LMloc(llmMag:ulmMag,1:n_r_maxMag)  => field_LMloc_container(:,:,5)
       ddj_LMloc(llmMag:ulmMag,1:n_r_maxMag) => field_LMloc_container(:,:,6)
+      bytes_allocated = bytes_allocated + &
+                        6*(ulmMag-llmMag+1)*n_r_maxMag*SIZEOF_DEF_COMPLEX
 
       allocate( field_Rloc_container(lm_maxMag,nRstart:nRstop,1:5) )
       b_Rloc(1:lm_maxMag,nRstart:nRstop)   => field_Rloc_container(:,:,1)
@@ -169,10 +188,6 @@ contains
       ddb_Rloc(1:lm_maxMag,nRstart:nRstop) => field_Rloc_container(:,:,3)
       aj_Rloc(1:lm_maxMag,nRstart:nRstop)  => field_Rloc_container(:,:,4)
       dj_Rloc(1:lm_maxMag,nRstart:nRstop)  => field_Rloc_container(:,:,5)
-
-
-      bytes_allocated = bytes_allocated + &
-                        6*(ulmMag-llmMag+1)*n_r_maxMag*SIZEOF_DEF_COMPLEX
       bytes_allocated = bytes_allocated + &
                         5*lm_maxMag*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
 
@@ -185,9 +200,43 @@ contains
       allocate( aj_ic_LMloc(llmMag:ulmMag,n_r_ic_maxMag) ) 
       allocate( dj_ic_LMloc(llmMag:ulmMag,n_r_ic_maxMag) )
       allocate( ddj_ic_LMloc(llmMag:ulmMag,n_r_ic_maxMag) )
-
       bytes_allocated = bytes_allocated + &
                         6*(ulmMag-llmMag+1)*n_r_ic_maxMag*SIZEOF_DEF_COMPLEX
+      
+      !-- Distributed version of some of the fields above
+      !@>TODO: implement these with the containers, like above
+      if (n_procs_theta > 1) then
+         allocate( s_dist  (1:lm_loc,nRstart:nRstop) )
+         allocate( ds_dist (1:lm_loc,nRstart:nRstop) )
+         allocate( z_dist  (1:lm_loc,nRstart:nRstop) )
+         allocate( dz_dist (1:lm_loc,nRstart:nRstop) )
+         allocate( p_dist  (1:lm_loc,nRstart:nRstop) )
+         allocate( dp_dist (1:lm_loc,nRstart:nRstop) )
+         allocate( w_dist  (1:lm_loc,nRstart:nRstop) )
+         allocate( dw_dist (1:lm_loc,nRstart:nRstop) )
+         allocate( ddw_dist(1:lm_loc,nRstart:nRstop) )
+         bytes_allocated = bytes_allocated + &
+                           9*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         
+         if ( l_chemical_conv ) then
+            allocate( xi_dist (1:lm_loc,nRstart:nRstop) )
+            bytes_allocated = bytes_allocated + &
+                              lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         else
+            allocate( xi_dist (1:1,1:1) )
+            bytes_allocated = bytes_allocated + SIZEOF_DEF_COMPLEX
+         end if
+         
+         !-- Magnetic field potentials:
+         allocate( b_dist  (1:lm_maxMag,nRstart:nRstop) )
+         allocate( db_dist (1:lm_maxMag,nRstart:nRstop) )
+         allocate( ddb_dist(1:lm_maxMag,nRstart:nRstop) )
+         allocate( aj_dist (1:lm_maxMag,nRstart:nRstop) )
+         allocate( dj_dist (1:lm_maxMag,nRstart:nRstop) )
+         bytes_allocated = bytes_allocated + &
+                           5*lm_maxMag*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+      end if
+      
 
       allocate( work_LMloc(llm:ulm,1:n_r_max) )
       bytes_allocated = bytes_allocated + (ulm-llm+1)*n_r_max*SIZEOF_DEF_COMPLEX
@@ -200,10 +249,31 @@ contains
       deallocate( aj_ic, dj_ic, ddj_ic, flow_LMloc_container )
       deallocate( flow_Rloc_container, s_LMloc_container, s_Rloc_container )
       deallocate( field_LMloc_container, field_Rloc_container )
-      deallocate( b_ic_LMloc, db_ic_LMloc, ddb_ic_LMloc, aj_ic_LMloc )
+      deallocate( b_ic_LMloc )
+      deallocate( db_ic_LMloc )
+      deallocate( ddb_ic_LMloc )
+      deallocate( aj_ic_LMloc )
       deallocate( dj_ic_LMloc, ddj_ic_LMloc )
       deallocate( xi_LMloc_container, xi_Rloc_container )
       deallocate( work_LMloc )
+      
+      if (n_procs_theta > 1) then
+         deallocate( s_dist  )
+         deallocate( ds_dist )
+         deallocate( z_dist  )
+         deallocate( dz_dist )
+         deallocate( p_dist  )
+         deallocate( dp_dist )
+         deallocate( b_dist  )
+         deallocate( db_dist )
+         deallocate( ddb_dist)
+         deallocate( aj_dist )
+         deallocate( dj_dist )
+         deallocate( w_dist  )
+         deallocate( dw_dist )
+         deallocate( ddw_dist)
+         deallocate( xi_dist )
+      end if
 
    end subroutine finalize_fields
 !----------------------------------------------------------------------------

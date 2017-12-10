@@ -59,10 +59,9 @@ module nonlinear_lm_mod
 
 contains
 
-   subroutine initialize(this,lmP_max)
+   subroutine initialize(this)
 
       class(nonlinear_lm_t) :: this
-      integer, intent(in) :: lmP_max
 
       allocate( this%AdvrLM(lmP_max) )   
       allocate( this%AdvtLM(lmP_max) )   

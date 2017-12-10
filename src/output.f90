@@ -803,7 +803,7 @@ contains
          if ( l_log ) then
             !--- Energies and rotation info and a lot of other stuff 
             !    performed for l_log=.true.
-  
+            
             !----- Getting the property parameters:
             Re     = sqrt(two*e_kin/vol_oc)/sqrt(mass)
             if ( abs(e_kin_nas) <= 10.0_cp * epsilon(mass) ) e_kin_nas=0.0_cp

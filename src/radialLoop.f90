@@ -28,7 +28,7 @@ module radialLoop
    use graphOut_mod, only: graphOut_header
 #endif
 
-   use rIterThetaParallel_mod, only: rIterThetaParallel_t
+   use rIterThetaDistributed_mod, only: rIterThetaDistributed_t
 #ifdef WITHOMP
    use rIterThetaBlocking_OpenMP_mod, only: rIterThetaBlocking_OpenMP_t
 #else
@@ -62,7 +62,7 @@ contains
 #ifdef WITH_SHTNS
       allocate( rIterThetaBlocking_shtns_t :: this_rIteration )
       if (n_procs_theta > 1) then
-         allocate( rIterThetaParallel_t :: this_rIteration )
+         allocate( rIterThetaDistributed_t :: this_rIteration )
       end if
 #else
 #ifdef WITHOMP
@@ -76,8 +76,8 @@ contains
       if (rank == 0) write(*,"(2A)") "Using rIteration type: ",trim(this_type)
       call this_rIteration%initialize()
       select type (this_rIteration)
-         class is (rIterThetaParallel_t)
-           call this_rIteration%set_ThetaParallel(nThetaBs,sizeThetaB)
+         class is (rIterThetaDistributed_t)
+           call this_rIteration%set_ThetaDistributed(nThetaBs,sizeThetaB)
          class is (rIterThetaBlocking_t)
            call this_rIteration%set_ThetaBlocking(nThetaBs,sizeThetaB)
          class default

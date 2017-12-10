@@ -196,7 +196,7 @@ contains
     
       dt_rh=min(dt_r,dt_h)
       dt_2 =min(half*(one/dt_fac+one)*dt_rh,dtMax)
-
+      
       if ( dt > dtMax ) then
     
          l_new_dt=.true.

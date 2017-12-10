@@ -1,13 +1,15 @@
 #include "perflib_preproc.cpp"
-module rIterThetaParallel_mod
+module rIterThetaDistributed_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use rIteration_mod, only: rIteration_t
 
-   use truncation, only: lm_max, lmP_max, l_max, lmP_max_dtB,      &
-       &                 n_phi_maxStr, n_theta_maxStr, n_r_maxStr, &
-       &                 lm_maxMag, l_axi, n_theta_max, n_phi_max, &
-       &                 nrp, n_r_max, m_max, minc
+   use truncation, only: lm_max, lmP_max, l_max, lmP_max_dtB,         &
+       &                 n_phi_maxStr, n_theta_maxStr, n_r_maxStr,    &
+       &                 lm_maxMag, l_axi, n_theta_max, n_phi_max,    &
+       &                 nrp, n_r_max, m_max, minc, n_theta_beg,      &
+       &                 n_theta_end, gather_f, slice_f, gather_FlmP, &
+       &                 gather_Flm, slice_Flm, slice_FlmP, lm_loc, n_m_loc, lmP_dist, lmP_loc
    use blocking, only: nfs, lm2
    use logic, only: l_mag, l_conv, l_mag_kin, l_heat, l_ht, l_anel,  &
        &            l_mag_LF, l_conv_nl, l_mag_nl, l_b_nl_cmb,       &
@@ -28,23 +30,31 @@ module rIterThetaParallel_mod
    use out_movie, only: store_movie_frame
    use outRot, only: get_lorentz_torque
    use courant_mod, only: courant
-   use nonlinear_bcs, only: get_br_v_bcs, v_rigid_boundary
+   use nonlinear_bcs, only: get_br_v_bcs, v_rigid_boundary, &
+                            v_rigid_boundary_dist
    use nl_special_calc
    use shtns
    use horizontal_data
+!    use fields, only: s_Rloc,ds_Rloc, z_Rloc,dz_Rloc, p_Rloc,dp_Rloc, &
+!        &             b_Rloc,db_Rloc,ddb_Rloc, aj_Rloc,dj_Rloc,       &
+!        &             w_Rloc,dw_Rloc,ddw_Rloc, xi_Rloc
    use fields, only: s_Rloc,ds_Rloc, z_Rloc,dz_Rloc, p_Rloc,dp_Rloc, &
        &             b_Rloc,db_Rloc,ddb_Rloc, aj_Rloc,dj_Rloc,       &
-       &             w_Rloc,dw_Rloc,ddw_Rloc, xi_Rloc
+       &             w_Rloc,dw_Rloc,ddw_Rloc, xi_Rloc,               &
+       &             s_dist,ds_dist, z_dist,dz_dist, p_dist,dp_dist, &
+       &             b_dist,db_dist,ddb_dist, aj_dist,dj_dist,       &
+       &             w_dist,dw_dist,ddw_dist, xi_dist
    use physical_parameters, only: ktops, kbots, n_r_LCR
    use probe_mod
    use parallel_mod
+   use arrays_dist
    use MKL_DFTI
-
+   
    implicit none
 
    private
-
-   type, public, extends(rIteration_t) :: rIterThetaParallel_t
+   
+   type, public, extends(rIteration_t) :: rIterThetaDistributed_t
       ! From rIterThetaBlocking_t
       integer :: sizeThetaB, nThetaBs
       type(leg_helper_t) :: leg_helper
@@ -53,31 +63,37 @@ module rIterThetaParallel_mod
       ! From rIterThetaBlocking_shtns_t
       integer :: nThreads
       type(grid_space_arrays_t) :: gsa
-      type(TO_arrays_t) :: TO_arrays
+      type(nonlinear_lm_t)      :: nl_lm
+      type(grid_space_arrays_dist_t) :: gsa_dist
+      type(nonlinear_lm_dist_t)      :: nl_lm_dist
+      type(TO_arrays_t)  :: TO_arrays
       type(dtB_arrays_t) :: dtB_arrays
-      type(nonlinear_lm_t) :: nl_lm
       real(cp) :: lorentz_torque_ic,lorentz_torque_ma
       
    contains
       ! From rIterThetaBlocking_t
       procedure :: allocate_common_arrays
       procedure :: deallocate_common_arrays
-      procedure :: set_ThetaParallel
+      procedure :: set_ThetaDistributed
    
       ! From rIterThetaBlocking_shtns_t
-      procedure :: initialize => initialize_rIterThetaParallel
-      procedure :: finalize => finalize_rIterThetaParallel
-      procedure :: do_iteration => do_iteration_ThetaParallel
+      procedure :: initialize => initialize_rIterThetaDistributed
+      procedure :: finalize => finalize_rIterThetaDistributed
+      procedure :: do_iteration => do_iteration_ThetaDistributed
       procedure :: getType => getThisType
-      procedure :: transform_to_grid_space
-      procedure :: transform_to_lm_space
-   end type rIterThetaParallel_t
+      procedure :: transform_to_grid_space_dist
+      procedure :: transform_to_grid_space_full
+      procedure :: transform_to_lm_space_dist
+      procedure :: transform_to_lm_space_full
+      procedure :: slice_all
+      procedure :: gather_all
+   end type rIterThetaDistributed_t
 
 contains
 
 subroutine allocate_common_arrays(this)
 
-      class(rIterThetaParallel_t) :: this
+      class(rIterThetaDistributed_t) :: this
 
       !----- Help arrays for Legendre transform calculated in legPrepG:
       !      Parallelizatio note: these are the R-distributed versions
@@ -95,7 +111,7 @@ subroutine allocate_common_arrays(this)
 !-------------------------------------------------------------------------------
    subroutine deallocate_common_arrays(this)
 
-      class(rIterThetaParallel_t) :: this
+      class(rIterThetaDistributed_t) :: this
 
       call this%leg_helper%finalize()
       deallocate( this%BsLast)
@@ -104,50 +120,56 @@ subroutine allocate_common_arrays(this)
 
    end subroutine deallocate_common_arrays
 !-------------------------------------------------------------------------------
-   subroutine set_ThetaParallel(this,nThetaBs,sizeThetaB)
+   subroutine set_ThetaDistributed(this,nThetaBs,sizeThetaB)
 
-      class(rIterThetaParallel_t) :: this
+      class(rIterThetaDistributed_t) :: this
       integer,intent(in) :: nThetaBs, sizeThetaB
 
       this%nThetaBs = nThetaBs
 
       this%sizeThetaB = sizeThetaB
 
-   end subroutine set_ThetaParallel
+   end subroutine set_ThetaDistributed
 !-------------------------------------------------------------------------------
    function getThisType(this)
 
-      class(rIterThetaParallel_t) :: this
+      class(rIterThetaDistributed_t) :: this
       character(len=100) :: getThisType
-      getThisType="rIterThetaParallel_t"
+      getThisType="rIterThetaDistributed_t"
 
    end function getThisType
 !------------------------------------------------------------------------------
-   subroutine initialize_rIterThetaParallel(this)
+   subroutine initialize_rIterThetaDistributed(this)
 
-      class(rIterThetaParallel_t) :: this
+      class(rIterThetaDistributed_t) :: this
 
       call this%allocate_common_arrays()
       call this%gsa%initialize()
       if ( l_TO ) call this%TO_arrays%initialize()
       call this%dtB_arrays%initialize()
-      call this%nl_lm%initialize(lmP_max)
+      call this%nl_lm%initialize()
+      
+      call this%gsa_dist%initialize()
+      call this%nl_lm_dist%initialize()
 
-   end subroutine initialize_rIterThetaParallel
+   end subroutine initialize_rIterThetaDistributed
 !------------------------------------------------------------------------------
-   subroutine finalize_rIterThetaParallel(this)
+   subroutine finalize_rIterThetaDistributed(this)
 
-      class(rIterThetaParallel_t) :: this
+      class(rIterThetaDistributed_t) :: this
 
       call this%deallocate_common_arrays()
       call this%gsa%finalize()
       if ( l_TO ) call this%TO_arrays%finalize()
       call this%dtB_arrays%finalize()
       call this%nl_lm%finalize()
+      
+      call this%gsa_dist%finalize()
+      call this%nl_lm_dist%finalize()
 
-   end subroutine finalize_rIterThetaParallel
+   end subroutine finalize_rIterThetaDistributed
 !------------------------------------------------------------------------------
-   subroutine do_iteration_ThetaParallel(this,nR,nBc,time,dt,dtLast, &
+   subroutine do_iteration_ThetaDistributed(this,nR,nBc,time,dt,dtLast, &
         &                 dsdt,dwdt,dzdt,dpdt,dxidt,dbdt,djdt,             &
         &                 dVxVhLM,dVxBhLM,dVSrLM,dVPrLM,dVXirLM,           &
         &                 br_vt_lm_cmb,br_vp_lm_cmb,                       &
@@ -158,7 +180,7 @@ subroutine allocate_common_arrays(this)
         &                 fpoynLMr,fresLMr,EperpLMr,EparLMr,EperpaxiLMr,   &
         &                 EparaxiLMr)
 
-      class(rIterThetaParallel_t) :: this
+      class(rIterThetaDistributed_t) :: this
       integer,  intent(in) :: nR,nBc
       real(cp), intent(in) :: time,dt,dtLast
 
@@ -179,10 +201,17 @@ subroutine allocate_common_arrays(this)
       real(cp),    intent(out) :: fpoynLMr(:), fresLMr(:)
       real(cp),    intent(out) :: EperpLMr(:), EparLMr(:), EperpaxiLMr(:), EparaxiLMr(:)
 
-      integer :: l,lm
+      integer :: lm
       logical :: lGraphHeader=.false.
       logical :: DEBUG_OUTPUT=.false.
       real(cp) :: c, lorentz_torques_ic
+      real(cp) :: test_r(n_phi_max,n_theta_max)
+      real(cp) :: test_t(n_phi_max,n_theta_max)
+      real(cp) :: test_p(n_phi_max,n_theta_max)
+      complex(cp) :: test_rLM(lmP_max)
+      complex(cp) :: test_tLM(lmP_max)
+      complex(cp) :: test_pLM(lmP_max)
+      real(cp) :: maxvalues(6)
 
       this%nR=nR
       this%nBc=nBc
@@ -236,7 +265,11 @@ subroutine allocate_common_arrays(this)
 
       call this%nl_lm%set_zero()
 
-      call this%transform_to_grid_space(this%gsa)
+      
+      call this%slice_all(this%nR)
+      call this%transform_to_grid_space_dist(this%gsa)
+      call this%gather_all(this%nR)
+!       call this%transform_to_grid_space_full(this%gsa)
 
       !--------- Calculation of nonlinear products in grid space:
       if ( (.not.this%isRadialBoundaryPoint) .or. this%lMagNlBc .or. &
@@ -245,8 +278,11 @@ subroutine allocate_common_arrays(this)
          PERFON('get_nl')
          call this%gsa%get_nl_shtns(this%nR, this%nBc, this%lRmsCalc)
          PERFOFF
-
-         call this%transform_to_lm_space(this%gsa, this%nl_lm)
+         
+         call this%slice_all(this%nR)
+         call this%transform_to_lm_space_dist
+         call this%gather_all(this%nR)
+!          call this%transform_to_lm_space_full(this%gsa, this%nl_lm)
 
       else if ( l_mag ) then
          do lm=1,lmP_max
@@ -279,6 +315,7 @@ subroutine allocate_common_arrays(this)
       !          lorentz_torque_ic
       if ( this%nR == n_r_icb .and. l_mag_LF .and. l_rot_ic .and. l_cond_ic  ) then
          lorentz_torques_ic=0.0_cp
+!          if (rank ==0) print *,"get lorentz torque inner core" ! LAGOTEST
          call get_lorentz_torque(lorentz_torques_ic,                &
               &                  1,this%sizeThetaB,                 &
               &                  this%gsa%brc,                      &
@@ -289,6 +326,7 @@ subroutine allocate_common_arrays(this)
       !          note: this calculates a torque of a wrong sign.
       !          sign is reversed at the end of the theta blocking.
       if ( this%nR == n_r_cmb .and. l_mag_LF .and. l_rot_ma .and. l_cond_ma ) then
+!          if (rank ==0) print *,"get lorentz torque mantle" ! LAGOTEST
          call get_lorentz_torque(this%lorentz_torque_ma,   &
               &                  1 ,this%sizeThetaB,       &
               &                  this%gsa%brc,             &
@@ -298,6 +336,7 @@ subroutine allocate_common_arrays(this)
 
       !--------- Calculate courant condition parameters:
       if ( this%l_cour ) then
+!          if (rank ==0) print *,"calculate courant" ! LAGOTEST
          !PRINT*,"Calling courant with this%nR=",this%nR
          call courant(this%nR,this%dtrkc,this%dthkc,this%gsa%vrc, &
               &       this%gsa%vtc,this%gsa%vpc,                  &
@@ -489,19 +528,118 @@ subroutine allocate_common_arrays(this)
               &            this%dtB_arrays%BtVpSn2LM,this%dtB_arrays%BpVtSn2LM)
          PERFOFF
       end if
-    end subroutine do_iteration_ThetaParallel
-!-------------------------------------------------------------------------------
-   subroutine transform_to_grid_space(this, gsa)
-
-      class(rIterThetaParallel_t) :: this
-      type(grid_space_arrays_t) :: gsa
       
+    end subroutine do_iteration_ThetaDistributed
+!-------------------------------------------------------------------------------
+   subroutine slice_all(this, nR)
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+      class(rIterThetaDistributed_t)  :: this
+      integer, intent(in) :: nR
+      
+      integer :: i,j, lm
+      
+      call this%gsa_dist%slice_all(this%gsa)
+      call this%nl_lm_dist%slice_all(this%nl_lm)
+      
+      !--------------------------------------------------------
+      !-- From fields.f90
+      !--------------------------------------------------------
+      call slice_Flm(s_Rloc(:,nR)  ,  s_dist(:,nR)  )
+      call slice_Flm(ds_Rloc(:,nR) ,  ds_dist(:,nR) )
+      call slice_Flm(z_Rloc(:,nR)  ,  z_dist(:,nR)  )
+      call slice_Flm(dz_Rloc(:,nR) ,  dz_dist(:,nR) )
+      call slice_Flm(p_Rloc(:,nR)  ,  p_dist(:,nR)  )
+      call slice_Flm(dp_Rloc(:,nR) ,  dp_dist(:,nR) )
+      call slice_Flm(w_Rloc(:,nR)  ,  w_dist(:,nR)  )
+      call slice_Flm(dw_Rloc(:,nR) ,  dw_dist(:,nR) )
+      call slice_Flm(ddw_Rloc(:,nR),  ddw_dist(:,nR))
+      
+      if ( l_chemical_conv ) then
+         call slice_Flm(xi_Rloc(:,nR) ,  xi_dist(:,nR) )
+      else
+         xi_dist(1,1) = xi_Rloc(1,1)
+      end if
+      
+      if (lm_maxMag == lm_max) then
+         call slice_Flm(b_Rloc(:,nR)  ,  b_dist(:,nR)  )
+         call slice_Flm(db_Rloc(:,nR) ,  db_dist(:,nR) )
+         call slice_Flm(ddb_Rloc(:,nR),  ddb_dist(:,nR))
+         call slice_Flm(aj_Rloc(:,nR) ,  aj_dist(:,nR) )
+         call slice_Flm(dj_Rloc(:,nR) ,  dj_dist(:,nR) )
+      else if (lm_maxMag == 1) then
+         b_dist(:,nR)  = b_Rloc(:,nR)  
+         db_dist(:,nR) = db_Rloc(:,nR) 
+         ddb_dist(:,nR)= ddb_Rloc(:,nR)
+         aj_dist(:,nR) = aj_Rloc(:,nR) 
+         dj_dist(:,nR) = dj_Rloc(:,nR) 
+      else
+         print *, "Woopsie, value of lm_maxMag is funny: ", lm_maxMag
+         print *, "Aborting!"
+         STOP
+      end if
+      
+   end subroutine slice_all
+!-------------------------------------------------------------------------------
+   subroutine gather_all(this, nR)
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+      class(rIterThetaDistributed_t)  :: this
+      integer, intent(in) :: nR
+      
+      call this%gsa_dist%gather_all(this%gsa)
+      call this%nl_lm_dist%gather_all(this%nl_lm)
+      
+      !--------------------------------------------------------
+      !-- From fields.f90
+      !--------------------------------------------------------
+      call gather_Flm(s_dist(:,nR)  , s_Rloc(:,nR)  )
+      call gather_Flm(ds_dist(:,nR) , ds_Rloc(:,nR) )
+      call gather_Flm(z_dist(:,nR)  , z_Rloc(:,nR)  )
+      call gather_Flm(dz_dist(:,nR) , dz_Rloc(:,nR) )
+      call gather_Flm(p_dist(:,nR)  , p_Rloc(:,nR)  )
+      call gather_Flm(dp_dist(:,nR) , dp_Rloc(:,nR) )
+      call gather_Flm(w_dist(:,nR)  , w_Rloc(:,nR)  )
+      call gather_Flm(dw_dist(:,nR) , dw_Rloc(:,nR) )
+      call gather_Flm(ddw_dist(:,nR), ddw_Rloc(:,nR))
+      
+      if ( l_chemical_conv ) then
+         call gather_Flm(xi_dist(:,nR) , xi_Rloc(:,nR) )
+      else
+         xi_Rloc(1,1) = xi_dist(1,1)
+      end if
+      
+      if (lm_maxMag == lm_max) then
+         call gather_Flm(b_dist(:,nR)  , b_Rloc(:,nR)  )
+         call gather_Flm(db_dist(:,nR) , db_Rloc(:,nR) )
+         call gather_Flm(ddb_dist(:,nR), ddb_Rloc(:,nR))
+         call gather_Flm(aj_dist(:,nR) , aj_Rloc(:,nR) )
+         call gather_Flm(dj_dist(:,nR) , dj_Rloc(:,nR) )
+      else if (lm_maxMag == 1) then
+         b_Rloc(:,nR)   = b_Rloc(:,nR)  
+         db_Rloc(:,nR)  = db_Rloc(:,nR) 
+         ddb_Rloc(:,nR) = ddb_Rloc(:,nR)
+         aj_Rloc(:,nR)  = aj_Rloc(:,nR) 
+         dj_Rloc(:,nR)  = dj_Rloc(:,nR) 
+      else
+         print *, "Woopsie, value of lm_maxMag is funny: ", lm_maxMag
+         print *, "Aborting!"
+         STOP
+      end if
+      
+   end subroutine gather_all
+!-------------------------------------------------------------------------------
+   subroutine transform_to_grid_space_full(this, gsa)
+
+      class(rIterThetaDistributed_t) :: this
+      type(grid_space_arrays_t) :: gsa
+
       integer :: nR
       nR = this%nR
 
       if ( l_conv .or. l_mag_kin ) then
          if ( l_heat ) then
-            call scal_to_spat_parallel(s_Rloc(:, nR), gsa%sc)
+            call scal_to_spat(s_Rloc(:, nR), gsa%sc)
             if ( this%lViscBcCalc ) then
                call scal_to_grad_spat(s_Rloc(:, nR), gsa%dsdtc, &
                                       gsa%dsdpc)
@@ -517,15 +655,15 @@ subroutine allocate_common_arrays(this)
          end if
 
          if ( this%lPressCalc ) then ! Pressure
-            call scal_to_spat_parallel(p_Rloc(:, nR), gsa%pc)
+            call scal_to_spat(p_Rloc(:, nR), gsa%pc)
          end if
 
          if ( l_chemical_conv ) then ! Chemical composition
-            call scal_to_spat_parallel(xi_Rloc(:, nR), gsa%xic)
+            call scal_to_spat(xi_Rloc(:, nR), gsa%xic)
          end if
 
          if ( l_HT .or. this%lViscBcCalc ) then
-            call scal_to_spat_parallel(ds_Rloc(:, nR), gsa%drsc)
+            call scal_to_spat(ds_Rloc(:, nR), gsa%drsc)
          endif
          if ( this%nBc == 0 ) then
             call torpol_to_spat(w_Rloc(:, nR), dw_Rloc(:, nR),  z_Rloc(:, nR), &
@@ -602,18 +740,264 @@ subroutine allocate_common_arrays(this)
          end if
       end if
 
-   end subroutine transform_to_grid_space
+   end subroutine transform_to_grid_space_full
 !-------------------------------------------------------------------------------
-   subroutine transform_to_lm_space(this, gsa, nl_lm)
-!>@author Rafael Lago, MPCDF
-!-------------------------------------------------------------------------------
+   subroutine transform_to_grid_space_dist(this, gsa)
 
-      class(rIterThetaParallel_t) :: this
+      class(rIterThetaDistributed_t) :: this
       type(grid_space_arrays_t) :: gsa
-      type(nonlinear_lm_t) :: nl_lm
+
+      integer :: nR
+      nR = this%nR
+      
+      if ( l_conv .or. l_mag_kin ) then
+         if ( l_heat ) then
+            call sh_to_spat_dist(s_dist(:, nR), this%gsa_dist%sc)
+            if ( this%lViscBcCalc ) then
+               call sph_to_spat_dist(s_dist(:, nR),       &
+                                     this%gsa_dist%dsdtc, &
+                                     this%gsa_dist%dsdpc)
+               if (this%nR == n_r_cmb .and. ktops==1) then
+                  this%gsa_dist%dsdtc=0.0_cp
+                  this%gsa_dist%dsdpc=0.0_cp
+               end if
+               if (this%nR == n_r_icb .and. kbots==1) then
+                  this%gsa_dist%dsdtc=0.0_cp
+                  this%gsa_dist%dsdpc=0.0_cp
+               end if
+            end if
+         end if
+
+         if ( this%lPressCalc ) then ! Pressure
+            call sh_to_spat_dist(p_dist(:, nR), this%gsa_dist%pc)
+         end if
+
+         if ( l_chemical_conv ) then ! Chemical composition
+            call sh_to_spat_dist(xi_dist(:, nR), this%gsa_dist%xic)
+         end if
+
+         if ( l_HT .or. this%lViscBcCalc ) then
+            call sh_to_spat_dist(ds_dist(:, nR), this%gsa_dist%drsc)
+         endif
+         if ( this%nBc == 0 ) then
+               call torpol_to_spat_dist(w_dist(:, nR),     &
+                                        dw_dist(:, nR),    &
+                                        z_dist(:, nR),     &
+                                        this%gsa_dist%vrc, &
+                                        this%gsa_dist%vtc, &
+                                        this%gsa_dist%vpc)
+            if ( this%lDeriv ) then
+               call torpol_to_spat_dist(dw_dist(:, nR),     &
+                                        ddw_dist(:, nR),    &
+                                        dz_dist(:, nR),     &
+                                        this%gsa_dist%dvrdrc, &
+                                        this%gsa_dist%dvtdrc, &
+                                        this%gsa_dist%dvpdrc)
+
+               call pol_to_curlr_spat_dist(z_dist(:, nR), this%gsa_dist%cvrc)
+
+               call pol_to_grad_spat_dist(w_dist(:, nR),        &
+                                          this%gsa_dist%dvrdtc, &
+                                          this%gsa_dist%dvrdpc)
+                                     
+               call torpol_to_dphspat_dist(dw_dist(:, nR),  z_dist(:, nR), &
+                                      this%gsa_dist%dvtdpc, &
+                                      this%gsa_dist%dvpdpc)
+
+            end if
+         else if ( this%nBc == 1 ) then ! Stress free
+            ! TODO don't compute vrc as it is set to 0 afterward
+            call torpol_to_spat_dist(w_dist(:, nR),     &
+                                     dw_dist(:, nR),    &
+                                     z_dist(:, nR),     &
+                                     this%gsa_dist%vrc, &
+                                     this%gsa_dist%vtc, &
+                                     this%gsa_dist%vpc)
+                               
+            gsa%vrc = 0.0_cp
+            if ( this%lDeriv ) then
+               gsa%dvrdtc = 0.0_cp
+               gsa%dvrdpc = 0.0_cp
+               call torpol_to_spat_dist(dw_dist(:, nR),     &
+                                     ddw_dist(:, nR),    &
+                                     dz_dist(:, nR),     &
+                                     this%gsa_dist%dvrdrc, &
+                                     this%gsa_dist%dvtdrc, &
+                                     this%gsa_dist%dvpdrc)
+               call pol_to_curlr_spat_dist(z_dist(:, nR), this%gsa_dist%cvrc)
+               call torpol_to_dphspat_dist(dw_dist(:, nR),  z_dist(:, nR), &
+                                      this%gsa_dist%dvtdpc, &
+                                      this%gsa_dist%dvpdpc)
+            end if
+         else if ( this%nBc == 2 ) then
+            if ( this%nR == n_r_cmb ) then
+               call v_rigid_boundary_dist(this%nR, this%leg_helper%omegaMA, &
+                    this%lDeriv, this%gsa_dist%vrc, this%gsa_dist%vtc,      &
+                    this%gsa_dist%vpc, this%gsa_dist%cvrc,                  &
+                    this%gsa_dist%dvrdtc, this%gsa_dist%dvrdpc,             &
+                    this%gsa_dist%dvtdpc, this%gsa_dist%dvpdpc)
+                    
+            else if ( this%nR == n_r_icb ) then
+               call v_rigid_boundary_dist(this%nR, this%leg_helper%omegaIC, &
+                  this%lDeriv, this%gsa_dist%vrc, this%gsa_dist%vtc,      &
+                  this%gsa_dist%vpc, this%gsa_dist%cvrc,                  &
+                  this%gsa_dist%dvrdtc, this%gsa_dist%dvrdpc,             &
+                  this%gsa_dist%dvtdpc, this%gsa_dist%dvpdpc)
+
+            end if
+            if ( this%lDeriv ) then
+               call torpol_to_spat_dist(dw_dist(:, nR),     &
+                                     ddw_dist(:, nR),    &
+                                     dz_dist(:, nR),     &
+                                     this%gsa_dist%dvrdrc, &
+                                     this%gsa_dist%dvtdrc, &
+                                     this%gsa_dist%dvpdrc)
+            end if
+         end if
+      end if
+      if ( l_mag .or. l_mag_LF ) then
+         call torpol_to_spat_dist( b_dist(:, nR),       &
+                               db_dist(:, nR),       &
+                               aj_dist(:, nR),       &
+                               this%gsa_dist%brc, &
+                               this%gsa_dist%btc, &
+                               this%gsa_dist%bpc)
+
+         if ( this%lDeriv ) then
+            call torpol_to_curl_spat_dist(b_dist(:, nR), ddb_dist(:, nR),     &
+                                          aj_dist(:, nR), dj_dist(:, nR), nR, &
+                                          this%gsa_dist%cbrc,                 &
+                                          this%gsa_dist%cbtc,                 &
+                                          this%gsa_dist%cbpc)
+         end if
+      end if
+      
+   end subroutine transform_to_grid_space_dist
+!-------------------------------------------------------------------------------
+   subroutine transform_to_lm_space_dist(this)
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+      class(rIterThetaDistributed_t) :: this
       
       ! Local variables
+      integer :: i, j
+      
+      if ( (.not.this%isRadialBoundaryPoint .or. this%lRmsCalc) &
+            .and. ( l_conv_nl .or. l_mag_LF ) ) then
+         !PERFON('inner1')
+         
+         if ( l_conv_nl .and. l_mag_LF ) then
+            if ( this%nR>n_r_LCR ) then
+               do j=n_theta_beg,n_theta_end
+                  do i=1, n_phi_max
+                     this%gsa_dist%Advr(i, j)=this%gsa_dist%Advr(i, j) + this%gsa_dist%LFr(i, j)
+                     this%gsa_dist%Advt(i, j)=this%gsa_dist%Advt(i, j) + this%gsa_dist%LFt(i, j)
+                     this%gsa_dist%Advp(i, j)=this%gsa_dist%Advp(i, j) + this%gsa_dist%LFp(i, j)
+                  end do
+               end do
+            end if
+         else if ( l_mag_LF ) then
+            if ( this%nR > n_r_LCR ) then
+               do j=n_theta_beg, n_theta_end
+                  do i=1, n_phi_max
+                     this%gsa_dist%Advr(i, j) = this%gsa_dist%LFr(i, j)
+                     this%gsa_dist%Advt(i, j) = this%gsa_dist%LFt(i, j)
+                     this%gsa_dist%Advp(i, j) = this%gsa_dist%LFp(i, j)
+                  end do
+               end do
+            else
+               do j=n_theta_beg, n_theta_end
+                  do i=1, n_phi_max
+                     this%gsa_dist%Advr(i,j)=0.0_cp
+                     this%gsa_dist%Advt(i,j)=0.0_cp
+                     this%gsa_dist%Advp(i,j)=0.0_cp
+                  end do
+               end do
+            end if
+         end if
+         
+         ! Computes the transform
+         call spat_to_SH_dist(this%gsa_dist%Advr, this%nl_lm_dist%AdvrLM)
+         call spat_to_SH_dist(this%gsa_dist%Advt, this%nl_lm_dist%AdvtLM)
+         call spat_to_SH_dist(this%gsa_dist%Advp, this%nl_lm_dist%AdvpLM)
+         
+         if ( this%lRmsCalc .and. l_mag_LF .and. this%nR>n_r_LCR ) then
+            ! LF treated extra:
+            call spat_to_SH_dist(this%gsa_dist%LFr, this%nl_lm_dist%LFrLM)
+            call spat_to_SH_dist(this%gsa_dist%LFt, this%nl_lm_dist%LFtLM)
+            call spat_to_SH_dist(this%gsa_dist%LFp, this%nl_lm_dist%LFpLM)
+         end if
+         !PERFOFF
+      end if
+      if ( (.not.this%isRadialBoundaryPoint) .and. l_heat ) then
+         !PERFON('inner2')
+         call spat_to_SH_dist(this%gsa_dist%VSr, this%nl_lm_dist%VSrLM)
+         call spat_to_SH_dist(this%gsa_dist%VSt, this%nl_lm_dist%VStLM)
+         call spat_to_SH_dist(this%gsa_dist%VSp, this%nl_lm_dist%VSpLM)
+
+         if (l_anel) then ! anelastic stuff
+            if ( l_mag_nl .and. this%nR>n_r_LCR ) then
+               call spat_to_SH_dist(this%gsa_dist%ViscHeat, this%nl_lm_dist%ViscHeatLM)
+               call spat_to_SH_dist(this%gsa_dist%OhmLoss,  this%nl_lm_dist%OhmLossLM)
+            else
+               call spat_to_SH_dist(this%gsa_dist%ViscHeat, this%nl_lm_dist%ViscHeatLM)
+            end if
+         end if
+         !PERFOFF
+      end if
+      if ( (.not.this%isRadialBoundaryPoint) .and. l_TP_form ) then
+         !PERFON('inner2')
+         call spat_to_SH_dist(this%gsa_dist%VPr, this%nl_lm_dist%VPrLM)
+         !PERFOFF
+      end if
+      if ( (.not.this%isRadialBoundaryPoint) .and. l_chemical_conv ) then
+         !PERFON('inner2')
+         call spat_to_SH_dist(this%gsa_dist%VXir, this%nl_lm_dist%VXirLM)
+         call spat_to_SH_dist(this%gsa_dist%VXit, this%nl_lm_dist%VXitLM)
+         call spat_to_SH_dist(this%gsa_dist%VXip, this%nl_lm_dist%VXipLM)
+         !PERFOFF
+      end if
+      if ( l_mag_nl ) then
+         !PERFON('mag_nl')
+         if ( .not.this%isRadialBoundaryPoint .and. this%nR>n_r_LCR ) then
+            call spat_to_SH_dist(this%gsa_dist%VxBr, this%nl_lm_dist%VxBrLM)
+            call spat_to_SH_dist(this%gsa_dist%VxBt, this%nl_lm_dist%VxBtLM)
+            call spat_to_SH_dist(this%gsa_dist%VxBp, this%nl_lm_dist%VxBpLM)
+         else
+            !write(*,"(I4,A,ES20.13)") this%nR,", VxBt = ",sum(VxBt*VxBt)
+            call spat_to_SH_dist(this%gsa_dist%VxBt, this%nl_lm_dist%VxBtLM)
+            call spat_to_SH_dist(this%gsa_dist%VxBp, this%nl_lm_dist%VxBpLM)
+         end if
+         !PERFOFF
+      end if
+
+      if ( this%lRmsCalc ) then
+         call spat_to_SH_dist(this%gsa_dist%p1, this%nl_lm_dist%p1LM)
+         call spat_to_SH_dist(this%gsa_dist%p2, this%nl_lm_dist%p2LM)
+         call spat_to_SH_dist(this%gsa_dist%CFt2, this%nl_lm_dist%CFt2LM)
+         call spat_to_SH_dist(this%gsa_dist%CFp2, this%nl_lm_dist%CFp2LM)
+         if ( l_conv_nl ) then
+            call spat_to_SH_dist(this%gsa_dist%Advt2, this%nl_lm_dist%Advt2LM)
+            call spat_to_SH_dist(this%gsa_dist%Advp2, this%nl_lm_dist%Advp2LM)
+         end if
+         if ( l_mag_nl .and. this%nR>n_r_LCR ) then
+            call spat_to_SH_dist(this%gsa_dist%LFt2, this%nl_lm_dist%LFt2LM)
+            call spat_to_SH_dist(this%gsa_dist%LFp2, this%nl_lm_dist%LFp2LM)
+         end if
+      end if
+      
+   end subroutine transform_to_lm_space_dist
+!-------------------------------------------------------------------------------
+   subroutine transform_to_lm_space_full(this, gsa, nl_lm)
+
+      class(rIterThetaDistributed_t) :: this
+      type(grid_space_arrays_t) :: gsa
+      type(nonlinear_lm_t) :: nl_lm
+
+      ! Local variables
       integer :: nTheta, nPhi
+
+      call shtns_load_cfg(1)
 
       if ( (.not.this%isRadialBoundaryPoint .or. this%lRmsCalc) &
             .and. ( l_conv_nl .or. l_mag_LF ) ) then
@@ -647,77 +1031,80 @@ subroutine allocate_common_arrays(this)
                end do
             end if
          end if
-        
-         ! Computes the transform
-         call spat_to_SH_parallel(gsa%Advr, nl_lm%AdvrLM)
-         call spat_to_SH_parallel(gsa%Advt, nl_lm%AdvtLM)
-         call spat_to_SH_parallel(gsa%Advp, nl_lm%AdvpLM)
 
+         call spat_to_SH(gsa%Advr, nl_lm%AdvrLM)
+         call spat_to_SH(gsa%Advt, nl_lm%AdvtLM)
+         call spat_to_SH(gsa%Advp, nl_lm%AdvpLM)
+         
          if ( this%lRmsCalc .and. l_mag_LF .and. this%nR>n_r_LCR ) then
             ! LF treated extra:
-            call spat_to_SH_parallel(gsa%LFr, nl_lm%LFrLM)
-            call spat_to_SH_parallel(gsa%LFt, nl_lm%LFtLM)
-            call spat_to_SH_parallel(gsa%LFp, nl_lm%LFpLM)
+            call spat_to_SH(gsa%LFr, nl_lm%LFrLM)
+            call spat_to_SH(gsa%LFt, nl_lm%LFtLM)
+            call spat_to_SH(gsa%LFp, nl_lm%LFpLM)
          end if
          !PERFOFF
       end if
       if ( (.not.this%isRadialBoundaryPoint) .and. l_heat ) then
          !PERFON('inner2')
-         call spat_to_SH_parallel(gsa%VSr, nl_lm%VSrLM)
-         call spat_to_SH_parallel(gsa%VSt, nl_lm%VStLM)
-         call spat_to_SH_parallel(gsa%VSp, nl_lm%VSpLM)
+         call spat_to_SH(gsa%VSr, nl_lm%VSrLM)
+         call spat_to_SH(gsa%VSt, nl_lm%VStLM)
+         call spat_to_SH(gsa%VSp, nl_lm%VSpLM)
 
          if (l_anel) then ! anelastic stuff
             if ( l_mag_nl .and. this%nR>n_r_LCR ) then
-               call spat_to_SH_parallel(gsa%ViscHeat, nl_lm%ViscHeatLM)
-               call spat_to_SH_parallel(gsa%OhmLoss, nl_lm%OhmLossLM)
+               call spat_to_SH(gsa%ViscHeat, nl_lm%ViscHeatLM)
+               call spat_to_SH(gsa%OhmLoss, nl_lm%OhmLossLM)
             else
-               call spat_to_SH_parallel(gsa%ViscHeat, nl_lm%ViscHeatLM)
+               call spat_to_SH(gsa%ViscHeat, nl_lm%ViscHeatLM)
             end if
          end if
          !PERFOFF
       end if
       if ( (.not.this%isRadialBoundaryPoint) .and. l_TP_form ) then
          !PERFON('inner2')
-         call spat_to_SH_parallel(gsa%VPr, nl_lm%VPrLM)
+         call spat_to_SH(gsa%VPr, nl_lm%VPrLM)
          !PERFOFF
       end if
       if ( (.not.this%isRadialBoundaryPoint) .and. l_chemical_conv ) then
          !PERFON('inner2')
-         call spat_to_SH_parallel(gsa%VXir, nl_lm%VXirLM)
-         call spat_to_SH_parallel(gsa%VXit, nl_lm%VXitLM)
-         call spat_to_SH_parallel(gsa%VXip, nl_lm%VXipLM)
+         call spat_to_SH(gsa%VXir, nl_lm%VXirLM)
+         call spat_to_SH(gsa%VXit, nl_lm%VXitLM)
+         call spat_to_SH(gsa%VXip, nl_lm%VXipLM)
          !PERFOFF
       end if
       if ( l_mag_nl ) then
          !PERFON('mag_nl')
          if ( .not.this%isRadialBoundaryPoint .and. this%nR>n_r_LCR ) then
-            call spat_to_SH_parallel(gsa%VxBr, nl_lm%VxBrLM)
-            call spat_to_SH_parallel(gsa%VxBt, nl_lm%VxBtLM)
-            call spat_to_SH_parallel(gsa%VxBp, nl_lm%VxBpLM)
+            call spat_to_SH(gsa%VxBr, nl_lm%VxBrLM)
+            call spat_to_SH(gsa%VxBt, nl_lm%VxBtLM)
+            call spat_to_SH(gsa%VxBp, nl_lm%VxBpLM)
          else
             !write(*,"(I4,A,ES20.13)") this%nR,", VxBt = ",sum(VxBt*VxBt)
-            call spat_to_SH_parallel(gsa%VxBt, nl_lm%VxBtLM)
-            call spat_to_SH_parallel(gsa%VxBp, nl_lm%VxBpLM)
+            call spat_to_SH(gsa%VxBt, nl_lm%VxBtLM)
+            call spat_to_SH(gsa%VxBp, nl_lm%VxBpLM)
          end if
          !PERFOFF
       end if
 
       if ( this%lRmsCalc ) then
-         call spat_to_SH_parallel(gsa%p1, nl_lm%p1LM)
-         call spat_to_SH_parallel(gsa%p2, nl_lm%p2LM)
-         call spat_to_SH_parallel(gsa%CFt2, nl_lm%CFt2LM)
-         call spat_to_SH_parallel(gsa%CFp2, nl_lm%CFp2LM)
+         call spat_to_SH(gsa%p1, nl_lm%p1LM)
+         call spat_to_SH(gsa%p2, nl_lm%p2LM)
+         call spat_to_SH(gsa%CFt2, nl_lm%CFt2LM)
+         call spat_to_SH(gsa%CFp2, nl_lm%CFp2LM)
          if ( l_conv_nl ) then
-            call spat_to_SH_parallel(gsa%Advt2, nl_lm%Advt2LM)
-            call spat_to_SH_parallel(gsa%Advp2, nl_lm%Advp2LM)
+            call spat_to_SH(gsa%Advt2, nl_lm%Advt2LM)
+            call spat_to_SH(gsa%Advp2, nl_lm%Advp2LM)
          end if
          if ( l_mag_nl .and. this%nR>n_r_LCR ) then
-            call spat_to_SH_parallel(gsa%LFt2, nl_lm%LFt2LM)
-            call spat_to_SH_parallel(gsa%LFp2, nl_lm%LFp2LM)
+            call spat_to_SH(gsa%LFt2, nl_lm%LFt2LM)
+            call spat_to_SH(gsa%LFp2, nl_lm%LFp2LM)
          end if
       end if
-      
-   end subroutine transform_to_lm_space
+
+      call shtns_load_cfg(0)
+
+   end subroutine transform_to_lm_space_full
 !-------------------------------------------------------------------------------
-end module rIterThetaParallel_mod
+
+end module rIterThetaDistributed_mod
+
