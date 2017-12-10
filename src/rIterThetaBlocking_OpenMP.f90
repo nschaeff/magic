@@ -90,7 +90,7 @@ contains
       call this%gsa(threadid)%initialize()
       if ( l_TO ) call this%TO_arrays(threadid)%initialize()
       call this%dtB_arrays(threadid)%initialize()
-      call this%nl_lm(threadid)%initialize(lmP_max)
+      call this%nl_lm(threadid)%initialize()
       !$OMP END PARALLEL
    end subroutine initialize_rIterThetaBlocking_OpenMP
 !------------------------------------------------------------------------------

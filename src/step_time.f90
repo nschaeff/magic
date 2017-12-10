@@ -1157,6 +1157,7 @@ contains
             end if
             call abortRun('Stop run in steptime')
          end if
+         
          if ( l_new_dtNext ) then
             !------ Writing info and getting new weights:
             w2New=-half*dtNew/dt ! Weight I will be using for next update !

@@ -5,7 +5,8 @@ module horizontal_data
    !
 
    use truncation, only: l_max, lmP_max, n_theta_max, n_phi_max, &
-       &                 lm_max, n_m_max, minc, m_max, l_axi
+       &                 lm_max, lm_loc, n_m_max, minc, m_max, l_axi, &
+       &                 slice_fLM
    use radial_functions, only: r_cmb
    use physical_parameters, only: ek
    use num_param, only: difeta, difnu, difkap, ldif, ldifexp, difchem
@@ -16,6 +17,7 @@ module horizontal_data
    use constants, only: pi, zero, one, two, half
    use precision_mod
    use mem_alloc, only: bytes_allocated
+   use parallel_mod
  
    implicit none
 
@@ -50,11 +52,12 @@ module horizontal_data
    complex(cp), public, allocatable :: dPhi0(:)
    complex(cp), public, allocatable :: dPhi02(:)
    real(cp), public, allocatable :: dLh(:)
+   real(cp), public, allocatable :: dLh_loc(:)
    real(cp), public, allocatable :: dTheta1S(:),dTheta1A(:)
    real(cp), public, allocatable :: dTheta2S(:),dTheta2A(:)
    real(cp), public, allocatable :: dTheta3S(:),dTheta3A(:)
    real(cp), public, allocatable :: dTheta4S(:),dTheta4A(:)
-   real(cp), public, allocatable :: D_m(:),D_l(:),D_lP1(:)
+   real(cp), public, allocatable :: D_m(:),D_m_loc(:),D_l(:),D_lP1(:)
    real(cp), public, allocatable :: D_mc2m(:)
    real(cp), public, allocatable :: hdif_B(:),hdif_V(:),hdif_S(:),hdif_Xi(:)
  
@@ -106,11 +109,13 @@ contains
       allocate( dPhi0(lm_max) )
       allocate( dPhi02(lm_max) )
       allocate( dLh(lm_max) )
+      if (n_procs_theta>1) allocate( dLh_loc(lm_loc) )
       allocate( dTheta1S(lm_max),dTheta1A(lm_max) )
       allocate( dTheta2S(lm_max),dTheta2A(lm_max) )
       allocate( dTheta3S(lm_max),dTheta3A(lm_max) )
       allocate( dTheta4S(lm_max),dTheta4A(lm_max) )
       allocate( D_m(lm_max),D_l(lm_max),D_lP1(lm_max) )
+      if (n_procs_theta>1) allocate( D_m_loc(lm_loc) )
       allocate( D_mc2m(n_m_max) )
       allocate( hdif_B(lm_max),hdif_V(lm_max),hdif_S(lm_max) )
       allocate( hdif_Xi(lm_max) )
@@ -131,8 +136,10 @@ contains
       deallocate( Plm, wPlm, dPlm, gauss, dPl0Eq )
       if ( l_RMS ) deallocate( wdPlm )
       deallocate( dPhi, dPhi0, dPhi02, dLh, dTheta1S, dTheta1A )
+      if (n_procs_theta>1) deallocate( dLh_loc )
       deallocate( dTheta2S, dTheta2A, dTheta3S, dTheta3A, dTheta4S, dTheta4A )
       deallocate( D_m, D_l, D_lP1, D_mc2m, hdif_B, hdif_V, hdif_S, hdif_Xi )
+      if (n_procs_theta>1) deallocate( D_m_loc)
       deallocate( lStart, lStop, lStartP, lStopP, lmOdd, lmOddP )
 
       if ( .not. l_axi ) call finalize_fft()
@@ -329,6 +336,11 @@ contains
          end if
 
       end do ! lm
+      
+      if (n_procs_theta > 1) then
+         call slice_fLM(dLh, dLh_loc)
+         call slice_fLM(D_m, D_m_loc)
+      end if
 
 
       !-- Build auxiliary index arrays for Legendre transform:

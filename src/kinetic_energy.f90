@@ -298,7 +298,6 @@ contains
          call MPI_Bcast(ekinR,n_r_max,MPI_DEF_REAL,0,comm_r,ierr)
       end if
 #endif
-
    end subroutine get_e_kin
 !-----------------------------------------------------------------------------
    subroutine get_u_square(time,w,dw,z,RolR,dlR,dlRc)
