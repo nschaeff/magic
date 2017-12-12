@@ -112,6 +112,7 @@ contains
       integer :: nTheta
       logical :: DEBUG_OUTPUT=.false.
 
+      PERFON('sp2lm')
       !----- Legendre transform from (r,l,m) to (r,theta,m):
       !      First version with PlmTF needed for first-touch policy
       if ( l_mag ) then
@@ -267,6 +268,7 @@ contains
             call fft_thetab(gsa%cbpc,1)
          end if
       end if
+      PERFOFF
 
    end subroutine transform_to_grid_space
 !-------------------------------------------------------------------------------
@@ -280,6 +282,7 @@ contains
       ! Local variables
       integer :: nTheta,nPhi
   
+      PERFON('lm2sp')
       if ( (.not.this%isRadialBoundaryPoint .or. this%lRmsCalc) .and. &
             ( l_conv_nl .or. l_mag_LF ) ) then
          !PERFON('inner1')
@@ -433,6 +436,7 @@ contains
                  &               gsa%LFp2,gsa%LFt2)
          end if
       end if
+      PERFOFF
 
    end subroutine transform_to_lm_space
 !-------------------------------------------------------------------------------

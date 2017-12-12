@@ -458,6 +458,7 @@ contains
       integer :: nR
       nR = this%nR
 
+      PERFON('sp2lm')
       if ( l_conv .or. l_mag_kin ) then
          if ( l_heat ) then
             call scal_to_spat(s_Rloc(:, nR), gsa%sc)
@@ -546,6 +547,7 @@ contains
                  &                   gsa%cbrc, gsa%cbtc, gsa%cbpc)
          end if
       end if
+      PERFOFF
 
    end subroutine transform_to_grid_space_shtns
 !-------------------------------------------------------------------------------
@@ -560,6 +562,7 @@ contains
 
       call shtns_load_cfg(1)
 
+      PERFON('lm2sp')
       if ( (.not.this%isRadialBoundaryPoint .or. this%lRmsCalc) &
             .and. ( l_conv_nl .or. l_mag_LF ) ) then
          !PERFON('inner1')
@@ -667,6 +670,7 @@ contains
             call spat_to_sphertor(gsa%LFt2, gsa%LFp2, nl_lm%LFt2LM, nl_lm%LFp2LM)
          end if
       end if
+      PERFOFF
 
       call shtns_load_cfg(0)
 

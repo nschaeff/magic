@@ -82,9 +82,9 @@ module rIterThetaDistributed_mod
       procedure :: do_iteration => do_iteration_ThetaDistributed
       procedure :: getType => getThisType
       procedure :: transform_to_grid_space_dist
-      procedure :: transform_to_grid_space_full
+      procedure :: transform_to_grid_space
       procedure :: transform_to_lm_space_dist
-      procedure :: transform_to_lm_space_full
+      procedure :: transform_to_lm_space
       procedure :: slice_all
       procedure :: gather_all
    end type rIterThetaDistributed_t
@@ -267,9 +267,9 @@ subroutine allocate_common_arrays(this)
 
       
       call this%slice_all(this%nR)
-      call this%transform_to_grid_space_dist(this%gsa)
+      call this%transform_to_grid_space_dist
       call this%gather_all(this%nR)
-!       call this%transform_to_grid_space_full(this%gsa)
+!       call this%transform_to_grid_space(this%gsa)
 
       !--------- Calculation of nonlinear products in grid space:
       if ( (.not.this%isRadialBoundaryPoint) .or. this%lMagNlBc .or. &
@@ -282,7 +282,7 @@ subroutine allocate_common_arrays(this)
          call this%slice_all(this%nR)
          call this%transform_to_lm_space_dist
          call this%gather_all(this%nR)
-!          call this%transform_to_lm_space_full(this%gsa, this%nl_lm)
+!          call this%transform_to_lm_space(this%gsa, this%nl_lm)
 
       else if ( l_mag ) then
          do lm=1,lmP_max
@@ -629,7 +629,7 @@ subroutine allocate_common_arrays(this)
       
    end subroutine gather_all
 !-------------------------------------------------------------------------------
-   subroutine transform_to_grid_space_full(this, gsa)
+   subroutine transform_to_grid_space(this, gsa)
 
       class(rIterThetaDistributed_t) :: this
       type(grid_space_arrays_t) :: gsa
@@ -740,16 +740,15 @@ subroutine allocate_common_arrays(this)
          end if
       end if
 
-   end subroutine transform_to_grid_space_full
+   end subroutine transform_to_grid_space
 !-------------------------------------------------------------------------------
-   subroutine transform_to_grid_space_dist(this, gsa)
+   subroutine transform_to_grid_space_dist(this)
 
       class(rIterThetaDistributed_t) :: this
-      type(grid_space_arrays_t) :: gsa
-
       integer :: nR
       nR = this%nR
       
+      PERFON('lm2sp_d')
       if ( l_conv .or. l_mag_kin ) then
          if ( l_heat ) then
             call sh_to_spat_dist(s_dist(:, nR), this%gsa_dist%sc)
@@ -814,10 +813,10 @@ subroutine allocate_common_arrays(this)
                                      this%gsa_dist%vtc, &
                                      this%gsa_dist%vpc)
                                
-            gsa%vrc = 0.0_cp
+            this%gsa_dist%vrc = 0.0_cp
             if ( this%lDeriv ) then
-               gsa%dvrdtc = 0.0_cp
-               gsa%dvrdpc = 0.0_cp
+               this%gsa_dist%dvrdtc = 0.0_cp
+               this%gsa_dist%dvrdpc = 0.0_cp
                call torpol_to_spat_dist(dw_dist(:, nR),     &
                                      ddw_dist(:, nR),    &
                                      dz_dist(:, nR),     &
@@ -871,6 +870,7 @@ subroutine allocate_common_arrays(this)
                                           this%gsa_dist%cbpc)
          end if
       end if
+      PERFOFF
       
    end subroutine transform_to_grid_space_dist
 !-------------------------------------------------------------------------------
@@ -879,12 +879,11 @@ subroutine allocate_common_arrays(this)
 !-------------------------------------------------------------------------------
       class(rIterThetaDistributed_t) :: this
       
-      ! Local variables
       integer :: i, j
       
+      PERFON('sp2lm_d')
       if ( (.not.this%isRadialBoundaryPoint .or. this%lRmsCalc) &
             .and. ( l_conv_nl .or. l_mag_LF ) ) then
-         !PERFON('inner1')
          
          if ( l_conv_nl .and. l_mag_LF ) then
             if ( this%nR>n_r_LCR ) then
@@ -927,10 +926,8 @@ subroutine allocate_common_arrays(this)
             call spat_to_SH_dist(this%gsa_dist%LFt, this%nl_lm_dist%LFtLM)
             call spat_to_SH_dist(this%gsa_dist%LFp, this%nl_lm_dist%LFpLM)
          end if
-         !PERFOFF
       end if
       if ( (.not.this%isRadialBoundaryPoint) .and. l_heat ) then
-         !PERFON('inner2')
          call spat_to_SH_dist(this%gsa_dist%VSr, this%nl_lm_dist%VSrLM)
          call spat_to_SH_dist(this%gsa_dist%VSt, this%nl_lm_dist%VStLM)
          call spat_to_SH_dist(this%gsa_dist%VSp, this%nl_lm_dist%VSpLM)
@@ -943,32 +940,24 @@ subroutine allocate_common_arrays(this)
                call spat_to_SH_dist(this%gsa_dist%ViscHeat, this%nl_lm_dist%ViscHeatLM)
             end if
          end if
-         !PERFOFF
       end if
       if ( (.not.this%isRadialBoundaryPoint) .and. l_TP_form ) then
-         !PERFON('inner2')
          call spat_to_SH_dist(this%gsa_dist%VPr, this%nl_lm_dist%VPrLM)
-         !PERFOFF
       end if
       if ( (.not.this%isRadialBoundaryPoint) .and. l_chemical_conv ) then
-         !PERFON('inner2')
          call spat_to_SH_dist(this%gsa_dist%VXir, this%nl_lm_dist%VXirLM)
          call spat_to_SH_dist(this%gsa_dist%VXit, this%nl_lm_dist%VXitLM)
          call spat_to_SH_dist(this%gsa_dist%VXip, this%nl_lm_dist%VXipLM)
-         !PERFOFF
       end if
       if ( l_mag_nl ) then
-         !PERFON('mag_nl')
          if ( .not.this%isRadialBoundaryPoint .and. this%nR>n_r_LCR ) then
             call spat_to_SH_dist(this%gsa_dist%VxBr, this%nl_lm_dist%VxBrLM)
             call spat_to_SH_dist(this%gsa_dist%VxBt, this%nl_lm_dist%VxBtLM)
             call spat_to_SH_dist(this%gsa_dist%VxBp, this%nl_lm_dist%VxBpLM)
          else
-            !write(*,"(I4,A,ES20.13)") this%nR,", VxBt = ",sum(VxBt*VxBt)
             call spat_to_SH_dist(this%gsa_dist%VxBt, this%nl_lm_dist%VxBtLM)
             call spat_to_SH_dist(this%gsa_dist%VxBp, this%nl_lm_dist%VxBpLM)
          end if
-         !PERFOFF
       end if
 
       if ( this%lRmsCalc ) then
@@ -985,10 +974,11 @@ subroutine allocate_common_arrays(this)
             call spat_to_SH_dist(this%gsa_dist%LFp2, this%nl_lm_dist%LFp2LM)
          end if
       end if
+      PERFOFF
       
    end subroutine transform_to_lm_space_dist
 !-------------------------------------------------------------------------------
-   subroutine transform_to_lm_space_full(this, gsa, nl_lm)
+   subroutine transform_to_lm_space(this, gsa, nl_lm)
 
       class(rIterThetaDistributed_t) :: this
       type(grid_space_arrays_t) :: gsa
@@ -1103,7 +1093,7 @@ subroutine allocate_common_arrays(this)
 
       call shtns_load_cfg(0)
 
-   end subroutine transform_to_lm_space_full
+   end subroutine transform_to_lm_space
 !-------------------------------------------------------------------------------
 
 end module rIterThetaDistributed_mod

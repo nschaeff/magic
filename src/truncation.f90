@@ -83,13 +83,13 @@ module truncation
    ! n_theta_end: shortcut to n_theta_dist(coord_theta,2)
    ! n_theta_loc: number of theta points in the local rank
    !-------------------------------------------------------------
-   ! lmP_dist - (n_procs_theta, n_m_ext, 4)
-   ! lmP_dist(i,j,1): value of the j-th "m" in the i-th rank
-   ! lmP_dist(i,j,2): length of the j-th row in Flm_loc
-   ! lmP_dist(i,j,3): where the j-th row begins in Flm_loc
-   ! lmP_dist(i,j,4): where the j-th row ends in Flm_loc
+   ! lm_dist - (n_procs_theta, n_m_ext, 4)
+   ! lm_dist(i,j,1): value of the j-th "m" in the i-th rank
+   ! lm_dist(i,j,2): length of the j-th row in Flm_loc
+   ! lm_dist(i,j,3): where the j-th row begins in Flm_loc
+   ! lm_dist(i,j,4): where the j-th row ends in Flm_loc
    !-------------------------------------------------------------
-   ! lm_dist(i,j,k) : same as above, but for lm_max instead of lmP_max
+   ! lmP_dist(i,j,k) : same as above, but for l_max+1 instead of l_max
    !-------------------------------------------------------------
    ! n_m_ext: number of m points in the local rank, +1. The extra
    !          point comes in when m_max + 1 is not divisible by the 
@@ -268,14 +268,6 @@ contains
             end do
             print "('length in rank ', I3, ' is ', I5)", i, sum(lmP_dist(i,:,2))
          end do
-          do i=0, n_procs_theta-1
-            do j=1, n_m_ext
-               print "('lm partition in rank ', I3, ': ', I5, I5, I5, I5)", i,&
-               lm_dist(i,j,1:4)
-            end do
-            print "('length in rank ', I3, ' is ', I5)", i, sum(lm_dist(i,:,2))
-         end do
-         
       end if
       
    end subroutine distribute_truncation

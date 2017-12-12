@@ -1,6 +1,124 @@
+2017-12-11
+------------------------------------------------------------------------
+✔ Wizard script updated. Following options were added:
+   ⚫  name: runs only a specific test, instead of all of them
+   ⚫  extracmd: passes this argument, as a string, to the magic.exe executable. 
+      Used mostly for n_procs_*
+   ⚫  link: creates a symlink to the executabe in build/ directory, instead of
+      rebuilding the whole thing
+
+✔ Validating the modifications with the following command:
+   module purge && module load intel/17.0 impi/2017.3 hdf5-mpi fftw mkl cmake anaconda/2
+   export FC=mpiifort
+   export CC=mpiicc
+   export CXX=mpiicpc
+   ./magic_wizard.py --use-mpi --use-mkl --use-shtns --mpicmd=srun --extracmd="n_procs_r=4 n_procs_theta=2" --nranks=8
+   run from samples directory.
+
+✘ Some of the notation is inconsistent; I'm not sure if the name of the input
+  of some of the functions make sense (specially the torpol_ and pol_ ones). 
+  That can be arranged later.
+
+✘ The code uses nRStart:nRStop for the partition of the radial
+  points, but nThetaStart:nThetaStop are related to the blocking.f90 
+  module (implemented to favour cache-hit). I cannot use the same nomenclature
+  for θ-partition. At the moment, I'm using n_theta_beg:n_theta_end.
+  
+✔ Build command:
+   export FC=mpiifort
+   export CC=mpiicc
+   export CXX=mpiicpc
+   cmake .. -DUSE_MPI=yes -DCMAKE_BUILD_TYPE=Release -DUSE_PRECOND=yes -DUSE_FFTLIB=MKL -DUSE_LAPACKLIB=MKL -DUSE_OMP=no -DUSE_SHTNS=yes
+   make -j VERBOSE=1
+
+✘ Todo: review the callstack (it changed, since now I'm using shtns)
+   
+2017-12-10
+------------------------------------------------------------------------
+✔ Spherical Harmonics Transform porting completed.
+
+New modules:
+
+⚫ arrays_dist - copy of nonlinear_lm_t and grid_space_arrays_t,  
+   implemented with a "gather_all" and "slice_all" function. Those will be used 
+   to aid the porting (bottom-up strategy)
+
+⚫ rIterThetaDistributed - replaces rIterThetaParallel (the name makes more 
+   sense). Acts just like rIterThetaBlocking_shtns, but has in addition:
+   ⚫ nonlinear_lm_dist_t 
+   ⚫ grid_space_arrays_dist_t
+   ⚫ transform_to_grid_space_dist
+   ⚫ transform_to_lm_space_dist
+   ⚫ slice_all
+   ⚫ gather_all
+   Those are in *addition* to their already existing fields (for the moment).
+   The slice and gather functions merely call the respective gather and slice
+   functions from the arrays_dist_t, but also slices some of the variables in
+   field.f90
+
+Modified modules:
+
+⚫ fields - added the following fields:
+   ⚫ s_dist
+   ⚫ ds_dist
+   ⚫ z_dist
+   ⚫ dz_dist
+   ⚫ p_dist
+   ⚫ dp_dist
+   ⚫ b_dist
+   ⚫ db_dist
+   ⚫ ddb_dist
+   ⚫ aj_dist
+   ⚫ dj_dist
+   ⚫ w_dist
+   ⚫ dw_dist
+   ⚫ ddw_dist
+   ⚫ xi_dist
+   which are the θ-distributed counterpart of their _Rloc versions.
+   TODO: Allocate them using containers just like the others
+   These fields will be later deleted; the _Rloc fields will be used for 
+   the distributed version as well, once the whole code is aware of the 
+   distribution.
+
+⚫ nonlinear_bcs - added
+   ⚫ v_rigid_boundary_dist
+   which is called in transform_to_grid_space
+
+⚫ fft_mkl
+   ⚫ init_fft_phi
+   ⚫ fft_phi_loc (does not transpose! it merely performs the FFT locally)
+
+⚫ truncation - added the following functions
+   ⚫ gather_f   
+   ⚫ gather_Flm
+   ⚫ gather_FlmP
+   ⚫ slice_f   
+   ⚫ slice_Flm
+   ⚫ slice_FlmP
+   ⚫ transpose_theta_m
+   ⚫ transpose_m_theta
+   ⚫ lmP_dist(:,:,:)
+   ⚫ lm_dist(:,:,:)
+   The domain is distributed like this:
+   
+   n_theta_dist(i,1): first theta point in the i-th rank
+   n_theta_dist(i,2): last theta ppoint in the i-th rank
+   n_theta_beg: shortcut to n_theta_dist(coord_theta,1)
+   n_theta_end: shortcut to n_theta_dist(coord_theta,2)
+   n_theta_loc: number of theta points in the local rank
+   
+   lm_dist - (n_procs_theta, n_m_ext, 4)
+   lm_dist(i,j,1): value of the j-th "m" in the i-th rank
+   lm_dist(i,j,2): length of the j-th row in Flm_loc
+   lm_dist(i,j,3): where the j-th row begins in Flm_loc
+   lm_dist(i,j,4): where the j-th row ends in Flm_loc
+   
+   lmP_dist(i,j,k) : same as above, but for l_max+1 instead of l_max
+   Those modules are richly commented.
+   
 2017-07-27
 ------------------------------------------------------------------------
-Implemented the following functions:
+✔ Implemented the following functions:
 
 initialize_fft_phi  (fft_mkl.f90)
 fft_phi             (fft_mkl.f90)
@@ -47,24 +165,24 @@ cd ./
 Functions from SHtns relevant for the parallelization (according to 
 Thomas):
 
-⚪ void spat_to_SH_ml (shtns_cfg, int im, cplx *Vr, cplx *Ql, int ltr)
-⚪ void SH_to_spat_ml (shtns_cfg, int im, cplx *Ql, cplx *Vr, int ltr)
-⚪ void spat_to_SHsphtor_ml (shtns_cfg, int im, cplx *Vt, cplx *Vp, cplx *Sl, cplx *Tl, int ltr)
-⚪ void SHsphtor_to_spat_ml (shtns_cfg, int im, cplx *Sl, cplx *Tl, cplx *Vt, cplx *Vp, int ltr)
-⚪ void SHsph_to_spat_ml (shtns_cfg, int im, cplx *Sl, cplx *Vt, cplx *Vp, int ltr)
-⚪ void SHtor_to_spat_ml (shtns_cfg, int im, cplx *Tl, cplx *Vt, cplx *Vp, int ltr)
-⚪ void spat_to_SHqst_ml (shtns_cfg, int im, cplx *Vr, cplx *Vt, cplx *Vp, cplx *Ql, cplx *Sl, cplx *Tl, int ltr)
-⚪ void SHqst_to_spat_ml (shtns_cfg, int im, cplx *Ql, cplx *Sl, cplx *Tl, cplx *Vr, cplx *Vt, cplx *Vp, int ltr)
+⚫ void spat_to_SH_ml (shtns_cfg, int im, cplx *Vr, cplx *Ql, int ltr)
+⚫ void SH_to_spat_ml (shtns_cfg, int im, cplx *Ql, cplx *Vr, int ltr)
+⚫ void spat_to_SHsphtor_ml (shtns_cfg, int im, cplx *Vt, cplx *Vp, cplx *Sl, cplx *Tl, int ltr)
+⚫ void SHsphtor_to_spat_ml (shtns_cfg, int im, cplx *Sl, cplx *Tl, cplx *Vt, cplx *Vp, int ltr)
+⚫ void SHsph_to_spat_ml (shtns_cfg, int im, cplx *Sl, cplx *Vt, cplx *Vp, int ltr)
+⚫ void SHtor_to_spat_ml (shtns_cfg, int im, cplx *Tl, cplx *Vt, cplx *Vp, int ltr)
+⚫ void spat_to_SHqst_ml (shtns_cfg, int im, cplx *Vr, cplx *Vt, cplx *Vp, cplx *Ql, cplx *Sl, cplx *Tl, int ltr)
+⚫ void SHqst_to_spat_ml (shtns_cfg, int im, cplx *Ql, cplx *Sl, cplx *Tl, cplx *Vr, cplx *Vt, cplx *Vp, int ltr)
 
 Currently called functions in magIC:
-⚪ void spat_to_SH (shtns_cfg shtns, double *Vr, cplx *Qlm)
-⚪ void SH_to_spat (shtns_cfg shtns, cplx *Qlm, double *Vr)
-⚪ void spat_to_SHsphtor (shtns_cfg, double *Vt, double *Vp, cplx *Slm, cplx *Tlm)
-⚪ void SHsphtor_to_spat (shtns_cfg, cplx *Slm, cplx *Tlm, double *Vt, double *Vp)
-⚪ void SHsph_to_spat (shtns_cfg, cplx *Slm, double *Vt, double *Vp)
-⚪ void SHtor_to_spat (shtns_cfg, cplx *Tlm, double *Vt, double *Vp)
-⚪ void spat_to_SHqst (shtns_cfg, double *Vr, double *Vt, double *Vp, cplx *Qlm, cplx *Slm, cplx *Tlm)
-⚪ void SHqst_to_spat (shtns_cfg, cplx *Qlm, cplx *Slm, cplx *Tlm, double *Vr, double *Vt, double *Vp)
+⚫ void spat_to_SH (shtns_cfg shtns, double *Vr, cplx *Qlm)
+⚫ void SH_to_spat (shtns_cfg shtns, cplx *Qlm, double *Vr)
+⚫ void spat_to_SHsphtor (shtns_cfg, double *Vt, double *Vp, cplx *Slm, cplx *Tlm)
+⚫ void SHsphtor_to_spat (shtns_cfg, cplx *Slm, cplx *Tlm, double *Vt, double *Vp)
+⚫ void SHsph_to_spat (shtns_cfg, cplx *Slm, double *Vt, double *Vp)
+⚫ void SHtor_to_spat (shtns_cfg, cplx *Tlm, double *Vt, double *Vp)
+⚫ void spat_to_SHqst (shtns_cfg, double *Vr, double *Vt, double *Vp, cplx *Qlm, cplx *Slm, cplx *Tlm)
+⚫ void SHqst_to_spat (shtns_cfg, cplx *Qlm, cplx *Slm, cplx *Tlm, double *Vr, double *Vt, double *Vp)
 
 Function call is practically the same, except that second argument is 
 the m index (im), and the last argument is the ltr (which is lmax, 
