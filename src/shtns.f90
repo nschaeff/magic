@@ -1,38 +1,33 @@
-#include "perflib_preproc.cpp"
 module shtns
 
    use precision_mod, only: cp
    use constants, only: ci
    use truncation
+   use horizontal_data, only: dLh, D_m, O_sin_theta_E2, dLh_loc, D_m_loc
    use radial_functions, only: or2
-   use horizontal_data, only: dLh, dLH_loc, D_m_loc, theta_ord, D_m, &
-                              O_sin_theta_E2
    use parallel_mod
    use fft, only: init_fft_phi, finalize_fft_phi, fft_phi_loc
-   
-   use libspina, only: spprintmatrix
-   
+
    implicit none
 
    include "shtns.f"
 
    private
 
-   public :: init_shtns, scal_to_spat, scal_to_grad_spat, pol_to_grad_spat, &
-             torpol_to_spat, pol_to_curlr_spat, torpol_to_curl_spat,        &
-             torpol_to_dphspat, spat_to_SH,&
-             spat_to_SH_dist, sh_to_spat_dist, &
-             sph_to_spat_dist, torpol_to_spat_dist, &
-             pol_to_curlr_spat_dist, pol_to_grad_spat_dist, &
-             torpol_to_dphspat_dist, torpol_to_curl_spat_dist
-             
-   public :: finalize_shtns
+   public :: init_shtns, finalize_shtns,                                    &
+   &         scal_to_spat, scal_to_grad_spat, pol_to_grad_spat,             &
+   &         torpol_to_spat, pol_to_curlr_spat, torpol_to_curl_spat,        &
+   &         torpol_to_dphspat, spat_to_SH, spat_to_sphertor,               &
+   &         spat_to_SH_dist, sh_to_spat_dist,                              &
+   &         sph_to_spat_dist, torpol_to_spat_dist,                         &
+   &         pol_to_curlr_spat_dist, pol_to_grad_spat_dist,                 &
+   &         torpol_to_dphspat_dist, torpol_to_curl_spat_dist,              &
+   &         spat_to_sphtor_dist
 
 contains
 
-   subroutine init_shtns()
-   
    !----------------------------------------------------------------------------
+   subroutine init_shtns()
    ! Lago: This is important! minc here is sort of the opposite of 
    ! mres in SHTns. In MagIC, the number of m modes stored is 
    ! n_m_max=m_max/minc+1. In SHTns, it is simply m_max.
@@ -48,6 +43,7 @@ contains
    ! lm_idx = lm2(l_idx, m_idx)
    ! provided that m_idx is a multiple of minc.
    !----------------------------------------------------------------------------
+
       integer :: norm
 
       if ( rank == 0 ) then
@@ -63,29 +59,25 @@ contains
                             1.e-10_cp, n_theta_max, n_phi_max)
       call shtns_save_cfg(0)
 
+      if ( rank == 0 ) then
+         call shtns_verbose(0)
+      end if
 
       call shtns_set_size(l_max+1, m_max/minc, minc, norm)
       call shtns_precompute(SHT_QUICK_INIT, SHT_PHI_CONTIGUOUS, &
            &                1.e-10_cp, n_theta_max, n_phi_max)
       call shtns_save_cfg(1)
-      
-      if ( rank == 0 ) then
-         call shtns_verbose(0)
-      end if
-      
+
       call shtns_load_cfg(0)
       
-      ! Might want to add a condition for initializing this only if necessary
       call init_fft_phi
-      
+
    end subroutine
 !-------------------------------------------------------------------------------
    subroutine finalize_shtns()
-!@>author Rafael Lago, MPCDF, July 2017
-!-------------------------------------------------------------------------------
       call finalize_fft_phi
    end subroutine finalize_shtns
-!-------------------------------------------------------------------------------
+!------------------------------------------------------------------------------
    subroutine scal_to_spat(Slm, fieldc)
       ! transform a spherical harmonic field into grid space
       complex(cp), intent(in) :: Slm(lm_max)
@@ -94,7 +86,7 @@ contains
       call shtns_SH_to_spat(Slm, fieldc)
 
    end subroutine scal_to_spat
-!-------------------------------------------------------------------------------
+!------------------------------------------------------------------------------
    subroutine scal_to_grad_spat(Slm, gradtc, gradpc)
       ! transform a scalar spherical harmonic field into it's gradient
       ! on the grid
@@ -105,7 +97,7 @@ contains
       call shtns_sph_to_spat(Slm, gradtc, gradpc)
 
    end subroutine scal_to_grad_spat
-!-------------------------------------------------------------------------------
+!------------------------------------------------------------------------------
    subroutine pol_to_grad_spat(Slm, gradtc, gradpc)
 
       complex(cp), intent(in) :: Slm(lm_max)
@@ -123,7 +115,7 @@ contains
       call shtns_sph_to_spat(Qlm, gradtc, gradpc)
 
    end subroutine pol_to_grad_spat
-!-------------------------------------------------------------------------------
+!------------------------------------------------------------------------------
    subroutine torpol_to_spat(Wlm, dWlm, Zlm, vrc, vtc, vpc)
       complex(cp), intent(in) :: Wlm(lm_max), dWlm(lm_max), Zlm(lm_max)
       real(cp), intent(out) :: vrc(n_phi_max, n_theta_max)
@@ -141,7 +133,7 @@ contains
       call shtns_qst_to_spat(Qlm, dWlm, Zlm, vrc, vtc, vpc)
 
    end subroutine torpol_to_spat
-!-------------------------------------------------------------------------------
+!------------------------------------------------------------------------------
    subroutine torpol_to_dphspat(dWlm, Zlm, dvtdp, dvpdp)
       !
       ! Computes horizontal phi derivative of a toroidal/poloidal field
@@ -171,7 +163,7 @@ contains
       end do
 
    end subroutine torpol_to_dphspat
-!-------------------------------------------------------------------------------
+!------------------------------------------------------------------------------
    subroutine pol_to_curlr_spat(Qlm, cvrc)
       complex(cp), intent(in) :: Qlm(lm_max)
       real(cp), intent(out) :: cvrc(n_phi_max, n_theta_max)
@@ -188,7 +180,7 @@ contains
       call shtns_SH_to_spat(dQlm, cvrc)
 
    end subroutine pol_to_curlr_spat
-!-------------------------------------------------------------------------------
+!------------------------------------------------------------------------------
    subroutine torpol_to_curl_spat(Blm, ddBlm, Jlm, dJlm, nR, &
               &                  cvrc, cvtc, cvpc)
       complex(cp), intent(in) :: Blm(lm_max), ddBlm(lm_max)
@@ -210,22 +202,32 @@ contains
       call shtns_qst_to_spat(Qlm, dJlm, Tlm, cvrc, cvtc, cvpc)
 
    end subroutine torpol_to_curl_spat
-!-------------------------------------------------------------------------------
+!------------------------------------------------------------------------------
    subroutine spat_to_SH(f, fLM)
 
       real(cp), intent(in) :: f(n_phi_max, n_theta_max)
-<<<<<<< HEAD
       complex(cp), intent(out) :: fLM(lmP_max)
-=======
-      complex(cp), intent(out) :: fLM(lm_max)  ! THIS IS WRONG Should be lmP_max! LAGOTEST (Thomas already fixed this in master branch)
->>>>>>> rIterParallel renamed to rIterDistributed; SHTns wrappers renamed from _parallel to _dist. arrays_dist module added. All SHT-related distributed functions have been completed. transform_to_grid_space_dist and transform_to_grid_space_dist fully implemented and tested. Functions slice_all and gather_all implemented to aid the bottom-up strategy for applying the modifications.
 
       call shtns_load_cfg(1)
       call shtns_spat_to_sh(f, fLM)
       call shtns_load_cfg(0)
 
    end subroutine spat_to_SH
-   
+!------------------------------------------------------------------------------
+   subroutine spat_to_sphertor(f,g,fLM,gLM)
+
+      real(cp), intent(in) :: f(n_phi_max,n_theta_max)
+      real(cp), intent(in) :: g(n_phi_max,n_theta_max)
+      complex(cp), intent(out) :: fLM(lmP_max)
+      complex(cp), intent(out) :: gLM(lmP_max)
+
+      call shtns_load_cfg(1)
+      call shtns_spat_to_sphtor(f,g,fLM,gLM)
+      call shtns_load_cfg(0)
+
+   end subroutine spat_to_sphertor
+!------------------------------------------------------------------------------
+
 !-------------------------------------------------------------------------------
 ! 
 ! Distributed version:
@@ -271,40 +273,55 @@ contains
       
       call shtns_load_cfg(0) ! l_max
 
-<<<<<<< HEAD
-   end subroutine spat_to_SH_parallel
-!------------------------------------------------------------------------------
-   subroutine spat_to_sphertor(f,g,fLM,gLM)
-
-      real(cp), intent(in) :: f(n_phi_max,n_theta_max)
-      real(cp), intent(in) :: g(n_phi_max,n_theta_max)
-      complex(cp), intent(out) :: fLM(lmP_max)
-      complex(cp), intent(out) :: gLM(lmP_max)
-
-      call shtns_load_cfg(1)
-      call shtns_spat_to_sphtor(f,g,fLM,gLM)
-      call shtns_load_cfg(0)
-
-   end subroutine spat_to_sphertor
-!------------------------------------------------------------------------------
-   subroutine scal_to_spat_parallel(fLM, f)
-!@>details Does the reverse of the routine above.
-!> 
-!> Notice that here we use [lm_dist] and NOT lmP_dist. We assume that there 
-!> are (m_max+1)*(l_max) modes.
-!> 
-!@>author Rafael Lago (MPCDF) August 2017
-!------------------------------------------------------------------------------
-      complex(cp),  intent(inout)   :: fLM(lm_max)
-      real(cp),     intent(out)     :: f(n_phi_max, n_theta_max)
-      
-      complex(cp) :: fLM_loc(lm_loc)
-      complex(cp) :: gT_loc(n_theta_max,n_m_loc)
-      complex(cp) ::  g_loc(m_max+1,n_theta_loc)
-      complex(cp) ::  tmp_loc(n_phi_max/2+1,n_theta_loc)
-      real(cp)    ::  f_loc(n_phi_max, n_theta_loc)
-=======
    end subroutine spat_to_SH_dist
+   
+!-------------------------------------------------------------------------------
+   subroutine spat_to_sphtor_dist(Vr_loc, Vt_loc, SlmP_loc, TlmP_loc)
+!@>details transform the spherical harmonic coefficients Qlm into its spatial 
+!>representation Vr.
+!> 
+!@>author Rafael Lago (MPCDF) July 2017
+!-------------------------------------------------------------------------------
+      real(cp),     intent(inout) :: Vr_loc(n_phi_max,n_theta_loc)
+      real(cp),     intent(inout) :: Vt_loc(n_phi_max,n_theta_loc)
+      complex(cp),  intent(out)   :: SlmP_loc(lmP_loc)
+      complex(cp),  intent(out)   :: TlmP_loc(lmP_loc)
+      
+      complex(cp) ::  SlP_loc(n_theta_max,n_m_loc)
+      complex(cp) ::  TlP_loc(n_theta_max,n_m_loc)
+      complex(cp) ::  transpose_loc(n_m_max,n_theta_loc)
+      complex(cp) ::  F_loc(n_phi_max/2+1,n_theta_loc)
+      
+      integer :: m_idx, lm_s, lm_e, i
+      
+      call shtns_load_cfg(1) ! l_max + 1
+      
+      !@>TODO: The FFT must be performed for an array with the dimensions of 
+      !> F_loc which may end up paded with zeroes.
+      !> Is there any way to tell MKL to perform a "truncated" FFT?
+      !@>TODO: Terrible performance here!
+      call fft_phi_loc(Vr_loc, F_loc, 1)
+      transpose_loc(1:n_m_max,1:n_theta_loc) = F_loc(1:n_m_max,1:n_theta_loc)
+      call transpose_m_theta(transpose_loc, SlP_loc)
+      
+      call fft_phi_loc(Vt_loc, F_loc, 1)
+      transpose_loc(1:n_m_max,1:n_theta_loc) = F_loc(1:n_m_max,1:n_theta_loc)
+      call transpose_m_theta(transpose_loc, TlP_loc)
+      
+      ! Now do the Legendre transform using the new function in a loop
+      do i = 1, n_m_loc
+        m_idx = lmP_dist(coord_theta, i, 1)/minc
+        lm_s  = lmP_dist(coord_theta, i, 3)
+        lm_e  = lmP_dist(coord_theta, i, 4)
+        call shtns_spat_to_sphtor_ml(m_idx,SlP_loc(:,i), TlP_loc(:,i),         &
+                                     SlmP_loc(lm_s:lm_e),TlmP_loc(lm_s:lm_e),  &
+                                     l_max+1)
+      end do
+      
+      call shtns_load_cfg(0) ! l_max
+
+   end subroutine spat_to_sphtor_dist
+
 !-------------------------------------------------------------------------------
    subroutine sh_to_spat_dist(Qlm_loc, Vr_loc)
 !@>details transform the spherical harmonic coefficients Qlm into its spatial 
@@ -314,7 +331,6 @@ contains
 !-------------------------------------------------------------------------------
       complex(cp),  intent(inout)   :: Qlm_loc(lm_loc)
       real(cp),     intent(out)     :: Vr_loc(n_phi_max, n_theta_loc)
->>>>>>> rIterParallel renamed to rIterDistributed; SHTns wrappers renamed from _parallel to _dist. arrays_dist module added. All SHT-related distributed functions have been completed. transform_to_grid_space_dist and transform_to_grid_space_dist fully implemented and tested. Functions slice_all and gather_all implemented to aid the bottom-up strategy for applying the modifications.
       
       complex(cp) :: Ql_loc(n_theta_max,n_m_loc)
       complex(cp) :: transposed_loc(n_m_max,n_theta_loc)
@@ -381,23 +397,11 @@ contains
       call fft_phi_loc(gVp_loc, F_loc, -1)
             
    end subroutine
-<<<<<<< HEAD
-
-!------------------------------------------------------------------------------
->>>>>>> scal_to_spat_parallel function implemented and working (tested with dynamo_bench). Also the functions transpose_m_theta, transpose_theta_m, gather_fLM, gather_f and fft_phi_loc  have been improved and revised
-   subroutine gather_fLM(fLM_local, fLM_global)
-!@>details Gathers the fLM which was computed in a distributed fashion.
-!> Mostly used for debugging. This function may not be performant at all.
-!> 
-!> Notice that here we use [lmP_dist] and NOT lm_dist. We assume that there 
-!> are (m_max+1)*(l_max+1) modes.
-=======
 !-------------------------------------------------------------------------------
    subroutine qst_to_spat_dist(Qlm_loc, Slm_loc, Tlm_loc, &
                                   Vr_loc, Vt_loc, Vp_loc)
 !@>details 3D vector transform from spherical coordinates to radial-spheroidal-
 !> toroidal spectral components. 
->>>>>>> rIterParallel renamed to rIterDistributed; SHTns wrappers renamed from _parallel to _dist. arrays_dist module added. All SHT-related distributed functions have been completed. transform_to_grid_space_dist and transform_to_grid_space_dist fully implemented and tested. Functions slice_all and gather_all implemented to aid the bottom-up strategy for applying the modifications.
 !
 !@>author Rafael Lago (MPCDF) December 2017
 !-------------------------------------------------------------------------------
@@ -589,21 +593,15 @@ contains
       real(cp),     intent(out)   :: cVt_loc(n_phi_max, n_theta_max)
       real(cp),     intent(out)   :: cVp_loc(n_phi_max, n_theta_max)
       
-<<<<<<< HEAD
-   end subroutine transpose_theta_m
->>>>>>> scal_to_spat_parallel function implemented and working (tested with dynamo_bench). Also the functions transpose_m_theta, transpose_theta_m, gather_fLM, gather_f and fft_phi_loc  have been improved and revised
-=======
       complex(cp) :: Qlm_loc(lm_loc)
       complex(cp) :: Tlm_loc(lm_loc)
       
       Qlm_loc(1:lm_loc) = dLH_loc(1:lm_loc)*Jlm_loc(1:lm_loc)
-      Tlm_loc(1:lm_loc) = 1/r(nR)**2 * dLH_loc(1:lm_loc) * Blm_loc(1:lm_loc) &
+      Tlm_loc(1:lm_loc) = or2(nR) * dLH_loc(1:lm_loc) * Blm_loc(1:lm_loc) &
                         - ddBlm_loc(1:lm_loc) 
       
       call qst_to_spat_dist(Qlm_loc,Slm_loc,Tlm_loc,cVr_loc,cVt_loc,cVp_loc)
       
    end subroutine torpol_to_curl_spat_dist
 
->>>>>>> rIterParallel renamed to rIterDistributed; SHTns wrappers renamed from _parallel to _dist. arrays_dist module added. All SHT-related distributed functions have been completed. transform_to_grid_space_dist and transform_to_grid_space_dist fully implemented and tested. Functions slice_all and gather_all implemented to aid the bottom-up strategy for applying the modifications.
 end module shtns
-

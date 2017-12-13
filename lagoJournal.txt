@@ -1,5 +1,14 @@
-2017-12-11
+2017-12-12
 ------------------------------------------------------------------------
+✔ git-rebase completed
+   ✘ Many problems were found because I have duplicated some
+     modules. For instance, . rIterDistributed was a minor-modified clone of 
+     rIterThetaBlocking_shtns. Git updated rIterThetaBlocking_shtns, but let
+     rIterDistributed untouched.
+
+✔ to solve the aforementioned problem, I merged rIterDistributed 
+  with rIterThetaBlocking_shtns. This is will speed up future git-rebases
+
 ✔ Wizard script updated. Following options were added:
    ⚫  name: runs only a specific test, instead of all of them
    ⚫  extracmd: passes this argument, as a string, to the magic.exe executable. 
@@ -39,13 +48,13 @@
 
 New modules:
 
-⚫ arrays_dist - copy of nonlinear_lm_t and grid_space_arrays_t,  
-   implemented with a "gather_all" and "slice_all" function. Those will be used 
+⚫ arrays_dist - copy of nonlinear_lm_t and grid_space_arrays_t,
+   implemented with a "gather_all" and "slice_all" function. Those will be used
    to aid the porting (bottom-up strategy)
 
-⚫ rIterThetaDistributed - replaces rIterThetaParallel (the name makes more 
+⚫ rIterThetaDistributed - replaces rIterThetaParallel (the name makes more
    sense). Acts just like rIterThetaBlocking_shtns, but has in addition:
-   ⚫ nonlinear_lm_dist_t 
+   ⚫ nonlinear_lm_dist_t
    ⚫ grid_space_arrays_dist_t
    ⚫ transform_to_grid_space_dist
    ⚫ transform_to_lm_space_dist

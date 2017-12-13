@@ -6,9 +6,7 @@ module rIterThetaBlocking_shtns_mod
    use precision_mod
    use rIterThetaBlocking_mod, only: rIterThetaBlocking_t
 
-   use truncation, only: lm_max, lmP_max, l_max, lmP_max_dtB,      &
-       &                 n_phi_maxStr, n_theta_maxStr, n_r_maxStr, &
-       &                 n_theta_max, n_phi_max, nrp, n_r_max
+   use truncation
    use logic, only: l_mag, l_conv, l_mag_kin, l_heat, l_ht, l_anel,  &
        &            l_mag_LF, l_conv_nl, l_mag_nl, l_b_nl_cmb,       &
        &            l_b_nl_icb, l_rot_ic, l_cond_ic, l_rot_ma,       &
@@ -33,15 +31,20 @@ module rIterThetaBlocking_shtns_mod
    use out_movie, only: store_movie_frame
    use outRot, only: get_lorentz_torque
    use courant_mod, only: courant
-   use nonlinear_bcs, only: get_br_v_bcs, v_rigid_boundary
+   use nonlinear_bcs, only: get_br_v_bcs, v_rigid_boundary, v_rigid_boundary_dist
    use nl_special_calc
    use shtns
    use horizontal_data
    use fields, only: s_Rloc,ds_Rloc, z_Rloc,dz_Rloc, p_Rloc,dp_Rloc, &
        &             b_Rloc,db_Rloc,ddb_Rloc, aj_Rloc,dj_Rloc,       &
-       &             w_Rloc,dw_Rloc,ddw_Rloc, xi_Rloc
+       &             w_Rloc,dw_Rloc,ddw_Rloc, xi_Rloc,               &
+       &             s_dist,ds_dist, z_dist,dz_dist, p_dist,dp_dist, &
+       &             b_dist,db_dist,ddb_dist, aj_dist,dj_dist,       &
+       &             w_dist,dw_dist,ddw_dist, xi_dist
    use physical_parameters, only: ktops, kbots, n_r_LCR
    use probe_mod
+   use parallel_mod
+   use arrays_dist
 
    implicit none
 
@@ -54,6 +57,11 @@ module rIterThetaBlocking_shtns_mod
       type(dtB_arrays_t) :: dtB_arrays
       type(nonlinear_lm_t) :: nl_lm
       real(cp) :: lorentz_torque_ic,lorentz_torque_ma
+      
+      ! Distributed Update - Lago
+      type(grid_space_arrays_dist_t) :: gsa_dist
+      type(nonlinear_lm_dist_t)      :: nl_lm_dist
+   
    contains
       procedure :: initialize => initialize_rIterThetaBlocking_shtns
       procedure :: finalize => finalize_rIterThetaBlocking_shtns
@@ -61,6 +69,13 @@ module rIterThetaBlocking_shtns_mod
       procedure :: getType => getThisType
       procedure :: transform_to_grid_space_shtns => transform_to_grid_space_shtns
       procedure :: transform_to_lm_space_shtns => transform_to_lm_space_shtns
+      
+      ! Distributed Update - Lago
+      procedure :: transform_to_grid_space_dist
+      procedure :: transform_to_lm_space_dist
+      procedure :: slice_all
+      procedure :: gather_all
+      
    end type rIterThetaBlocking_shtns_t
 
 contains
@@ -82,6 +97,12 @@ contains
       if ( l_TO ) call this%TO_arrays%initialize()
       call this%dtB_arrays%initialize()
       call this%nl_lm%initialize()
+      
+      ! Distributed Update - Lago
+      if (n_procs_theta > 1) then
+         call this%gsa_dist%initialize()
+         call this%nl_lm_dist%initialize()
+      end if
 
    end subroutine initialize_rIterThetaBlocking_shtns
 !------------------------------------------------------------------------------
@@ -94,6 +115,12 @@ contains
       if ( l_TO ) call this%TO_arrays%finalize()
       call this%dtB_arrays%finalize()
       call this%nl_lm%finalize()
+      
+      ! Distributed Update - Lago
+      if (n_procs_theta > 1) then
+         call this%gsa_dist%finalize()
+         call this%nl_lm_dist%finalize()
+      end if
 
    end subroutine finalize_rIterThetaBlocking_shtns
 !------------------------------------------------------------------------------
@@ -186,7 +213,13 @@ contains
 
       call this%nl_lm%set_zero()
 
-      call this%transform_to_grid_space_shtns(this%gsa)
+      if (n_procs_theta > 1) then
+         call this%slice_all(this%nR)
+         call this%transform_to_grid_space_dist
+         call this%gather_all(this%nR)
+      else
+         call this%transform_to_grid_space_shtns(this%gsa)
+      end if
 
       !--------- Calculation of nonlinear products in grid space:
       if ( (.not.this%isRadialBoundaryPoint) .or. this%lMagNlBc .or. &
@@ -195,8 +228,14 @@ contains
          PERFON('get_nl')
          call this%gsa%get_nl_shtns(time, this%nR, this%nBc, this%lRmsCalc)
          PERFOFF
-
-         call this%transform_to_lm_space_shtns(this%gsa, this%nl_lm)
+         
+         if (n_procs_theta > 1) then
+            call this%slice_all(this%nR)
+            call this%transform_to_lm_space_dist
+            call this%gather_all(this%nR)
+         else
+            call this%transform_to_lm_space_shtns(this%gsa, this%nl_lm)
+         end if
 
       else if ( l_mag ) then
          do lm=1,lmP_max
@@ -676,4 +715,320 @@ contains
 
    end subroutine transform_to_lm_space_shtns
 !-------------------------------------------------------------------------------
+
+
+!-------------------------------------------------------------------------------
+!
+! Distributed Update - Lago
+! 
+!-------------------------------------------------------------------------------
+   subroutine slice_all(this, nR)
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+      class(rIterThetaBlocking_shtns_t)  :: this
+      integer, intent(in) :: nR
+      
+      integer :: i,j, lm
+      
+      call this%gsa_dist%slice_all(this%gsa)
+      call this%nl_lm_dist%slice_all(this%nl_lm)
+      
+      !--------------------------------------------------------
+      !-- From fields.f90
+      !--------------------------------------------------------
+      call slice_Flm(s_Rloc(:,nR)  ,  s_dist(:,nR)  )
+      call slice_Flm(ds_Rloc(:,nR) ,  ds_dist(:,nR) )
+      call slice_Flm(z_Rloc(:,nR)  ,  z_dist(:,nR)  )
+      call slice_Flm(dz_Rloc(:,nR) ,  dz_dist(:,nR) )
+      call slice_Flm(p_Rloc(:,nR)  ,  p_dist(:,nR)  )
+      call slice_Flm(dp_Rloc(:,nR) ,  dp_dist(:,nR) )
+      call slice_Flm(w_Rloc(:,nR)  ,  w_dist(:,nR)  )
+      call slice_Flm(dw_Rloc(:,nR) ,  dw_dist(:,nR) )
+      call slice_Flm(ddw_Rloc(:,nR),  ddw_dist(:,nR))
+      
+      if ( l_chemical_conv ) then
+         call slice_Flm(xi_Rloc(:,nR) ,  xi_dist(:,nR) )
+      else
+         xi_dist(1,1) = xi_Rloc(1,1)
+      end if
+      
+      if (lm_maxMag == lm_max) then
+         call slice_Flm(b_Rloc(:,nR)  ,  b_dist(:,nR)  )
+         call slice_Flm(db_Rloc(:,nR) ,  db_dist(:,nR) )
+         call slice_Flm(ddb_Rloc(:,nR),  ddb_dist(:,nR))
+         call slice_Flm(aj_Rloc(:,nR) ,  aj_dist(:,nR) )
+         call slice_Flm(dj_Rloc(:,nR) ,  dj_dist(:,nR) )
+      else if (lm_maxMag == 1) then
+         b_dist(:,nR)  = b_Rloc(:,nR)  
+         db_dist(:,nR) = db_Rloc(:,nR) 
+         ddb_dist(:,nR)= ddb_Rloc(:,nR)
+         aj_dist(:,nR) = aj_Rloc(:,nR) 
+         dj_dist(:,nR) = dj_Rloc(:,nR) 
+      else
+         print *, "Woopsie, value of lm_maxMag is funny: ", lm_maxMag
+         print *, "Aborting!"
+         STOP
+      end if
+      
+   end subroutine slice_all
+!-------------------------------------------------------------------------------
+   subroutine gather_all(this, nR)
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+      class(rIterThetaBlocking_shtns_t)  :: this
+      integer, intent(in) :: nR
+      
+      call this%gsa_dist%gather_all(this%gsa)
+      call this%nl_lm_dist%gather_all(this%nl_lm)
+      
+      !--------------------------------------------------------
+      !-- From fields.f90
+      !--------------------------------------------------------
+      call gather_Flm(s_dist(:,nR)  , s_Rloc(:,nR)  )
+      call gather_Flm(ds_dist(:,nR) , ds_Rloc(:,nR) )
+      call gather_Flm(z_dist(:,nR)  , z_Rloc(:,nR)  )
+      call gather_Flm(dz_dist(:,nR) , dz_Rloc(:,nR) )
+      call gather_Flm(p_dist(:,nR)  , p_Rloc(:,nR)  )
+      call gather_Flm(dp_dist(:,nR) , dp_Rloc(:,nR) )
+      call gather_Flm(w_dist(:,nR)  , w_Rloc(:,nR)  )
+      call gather_Flm(dw_dist(:,nR) , dw_Rloc(:,nR) )
+      call gather_Flm(ddw_dist(:,nR), ddw_Rloc(:,nR))
+      
+      if ( l_chemical_conv ) then
+         call gather_Flm(xi_dist(:,nR) , xi_Rloc(:,nR) )
+      else
+         xi_Rloc(1,1) = xi_dist(1,1)
+      end if
+      
+      if (lm_maxMag == lm_max) then
+         call gather_Flm(b_dist(:,nR)  , b_Rloc(:,nR)  )
+         call gather_Flm(db_dist(:,nR) , db_Rloc(:,nR) )
+         call gather_Flm(ddb_dist(:,nR), ddb_Rloc(:,nR))
+         call gather_Flm(aj_dist(:,nR) , aj_Rloc(:,nR) )
+         call gather_Flm(dj_dist(:,nR) , dj_Rloc(:,nR) )
+      else if (lm_maxMag == 1) then
+         b_Rloc(:,nR)   = b_Rloc(:,nR)  
+         db_Rloc(:,nR)  = db_Rloc(:,nR) 
+         ddb_Rloc(:,nR) = ddb_Rloc(:,nR)
+         aj_Rloc(:,nR)  = aj_Rloc(:,nR) 
+         dj_Rloc(:,nR)  = dj_Rloc(:,nR) 
+      else
+         print *, "Woopsie, value of lm_maxMag is funny: ", lm_maxMag
+         print *, "Aborting!"
+         STOP
+      end if
+      
+   end subroutine gather_all
+!-------------------------------------------------------------------------------
+   subroutine transform_to_grid_space_dist(this)
+
+      class(rIterThetaBlocking_shtns_t) :: this
+
+      integer :: nR
+      logical, save :: printed = .false.
+      nR = this%nR
+
+      PERFON('sp2lm')
+      if ( l_conv .or. l_mag_kin ) then
+         if ( l_heat ) then
+            call sh_to_spat_dist(s_dist(:, nR), this%gsa_dist%sc)
+            if ( this%lViscBcCalc ) then
+               call sph_to_spat_dist(s_dist(:, nR), this%gsa_dist%dsdtc, this%gsa_dist%dsdpc)
+               if (this%nR == n_r_cmb .and. ktops==1) then
+                  this%gsa_dist%dsdtc=0.0_cp
+                  this%gsa_dist%dsdpc=0.0_cp
+               end if
+               if (this%nR == n_r_icb .and. kbots==1) then
+                  this%gsa_dist%dsdtc=0.0_cp
+                  this%gsa_dist%dsdpc=0.0_cp
+               end if
+            end if
+         end if
+
+         if ( this%lRmsCalc ) then
+            call sph_to_spat_dist(p_dist(:, nR), this%gsa_dist%dpdtc, this%gsa_dist%dpdpc)
+         end if
+
+         if ( this%lPressCalc ) then ! Pressure
+            call sh_to_spat_dist(p_dist(:, nR), this%gsa_dist%pc)
+         end if
+
+         if ( l_chemical_conv ) then ! Chemical composition
+            call sh_to_spat_dist(xi_dist(:, nR), this%gsa_dist%xic)
+         end if
+
+         if ( l_HT .or. this%lViscBcCalc ) then
+            call sh_to_spat_dist(ds_dist(:, nR), this%gsa_dist%drsc)
+         endif
+         if ( this%nBc == 0 ) then
+            call torpol_to_spat_dist(w_dist(:, nR), dw_dist(:, nR),  z_dist(:, nR), &
+                 &              this%gsa_dist%vrc, this%gsa_dist%vtc, this%gsa_dist%vpc)
+            if ( this%lDeriv ) then
+               call torpol_to_spat_dist(dw_dist(:, nR), ddw_dist(:, nR), dz_dist(:, nR), &
+                    &              this%gsa_dist%dvrdrc, this%gsa_dist%dvtdrc, this%gsa_dist%dvpdrc)
+
+               call pol_to_curlr_spat_dist(z_dist(:, nR), this%gsa_dist%cvrc)
+
+               call pol_to_grad_spat_dist(w_dist(:, nR), this%gsa_dist%dvrdtc, this%gsa_dist%dvrdpc)
+               call torpol_to_dphspat_dist(dw_dist(:, nR),  z_dist(:, nR), &
+                    &                 this%gsa_dist%dvtdpc, this%gsa_dist%dvpdpc)
+
+            end if
+         else if ( this%nBc == 1 ) then ! Stress free
+             ! TODO don't compute vrc as it is set to 0 afterward
+            call torpol_to_spat_dist(w_dist(:, nR), dw_dist(:, nR),  z_dist(:, nR), &
+                 &              this%gsa_dist%vrc, this%gsa_dist%vtc, this%gsa_dist%vpc)
+            this%gsa_dist%vrc = 0.0_cp
+            if ( this%lDeriv ) then
+               this%gsa_dist%dvrdtc = 0.0_cp
+               this%gsa_dist%dvrdpc = 0.0_cp
+               call torpol_to_spat_dist(dw_dist(:, nR), ddw_dist(:, nR), dz_dist(:, nR), &
+                    &              this%gsa_dist%dvrdrc, this%gsa_dist%dvtdrc, this%gsa_dist%dvpdrc)
+               call pol_to_curlr_spat_dist(z_dist(:, nR), this%gsa_dist%cvrc)
+               call torpol_to_dphspat_dist(dw_dist(:, nR),  z_dist(:, nR), &
+                    &                 this%gsa_dist%dvtdpc, this%gsa_dist%dvpdpc)
+            end if
+         else if ( this%nBc == 2 ) then
+            if ( this%nR == n_r_cmb ) then
+               call v_rigid_boundary_dist(this%nR,this%leg_helper%omegaMA,this%lDeriv, &
+                    &                this%gsa_dist%vrc,this%gsa_dist%vtc,this%gsa_dist%vpc,this%gsa_dist%cvrc,this%gsa_dist%dvrdtc, &
+                    &                this%gsa_dist%dvrdpc,this%gsa_dist%dvtdpc,this%gsa_dist%dvpdpc)
+            else if ( this%nR == n_r_icb ) then
+               call v_rigid_boundary_dist(this%nR,this%leg_helper%omegaIC,this%lDeriv, &
+                    &                this%gsa_dist%vrc,this%gsa_dist%vtc,this%gsa_dist%vpc,this%gsa_dist%cvrc,this%gsa_dist%dvrdtc, &
+                    &                this%gsa_dist%dvrdpc,this%gsa_dist%dvtdpc,this%gsa_dist%dvpdpc)
+            end if
+            if ( this%lDeriv ) then
+               call torpol_to_spat_dist(dw_dist(:, nR), ddw_dist(:, nR), dz_dist(:, nR), &
+                    &              this%gsa_dist%dvrdrc, this%gsa_dist%dvtdrc, this%gsa_dist%dvpdrc)
+            end if
+         end if
+      end if
+
+      if ( l_mag .or. l_mag_LF ) then
+         call torpol_to_spat_dist(b_dist(:, nR), db_dist(:, nR),  aj_dist(:, nR),    &
+              &              this%gsa_dist%brc, this%gsa_dist%btc, this%gsa_dist%bpc)
+
+         if ( this%lDeriv ) then
+            call torpol_to_curl_spat_dist(b_dist(:, nR), ddb_dist(:, nR),        &
+                 &                   aj_dist(:, nR), dj_dist(:, nR), nR,    &
+                 &                   this%gsa_dist%cbrc, this%gsa_dist%cbtc, this%gsa_dist%cbpc)
+         end if
+      end if
+      PERFOFF
+
+   end subroutine transform_to_grid_space_dist
+!-------------------------------------------------------------------------------
+   subroutine transform_to_lm_space_dist(this)
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+      class(rIterThetaBlocking_shtns_t) :: this
+      
+      integer :: nPhi, nTheta
+      
+      PERFON('sp2lm_d')
+      if ( (.not.this%isRadialBoundaryPoint .or. this%lRmsCalc) &
+            .and. ( l_conv_nl .or. l_mag_LF ) ) then
+         if ( l_conv_nl .and. l_mag_LF ) then
+            if ( this%nR>n_r_LCR ) then
+               do nTheta=n_theta_beg,n_theta_end
+                  do nPhi=1, n_phi_max
+                     this%gsa_dist%Advr(nPhi, nTheta)=this%gsa_dist%Advr(nPhi, nTheta) + this%gsa_dist%LFr(nPhi, nTheta)
+                     this%gsa_dist%Advt(nPhi, nTheta)=this%gsa_dist%Advt(nPhi, nTheta) + this%gsa_dist%LFt(nPhi, nTheta)
+                     this%gsa_dist%Advp(nPhi, nTheta)=this%gsa_dist%Advp(nPhi, nTheta) + this%gsa_dist%LFp(nPhi, nTheta)
+                  end do
+               end do
+            end if
+         else if ( l_mag_LF ) then
+            if ( this%nR > n_r_LCR ) then
+               do nTheta=n_theta_beg, n_theta_end
+                  do nPhi=1, n_phi_max
+                     this%gsa_dist%Advr(nPhi, nTheta) = this%gsa_dist%LFr(nPhi, nTheta)
+                     this%gsa_dist%Advt(nPhi, nTheta) = this%gsa_dist%LFt(nPhi, nTheta)
+                     this%gsa_dist%Advp(nPhi, nTheta) = this%gsa_dist%LFp(nPhi, nTheta)
+                  end do
+               end do
+            else
+               do nTheta=n_theta_beg, n_theta_end
+                  do nPhi=1, n_phi_max
+                     this%gsa_dist%Advr(nPhi,nTheta)=0.0_cp
+                     this%gsa_dist%Advt(nPhi,nTheta)=0.0_cp
+                     this%gsa_dist%Advp(nPhi,nTheta)=0.0_cp
+                  end do
+               end do
+            end if
+         end if
+
+         if ( l_precession ) then
+            do nTheta=n_theta_beg,n_theta_end
+               do nPhi=1, n_phi_max
+                  this%gsa_dist%Advr(nPhi, nTheta)=this%gsa_dist%Advr(nPhi, nTheta) + this%gsa_dist%PCr(nPhi, nTheta)
+                  this%gsa_dist%Advt(nPhi, nTheta)=this%gsa_dist%Advt(nPhi, nTheta) + this%gsa_dist%PCt(nPhi, nTheta)
+                  this%gsa_dist%Advp(nPhi, nTheta)=this%gsa_dist%Advp(nPhi, nTheta) + this%gsa_dist%PCp(nPhi, nTheta)
+               end do
+            end do
+
+         end if
+
+         call spat_to_SH_dist(this%gsa_dist%Advr, this%nl_lm_dist%AdvrLM)
+         call spat_to_SH_dist(this%gsa_dist%Advt, this%nl_lm_dist%AdvtLM)
+         call spat_to_SH_dist(this%gsa_dist%Advp, this%nl_lm_dist%AdvpLM)
+
+         if ( this%lRmsCalc .and. l_mag_LF .and. this%nR>n_r_LCR ) then
+            ! LF treated extra:
+            call spat_to_SH_dist(this%gsa_dist%LFr, this%nl_lm_dist%LFrLM)
+            call spat_to_SH_dist(this%gsa_dist%LFt, this%nl_lm_dist%LFtLM)
+            call spat_to_SH_dist(this%gsa_dist%LFp, this%nl_lm_dist%LFpLM)
+         end if
+      end if
+      if ( (.not.this%isRadialBoundaryPoint) .and. l_heat ) then
+         call spat_to_SH_dist(this%gsa_dist%VSr, this%nl_lm_dist%VSrLM)
+         call spat_to_SH_dist(this%gsa_dist%VSt, this%nl_lm_dist%VStLM)
+         call spat_to_SH_dist(this%gsa_dist%VSp, this%nl_lm_dist%VSpLM)
+
+         if (l_anel) then ! anelastic stuff
+            if ( l_mag_nl .and. this%nR>n_r_LCR ) then
+               call spat_to_SH_dist(this%gsa_dist%ViscHeat, this%nl_lm_dist%ViscHeatLM)
+               call spat_to_SH_dist(this%gsa_dist%OhmLoss, this%nl_lm_dist%OhmLossLM)
+            else
+               call spat_to_SH_dist(this%gsa_dist%ViscHeat, this%nl_lm_dist%ViscHeatLM)
+            end if
+         end if
+      end if
+      if ( (.not.this%isRadialBoundaryPoint) .and. l_TP_form ) then
+         call spat_to_SH_dist(this%gsa_dist%VPr, this%nl_lm_dist%VPrLM)
+      end if
+      if ( (.not.this%isRadialBoundaryPoint) .and. l_chemical_conv ) then
+         call spat_to_SH_dist(this%gsa_dist%VXir, this%nl_lm_dist%VXirLM)
+         call spat_to_SH_dist(this%gsa_dist%VXit, this%nl_lm_dist%VXitLM)
+         call spat_to_SH_dist(this%gsa_dist%VXip, this%nl_lm_dist%VXipLM)
+      end if
+      if ( l_mag_nl ) then
+         if ( .not.this%isRadialBoundaryPoint .and. this%nR>n_r_LCR ) then
+            call spat_to_SH_dist(this%gsa_dist%VxBr, this%nl_lm_dist%VxBrLM)
+            call spat_to_SH_dist(this%gsa_dist%VxBt, this%nl_lm_dist%VxBtLM)
+            call spat_to_SH_dist(this%gsa_dist%VxBp, this%nl_lm_dist%VxBpLM)
+         else
+            call spat_to_SH_dist(this%gsa_dist%VxBt, this%nl_lm_dist%VxBtLM)
+            call spat_to_SH_dist(this%gsa_dist%VxBp, this%nl_lm_dist%VxBpLM)
+         end if
+      end if
+
+      if ( this%lRmsCalc ) then
+         call spat_to_sphtor_dist(this%gsa_dist%dpdtc, this%gsa_dist%dpdpc,    &
+                                 this%nl_lm_dist%PFt2LM, this%nl_lm_dist%PFp2LM)
+         call spat_to_sphtor_dist(this%gsa_dist%CFt2, this%gsa_dist%CFp2,      &
+                                 this%nl_lm_dist%CFt2LM, this%nl_lm_dist%CFp2LM)
+         if ( l_conv_nl ) then
+            call spat_to_sphtor_dist(this%gsa_dist%Advt2, this%gsa_dist%Advp2, &
+                               this%nl_lm_dist%Advt2LM, this%nl_lm_dist%Advp2LM)
+         end if
+         if ( l_mag_nl .and. this%nR>n_r_LCR ) then
+            call spat_to_sphtor_dist(this%gsa_dist%LFt2, this%gsa_dist%LFp2,   &
+                                 this%nl_lm_dist%LFt2LM, this%nl_lm_dist%LFp2LM)
+         end if
+      end if
+      PERFOFF
+      
+   end subroutine transform_to_lm_space_dist
 end module rIterThetaBlocking_shtns_mod

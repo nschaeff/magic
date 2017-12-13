@@ -11,7 +11,7 @@ module arrays_dist
    use nonlinear_lm_mod, only: nonlinear_lm_t
    use logic, only: l_conv_nl, l_heat_nl, l_mag_nl, l_anel, l_mag_LF, &
        &            l_RMS, l_chemical_conv, l_TP_form, l_HT, l_heat, l_conv, &
-       &            l_mag_kin
+       &            l_mag_kin, l_precession
        
    use fields, only: s_Rloc,ds_Rloc, z_Rloc,dz_Rloc, p_Rloc,dp_Rloc, &
        &             b_Rloc,db_Rloc,ddb_Rloc, aj_Rloc,dj_Rloc,       &
@@ -67,6 +67,12 @@ contains
       if ( l_TP_form ) then
          call gather_f(this%VPr, gsa_glb%VPr)
       end if
+      
+      if ( l_precession ) then
+         call gather_f(this%PCr, gsa_glb%PCr)
+         call gather_f(this%PCt, gsa_glb%PCt)
+         call gather_f(this%PCp, gsa_glb%PCp)
+      end if
 
       if ( l_chemical_conv ) then
          call gather_f(this%VXir, gsa_glb%VXir)
@@ -112,8 +118,8 @@ contains
          call gather_f(this%LFp2, gsa_glb%LFp2)
          call gather_f(this%CFt2, gsa_glb%CFt2)
          call gather_f(this%CFp2, gsa_glb%CFp2)
-         call gather_f(this%p1, gsa_glb%p1)
-         call gather_f(this%p2, gsa_glb%p2)
+         call gather_f(this%dpdtc, gsa_glb%dpdtc)
+         call gather_f(this%dpdpc, gsa_glb%dpdpc)
       end if
       
    end subroutine gather_all_grid_space
@@ -158,8 +164,8 @@ contains
          call gather_FlmP(this%LFp2LM, nl_lm_glb%LFp2LM)
          call gather_FlmP(this%CFt2LM, nl_lm_glb%CFt2LM)
          call gather_FlmP(this%CFp2LM, nl_lm_glb%CFp2LM)
-         call gather_FlmP(this%p1LM, nl_lm_glb%p1LM)
-         call gather_FlmP(this%p2LM, nl_lm_glb%p2LM)
+         call gather_FlmP(this%PFt2LM, nl_lm_glb%PFt2LM)
+         call gather_FlmP(this%PFp2LM, nl_lm_glb%PFp2LM)
       end if
       
    end subroutine gather_all_nonlinear_lm
@@ -188,6 +194,12 @@ contains
 
       if ( l_TP_form ) then
          call slice_f(gsa_glb%VPr, this%VPr)
+      end if
+      
+      if ( l_precession ) then
+         call slice_f(gsa_glb%PCr, this%PCr)
+         call slice_f(gsa_glb%PCt, this%PCt)
+         call slice_f(gsa_glb%PCp, this%PCp)
       end if
 
       if ( l_chemical_conv ) then
@@ -234,8 +246,8 @@ contains
          call slice_f(gsa_glb%LFp2, this%LFp2)
          call slice_f(gsa_glb%CFt2, this%CFt2)
          call slice_f(gsa_glb%CFp2, this%CFp2)
-         call slice_f(gsa_glb%p1, this%p1)
-         call slice_f(gsa_glb%p2, this%p2)
+         call slice_f(gsa_glb%dpdtc, this%dpdtc)
+         call slice_f(gsa_glb%dpdpc, this%dpdpc)
       end if
       
    end subroutine slice_all_grid_space
@@ -280,8 +292,8 @@ contains
          call slice_FlmP(nl_lm_glb%LFp2LM, this%LFp2LM)
          call slice_FlmP(nl_lm_glb%CFt2LM, this%CFt2LM)
          call slice_FlmP(nl_lm_glb%CFp2LM, this%CFp2LM)
-         call slice_FlmP(nl_lm_glb%p1LM, this%p1LM)
-         call slice_FlmP(nl_lm_glb%p2LM, this%p2LM)
+         call slice_FlmP(nl_lm_glb%PFt2LM, this%PFt2LM)
+         call slice_FlmP(nl_lm_glb%PFp2LM, this%PFp2LM)
       end if
       
    end subroutine slice_all_nonlinear_lm
@@ -312,6 +324,13 @@ contains
       if ( l_TP_form ) then
          allocate( this%VPr(n_phi_max,n_theta_beg:n_theta_end) )
          bytes_allocated=bytes_allocated + n_phi_max*n_theta_loc*SIZEOF_DEF_REAL
+      end if
+      
+      if ( l_precession ) then
+         allocate( this%PCr(n_phi_max,n_theta_beg:n_theta_end) )
+         allocate( this%PCt(n_phi_max,n_theta_beg:n_theta_end) )
+         allocate( this%PCp(n_phi_max,n_theta_beg:n_theta_end) )
+         bytes_allocated=bytes_allocated + 3*n_phi_max*n_theta_loc*SIZEOF_DEF_REAL
       end if
 
       if ( l_chemical_conv ) then
@@ -363,8 +382,8 @@ contains
          allocate ( this%LFp2(n_phi_max,n_theta_beg:n_theta_end) )
          allocate ( this%CFt2(n_phi_max,n_theta_beg:n_theta_end) )
          allocate ( this%CFp2(n_phi_max,n_theta_beg:n_theta_end) )
-         allocate ( this%p1(n_phi_max,n_theta_beg:n_theta_end) )
-         allocate ( this%p2(n_phi_max,n_theta_beg:n_theta_end) )
+         allocate ( this%dpdtc(n_phi_max,n_theta_beg:n_theta_end) )
+         allocate ( this%dpdpc(n_phi_max,n_theta_beg:n_theta_end) )
          bytes_allocated=bytes_allocated + 8*n_phi_max*n_theta_loc*SIZEOF_DEF_REAL
       end if
       !write(*,"(A,I15,A)") "grid_space_arrays: allocated ",bytes_allocated,"B."
@@ -414,8 +433,8 @@ contains
          allocate( this%LFp2LM(lmP_loc) )
          allocate( this%CFt2LM(lmP_loc) )
          allocate( this%CFp2LM(lmP_loc) )
-         allocate( this%p1LM(lmP_loc) )
-         allocate( this%p2LM(lmP_loc) )
+         allocate( this%PFt2LM(lmP_loc) )
+         allocate( this%PFp2LM(lmP_loc) )
          bytes_allocated = bytes_allocated + 8*lmP_loc*SIZEOF_DEF_COMPLEX
       end if
 
