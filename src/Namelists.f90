@@ -479,6 +479,9 @@ contains
          l_anel=.true.
       else if ( index(interior_model, 'KOI889B') /= 0 ) then
          l_anel=.true.
+      else if ( index(interior_model, 'PNS') /= 0 ) then
+         ! Proto-Neutron Star interior model
+         l_anel=.true.
       end if
 
       if ( prmag == 0.0_cp ) then
