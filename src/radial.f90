@@ -909,6 +909,14 @@ contains
          call get_dr(visc,dvisc,n_r_max,rscheme_oc)
          dLvisc(:)=dvisc(:)/visc(:)
          call get_dr(dLvisc,ddLvisc,n_r_max,rscheme_oc)
+      else if ( nVarVisc == 3 ) then
+         ! Neutrino viscosity
+         ! Guilet et al, MNRAS 447, 3992-4003 (2015)
+         ! Eq. (10)
+         visc = temp0**2*rho0**(-2)
+         call get_dr(visc,dvisc,n_r_max,rscheme_oc)
+         dLvisc(:)=dvisc(:)/visc(:)
+         call get_dr(dLvisc,ddLvisc,n_r_max,rscheme_oc)
       end if
 
       if ( l_anelastic_liquid .or. l_non_adia ) then
