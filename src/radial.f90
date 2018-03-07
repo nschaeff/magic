@@ -731,7 +731,7 @@ contains
       !real(cp) :: condBot(n_r_max), condTop(n_r_max)
       !real(cp) :: func(n_r_max)
       real(cp) :: kcond(n_r_max)
-      real(cp) :: a0,a1,a2,a3,a4,a5
+      real(cp) :: a0,a1,a2,a3,a4,a5,a6,a7
       real(cp) :: kappatop,rrOcmb
 
       !-- Variable conductivity:
@@ -866,6 +866,38 @@ contains
             kappa=kcond/rho0
             call get_dr(kappa,dkappa,n_r_max,rscheme_oc)
             dLkappa=dkappa/kappa
+         else if (nVarDiff == 6) then ! PNS thermal diffusivity
+            ! warning: reversed order for coefficients a_i
+            if ( index(interior_model,'PNS_0V2S') /= 0 ) then
+               a0 = -15.4045660979
+               a1 = 167.416944961
+               a2 = -773.523043238
+               a3 = 1971.51233444
+               a4 = -2995.52988304
+               a5 = 2717.20296952
+               a6 = -1364.75385894
+               a7 = 294.078979841
+            else if ( index(interior_model, 'PNS_1S') /= 0 ) then
+               a0 = -1892.77098523
+               a1 = 17646.3340418
+               a2 = -70253.2335883
+               a3 = 154843.933552
+               a4 = -204092.633188
+               a5 = 160897.639922
+               a6 = -70265.4062536
+               a7 = 13117.1344588
+            else
+               call abortRun('Stop the run in radial.f90. Thermal diffusivity profile is not defined !')
+            endif
+            do n_r=1,n_r_max
+               rrOcmb = r(n_r)/r_cmb*r_cut_model
+               kappa(n_r)= a0 + a1*rrOcmb    + a2*rrOcmb**2 &
+                    + a3*rrOcmb**3 + a4*rrOcmb**4 &
+                    + a5*rrOcmb**5 + a6*rrOcmb**6 &
+                    + a7*rrOcmb**7
+            end do
+            call get_dr(kappa,dkappa,n_r_max,rscheme_oc)
+            dLkappa=dkappa/kappa
          end if
       end if
 
@@ -910,7 +942,7 @@ contains
          dLvisc(:)=dvisc(:)/visc(:)
          call get_dr(dLvisc,ddLvisc,n_r_max,rscheme_oc)
       else if ( nVarVisc == 3 ) then
-         ! Neutrino viscosity
+         ! Neutrino viscosity for PNS model
          ! Guilet et al, MNRAS 447, 3992-4003 (2015)
          ! Eq. (10)
          visc = temp0**2*rho0**(-2)
