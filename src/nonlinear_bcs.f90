@@ -2,7 +2,7 @@ module nonlinear_bcs
 
    use precision_mod
    use truncation, only: nrp, lmP_max, n_phi_max, l_axi, &
-                         n_theta_beg, n_theta_end
+                         n_theta_beg, n_theta_end, lmP_loc
    use radial_data, only: n_r_cmb, n_r_icb
    use radial_functions, only: r_cmb, r_icb, rho0
    use blocking, only: lm2l, lm2m, lm2lmP, lmP2lmPS, lmP2lmPA, nfs, &
@@ -14,7 +14,7 @@ module nonlinear_bcs
    use legendre_grid_to_spec, only: legTF2
    use constants, only: two
 #ifdef WITH_SHTNS
-   use shtns, only: spat_to_SH
+   use shtns, only: spat_to_SH, spat_to_SH_dist
 #endif
    use useful, only: abortRun
 
@@ -27,7 +27,6 @@ module nonlinear_bcs
 contains
 
    subroutine get_br_v_bcs(br,vt,vp,omega,O_r_E_2,O_rho, &
-        &                  n_theta_min,n_theta_block, &
         &                  br_vt_lm,br_vp_lm)
       !
       !  Purpose of this subroutine is to calculate the nonlinear term    
@@ -47,56 +46,47 @@ contains
       !
     
       !-- input:
-      real(cp), intent(in) :: br(nrp,*)      ! r**2 * B_r
-      real(cp), intent(in) :: vt(nrp,*)      ! r*sin(theta) U_theta
-      real(cp), intent(in) :: vp(nrp,*)      ! r*sin(theta) U_phi
+      real(cp), intent(in) :: br(n_phi_max,n_theta_beg:n_theta_end)      ! r**2 * B_r
+      real(cp), intent(in) :: vt(n_phi_max,n_theta_beg:n_theta_end)      ! r*sin(theta) U_theta
+      real(cp), intent(in) :: vp(n_phi_max,n_theta_beg:n_theta_end)      ! r*sin(theta) U_phi
       real(cp), intent(in) :: omega          ! rotation rate of mantle or IC
       real(cp), intent(in) :: O_r_E_2        ! 1/r**2
       real(cp), intent(in) :: O_rho          ! 1/rho0 (anelastic)
-      integer,  intent(in) :: n_theta_min    ! start of theta block
-      integer,  intent(in) :: n_theta_block  ! size of theta_block
     
       !-- Output variables:
       ! br*vt/(sin(theta)**2*r**2)
-      complex(cp), intent(inout) :: br_vt_lm(lmP_max)
+      complex(cp), intent(inout) :: br_vt_lm(lmP_loc)
       ! br*(vp/(sin(theta)**2*r**2)-omega_ma)
-      complex(cp), intent(inout) :: br_vp_lm(lmP_max)
+      complex(cp), intent(inout) :: br_vp_lm(lmP_loc)
     
       !-- Local variables:
       integer :: n_theta     ! number of theta position
       integer :: n_theta_rel ! number of theta position in block
       integer :: n_phi       ! number of longitude
-      real(cp) :: br_vt(nrp,n_theta_block)
-      real(cp) :: br_vp(nrp,n_theta_block)
+      real(cp) :: br_vt(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp) :: br_vp(n_phi_max,n_theta_beg:n_theta_end)
       real(cp) :: fac          ! 1/( r**2 sin(theta)**2 )
     
-      n_theta=n_theta_min-1 ! n_theta needed for O_sin_theta_E_2
+      ! 20180328 Lago
+      ! This used to take the thetaBlock into account. I'm deleting it 
+      ! because it is extremely confusing right now.
+      ! This used to have OMP stuff in it. I'm deleting it because it needs 
+      ! to be reworked anyway!
     
-#ifdef WITH_SHTNS
-      !$OMP PARALLEL DO default(shared) &
-      !$OMP& private(n_theta_rel,n_phi,fac,n_theta)
-#endif
-      do n_theta_rel=1,n_theta_block
-         n_theta=n_theta_min+n_theta_rel-1         ! absolute number of theta
-    
+      do n_theta_rel=n_theta_beg,n_theta_end
          fac=O_sin_theta(n_theta)*O_sin_theta(n_theta)*O_r_E_2*O_rho
-    
          do n_phi=1,n_phi_max
-            br_vt(n_phi,n_theta_rel)= fac*br(n_phi,n_theta_rel)*vt(n_phi,n_theta_rel)
+            br_vt(n_phi,n_theta)= fac*br(n_phi,n_theta)*vt(n_phi,n_theta)
     
-            br_vp(n_phi,n_theta_rel)= br(n_phi,n_theta_rel) * &
-                                     ( fac*vp(n_phi,n_theta_rel) - omega )
+            br_vp(n_phi,n_theta)= br(n_phi,n_theta) * &
+                                     ( fac*vp(n_phi,n_theta) - omega )
          end do
       end do
-#ifdef WITH_SHTNS
-      !$OMP END PARALLEL DO
-#endif
-
     
       !-- Fourier transform phi 2 m (real 2 complex!)
 #ifdef WITH_SHTNS
-      call spat_to_SH(br_vt, br_vt_lm)
-      call spat_to_SH(br_vp, br_vp_lm)
+      call spat_to_SH_dist(br_vt, br_vt_lm)
+      call spat_to_SH_dist(br_vp, br_vp_lm)
 #else
       if ( .not. l_axi ) then
          call fft_thetab(br_vt, -1)
@@ -104,7 +94,7 @@ contains
       end if
     
       !-- Legendre transform contribution of thetas in block:
-      call legTF2(n_theta_min,br_vt_lm,br_vp_lm,br_vt,br_vp)
+      call legTF2(n_theta_beg,br_vt_lm,br_vp_lm,br_vt,br_vp)
 #endif
     
    end subroutine get_br_v_bcs

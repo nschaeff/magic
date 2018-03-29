@@ -302,9 +302,8 @@ contains
    subroutine initialize_grid_space(this)
 !@>author Rafael Lago, MPCDF, December 2017
 !-------------------------------------------------------------------------------
-
       class(grid_space_arrays_dist_t) :: this
-
+      
       allocate( this%Advr(n_phi_max,n_theta_beg:n_theta_end) )
       allocate( this%Advt(n_phi_max,n_theta_beg:n_theta_end) )
       allocate( this%Advp(n_phi_max,n_theta_beg:n_theta_end) )
@@ -439,6 +438,5 @@ contains
       end if
 
    end subroutine initialize_nonlinear_lm
-
 
 end module arrays_dist

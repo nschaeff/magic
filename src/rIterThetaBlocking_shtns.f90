@@ -67,8 +67,6 @@ module rIterThetaBlocking_shtns_mod
       procedure :: finalize => finalize_rIterThetaBlocking_shtns
       procedure :: do_iteration => do_iteration_ThetaBlocking_shtns
       procedure :: getType => getThisType
-      procedure :: transform_to_grid_space_shtns => transform_to_grid_space_shtns
-      procedure :: transform_to_lm_space_shtns => transform_to_lm_space_shtns
       
       ! Distributed Update - Lago
       procedure :: transform_to_grid_space_dist
@@ -92,6 +90,9 @@ contains
 
       class(rIterThetaBlocking_shtns_t) :: this
 
+      if (n_procs_theta < 2) print *, "n_procs_theta is too small!!!!!!!!!!!"
+      if (n_procs_theta < 2) stop
+      
       call this%allocate_common_arrays()
       call this%gsa%initialize()
       if ( l_TO ) call this%TO_arrays%initialize()
@@ -99,10 +100,8 @@ contains
       call this%nl_lm%initialize()
       
       ! Distributed Update - Lago
-      if (n_procs_theta > 1) then
-         call this%gsa_dist%initialize()
-         call this%nl_lm_dist%initialize()
-      end if
+      call this%gsa_dist%initialize()
+      call this%nl_lm_dist%initialize()
 
    end subroutine initialize_rIterThetaBlocking_shtns
 !------------------------------------------------------------------------------
@@ -117,10 +116,8 @@ contains
       call this%nl_lm%finalize()
       
       ! Distributed Update - Lago
-      if (n_procs_theta > 1) then
-         call this%gsa_dist%finalize()
-         call this%nl_lm_dist%finalize()
-      end if
+      call this%gsa_dist%finalize()
+      call this%nl_lm_dist%finalize()
 
    end subroutine finalize_rIterThetaBlocking_shtns
 !------------------------------------------------------------------------------
@@ -156,10 +153,14 @@ contains
       real(cp),    intent(out) :: fpoynLMr(:), fresLMr(:)
       real(cp),    intent(out) :: EperpLMr(:), EparLMr(:), EperpaxiLMr(:), EparaxiLMr(:)
 
-      integer :: l,lm
+      integer :: l,lm, ierr
       logical :: lGraphHeader=.false.
       logical :: DEBUG_OUTPUT=.false.
       real(cp) :: c, lorentz_torques_ic
+      complex(cp) :: br_vt_lm_cmb_loc(lmP_loc) ! product br*vt at CMB
+      complex(cp) :: br_vp_lm_cmb_loc(lmP_loc) ! product br*vp at CMB
+      complex(cp) :: br_vt_lm_icb_loc(lmP_loc) ! product br*vt at ICB
+      complex(cp) :: br_vp_lm_icb_loc(lmP_loc) ! product br*vp at ICB
 
       this%nR=nR
       this%nBc=nBc
@@ -193,6 +194,11 @@ contains
       br_vp_lm_cmb=zero
       br_vt_lm_icb=zero
       br_vp_lm_icb=zero
+      br_vt_lm_cmb_loc=zero
+      br_vp_lm_cmb_loc=zero
+      br_vt_lm_icb_loc=zero
+      br_vp_lm_icb_loc=zero
+      
       HelLMr     =0.0_cp
       Hel2LMr    =0.0_cp
       HelnaLMr   =0.0_cp
@@ -213,34 +219,23 @@ contains
 
       call this%nl_lm%set_zero()
 
-      if (n_procs_theta > 1) then
-         call this%slice_all(this%nR)
-         call this%transform_to_grid_space_dist
-         call this%gather_all(this%nR)
-      else
-         call this%transform_to_grid_space_shtns(this%gsa)
-      end if
+      call this%slice_all(this%nR)
+      call this%transform_to_grid_space_dist
 
       !--------- Calculation of nonlinear products in grid space:
       if ( (.not.this%isRadialBoundaryPoint) .or. this%lMagNlBc .or. &
             this%lRmsCalc ) then
 
          PERFON('get_nl')
-         call this%gsa%get_nl_shtns(time, this%nR, this%nBc, this%lRmsCalc)
+         call this%gsa_dist%get_nl_shtns(time, this%nR, this%nBc, this%lRmsCalc)
          PERFOFF
          
-         if (n_procs_theta > 1) then
-            call this%slice_all(this%nR)
-            call this%transform_to_lm_space_dist
-            call this%gather_all(this%nR)
-         else
-            call this%transform_to_lm_space_shtns(this%gsa, this%nl_lm)
-         end if
-
+         call this%transform_to_lm_space_dist
+      
       else if ( l_mag ) then
-         do lm=1,lmP_max
-            this%nl_lm%VxBtLM(lm)=0.0_cp
-            this%nl_lm%VxBpLM(lm)=0.0_cp
+         do lm=1,lmP_loc
+            this%nl_lm_dist%VxBtLM(lm)=0.0_cp
+            this%nl_lm_dist%VxBpLM(lm)=0.0_cp
          end do
       end if
 
@@ -252,26 +247,29 @@ contains
       !     to these products from the points theta(nThetaStart)-theta(nThetaStop)
       !     These products are used in get_b_nl_bcs.
       if ( this%nR == n_r_cmb .and. l_b_nl_cmb ) then
-         call get_br_v_bcs(this%gsa%brc,this%gsa%vtc,               &
-              &            this%gsa%vpc,this%leg_helper%omegaMA,    &
-              &            or2(this%nR),orho1(this%nR), 1,          &
-              &            this%sizeThetaB,br_vt_lm_cmb,br_vp_lm_cmb)
+         call get_br_v_bcs(this%gsa_dist%brc,this%gsa_dist%vtc,          &
+              &            this%gsa_dist%vpc,this%leg_helper%omegaMA,    &
+              &            or2(this%nR),orho1(this%nR),                  &
+              &            br_vt_lm_cmb_loc,br_vp_lm_cmb_loc)
+         call gather_FlmP(br_vt_lm_cmb_loc,br_vt_lm_cmb) ! Is this needed? 180326-Lago
+         call gather_FlmP(br_vp_lm_cmb_loc,br_vp_lm_cmb) ! Is this needed? 180326-Lago
       else if ( this%nR == n_r_icb .and. l_b_nl_icb ) then
-         call get_br_v_bcs(this%gsa%brc,this%gsa%vtc,               &
-              &            this%gsa%vpc,this%leg_helper%omegaIC,    &
-              &            or2(this%nR),orho1(this%nR), 1,          &
-              &            this%sizeThetaB,br_vt_lm_icb,br_vp_lm_icb)
+         call get_br_v_bcs(this%gsa_dist%brc,this%gsa_dist%vtc,          &
+              &            this%gsa_dist%vpc,this%leg_helper%omegaIC,    &
+              &            or2(this%nR),orho1(this%nR),                  &
+              &            br_vt_lm_icb_loc,br_vp_lm_icb_loc)
+         call gather_FlmP(br_vt_lm_icb_loc,br_vt_lm_icb) ! Is this needed? 180326-Lago
+         call gather_FlmP(br_vp_lm_icb_loc,br_vp_lm_icb) ! Is this needed? 180326-Lago
       end if
+      
       !PERFOFF
       !--------- Calculate Lorentz torque on inner core:
       !          each call adds the contribution of the theta-block to
       !          lorentz_torque_ic
       if ( this%nR == n_r_icb .and. l_mag_LF .and. l_rot_ic .and. l_cond_ic  ) then
-         lorentz_torques_ic=0.0_cp
          call get_lorentz_torque(lorentz_torques_ic,                &
-              &                  1,this%sizeThetaB,                 &
-              &                  this%gsa%brc,                      &
-              &                  this%gsa%bpc,this%nR)
+              &                  this%gsa_dist%brc,                 &
+              &                  this%gsa_dist%bpc,this%nR)
       end if
 
       !--------- Calculate Lorentz torque on mantle:
@@ -279,20 +277,20 @@ contains
       !          sign is reversed at the end of the theta blocking.
       if ( this%nR == n_r_cmb .and. l_mag_LF .and. l_rot_ma .and. l_cond_ma ) then
          call get_lorentz_torque(this%lorentz_torque_ma,   &
-              &                  1 ,this%sizeThetaB,       &
-              &                  this%gsa%brc,             &
-              &                  this%gsa%bpc,this%nR)
+              &                  this%gsa_dist%brc,        &
+              &                  this%gsa_dist%bpc,this%nR)
       end if
       !PERFOFF
-
+      
       !--------- Calculate courant condition parameters:
       if ( this%l_cour ) then
          !PRINT*,"Calling courant with this%nR=",this%nR
-         call courant(this%nR,this%dtrkc,this%dthkc,this%gsa%vrc, &
-              &       this%gsa%vtc,this%gsa%vpc,                  &
-              &       this%gsa%brc,this%gsa%btc,                  &
-              &       this%gsa%bpc,1 ,this%sizeThetaB)
+         call courant(this%nR,this%dtrkc,this%dthkc,this%gsa_dist%vrc, &
+              &       this%gsa_dist%vtc,this%gsa_dist%vpc,             &
+              &       this%gsa_dist%brc,this%gsa_dist%btc,             &
+              &       this%gsa_dist%bpc)
       end if
+      call this%gather_all(this%nR)
 
       !--------- Since the fields are given at gridpoints here, this is a good
       !          point for graphical output:
@@ -497,7 +495,7 @@ contains
       integer :: nR
       nR = this%nR
 
-      PERFON('sp2lm')
+      PERFON('lm2sp')
       if ( l_conv .or. l_mag_kin ) then
          if ( l_heat ) then
             call scal_to_spat(s_Rloc(:, nR), gsa%sc)
@@ -601,7 +599,7 @@ contains
 
       call shtns_load_cfg(1)
 
-      PERFON('lm2sp')
+      PERFON('sp2lm')
       if ( (.not.this%isRadialBoundaryPoint .or. this%lRmsCalc) &
             .and. ( l_conv_nl .or. l_mag_LF ) ) then
          !PERFON('inner1')
@@ -826,9 +824,10 @@ contains
 
       integer :: nR
       logical, save :: printed = .false.
+      
       nR = this%nR
 
-      PERFON('sp2lm')
+      PERFON('lm2sp_d')
       if ( l_conv .or. l_mag_kin ) then
          if ( l_heat ) then
             call sh_to_spat_dist(s_dist(:, nR), this%gsa_dist%sc)

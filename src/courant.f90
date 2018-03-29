@@ -2,7 +2,7 @@ module courant_mod
  
    use parallel_mod
    use precision_mod
-   use truncation, only: nrp, n_phi_max
+   use truncation, only: nrp, n_phi_max, n_theta_beg, n_theta_end, comm_theta
    use radial_data, only: nRstart, nRstop
    use radial_functions, only: orho1, orho2, or4, or2
    use physical_parameters, only: LFfac, opm
@@ -21,8 +21,7 @@ module courant_mod
 
 contains
 
-   subroutine courant(n_r,dtrkc,dthkc,vr,vt,vp,br,bt,bp, &
-                      n_theta_min,n_theta_block)
+   subroutine courant(n_r,dtrkc,dthkc,vr,vt,vp,br,bt,bp)
       !
       !  courant condition check: calculates Courant                      
       !  advection lengths in radial direction dtrkc                      
@@ -42,14 +41,12 @@ contains
     
       !-- Input variable:
       integer,  intent(in) :: n_r           ! radial level
-      integer,  intent(in) :: n_theta_min   ! first theta in block stored in fields
-      integer,  intent(in) :: n_theta_block ! size of theta block
-      real(cp), intent(in) :: vr(nrp,nfs)   ! radial velocity
-      real(cp), intent(in) :: vt(nrp,nfs)   ! longitudinal velocity
-      real(cp), intent(in) :: vp(nrp,nfs)   ! azimuthal velocity
-      real(cp), intent(in) :: br(nrp,nfs)   ! radial magnetic field
-      real(cp), intent(in) :: bt(nrp,nfs)   ! longitudinal magnetic field
-      real(cp), intent(in) :: bp(nrp,nfs)   ! azimuthal magnetic field
+      real(cp), intent(in) :: vr(n_phi_max,n_theta_beg:n_theta_end)   ! radial velocity
+      real(cp), intent(in) :: vt(n_phi_max,n_theta_beg:n_theta_end)   ! longitudinal velocity
+      real(cp), intent(in) :: vp(n_phi_max,n_theta_beg:n_theta_end)   ! azimuthal velocity
+      real(cp), intent(in) :: br(n_phi_max,n_theta_beg:n_theta_end)   ! radial magnetic field
+      real(cp), intent(in) :: bt(n_phi_max,n_theta_beg:n_theta_end)   ! longitudinal magnetic field
+      real(cp), intent(in) :: bp(n_phi_max,n_theta_beg:n_theta_end)   ! azimuthal magnetic field
     
       !-- Output:
       real(cp), intent(inout) :: dtrkc    ! Courant step (based on radial advection)
@@ -58,7 +55,6 @@ contains
     
       !-- Local  variables:
       integer :: n_theta       ! absolut no of theta
-      integer :: n_theta_rel   ! no of theta in block
       integer :: n_theta_nhs   ! no of theta in NHS
       integer :: n_phi         ! no of longitude
     
@@ -82,30 +78,27 @@ contains
       O_r_E_4=or4(n_r)
       O_r_E_2=or2(n_r)
     
-      n_theta=n_theta_min-1
     
       if ( l_mag .and. l_mag_LF .and. .not. l_mag_kin ) then
     
          af2=alffac*alffac
     
-         do n_theta_rel=1,n_theta_block
-    
-            n_theta=n_theta_min+n_theta_rel-1
+         do n_theta=n_theta_beg,n_theta_end
             n_theta_nhs=(n_theta+1)/2 ! northern hemisphere=odd n_theta
     
             do n_phi=1,n_phi_max
     
-               vflr2=orho2(n_r)*vr(n_phi,n_theta_rel)*vr(n_phi,n_theta_rel)
-               valr =br(n_phi,n_theta_rel)*br(n_phi,n_theta_rel) * &
+               vflr2=orho2(n_r)*vr(n_phi,n_theta)*vr(n_phi,n_theta)
+               valr =br(n_phi,n_theta)*br(n_phi,n_theta) * &
                      LFfac*orho1(n_r)
                valr2=valr*valr/(valr+valri2)
                vr2max=max(vr2max,O_r_e_4*(cf2*vflr2+af2*valr2))
     
-               vflh2= ( vt(n_phi,n_theta_rel)*vt(n_phi,n_theta_rel) +  &
-                        vp(n_phi,n_theta_rel)*vp(n_phi,n_theta_rel) )* &
+               vflh2= ( vt(n_phi,n_theta)*vt(n_phi,n_theta) +  &
+                        vp(n_phi,n_theta)*vp(n_phi,n_theta) )* &
                         osn2(n_theta_nhs)*orho2(n_r)
-               valh2= ( bt(n_phi,n_theta_rel)*bt(n_phi,n_theta_rel) +  &
-                        bp(n_phi,n_theta_rel)*bp(n_phi,n_theta_rel) )* &
+               valh2= ( bt(n_phi,n_theta)*bt(n_phi,n_theta) +  &
+                        bp(n_phi,n_theta)*bp(n_phi,n_theta) )* &
                         LFfac*osn2(n_theta_nhs)*orho1(n_r)
                valh2m=valh2*valh2/(valh2+valhi2)
                vh2max=max(vh2max,O_r_E_2*(cf2*vflh2+af2*valh2m))
@@ -116,18 +109,16 @@ contains
     
       else   ! Magnetic field ?
     
-         do n_theta_rel=1,n_theta_block
-    
-            n_theta=n_theta+1
+         do n_theta=n_theta_beg,n_theta_end
             n_theta_nhs=(n_theta+1)/2 ! northern hemisphere=odd n_theta
     
             do n_phi=1,n_phi_max
     
-               vflr2=orho2(n_r)*vr(n_phi,n_theta_rel)*vr(n_phi,n_theta_rel)
+               vflr2=orho2(n_r)*vr(n_phi,n_theta)*vr(n_phi,n_theta)
                vr2max=max(vr2max,cf2*O_r_E_4*vflr2)
     
-               vflh2= ( vt(n_phi,n_theta_rel)*vt(n_phi,n_theta_rel) + &
-                        vp(n_phi,n_theta_rel)*vp(n_phi,n_theta_rel) )* &
+               vflh2= ( vt(n_phi,n_theta)*vt(n_phi,n_theta) + &
+                        vp(n_phi,n_theta)*vp(n_phi,n_theta) )* &
                         osn2(n_theta_nhs)*orho2(n_r)
                vh2max=max(vh2max,cf2*O_r_E_2*vflh2)
     
@@ -137,11 +128,10 @@ contains
     
       end if   ! Magnetic field ?
     
-    
-      !$OMP CRITICAL
+      call mpi_allreduce(MPI_IN_PLACE, vr2max, 1, MPI_DEF_REAL, MPI_MAX, comm_theta, ierr)
+      call mpi_allreduce(MPI_IN_PLACE, vh2max, 1, MPI_DEF_REAL, MPI_MAX, comm_theta, ierr)
       if ( vr2max /= 0.0_cp ) dtrkc=min(dtrkc,sqrt(delxr2(n_r)/vr2max))
       if ( vh2max /= 0.0_cp ) dthkc=min(dthkc,sqrt(delxh2(n_r)/vh2max))
-      !$OMP END CRITICAL
     
    end subroutine courant
 !------------------------------------------------------------------------------

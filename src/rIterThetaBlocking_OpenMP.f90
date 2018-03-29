@@ -313,13 +313,11 @@ contains
          if ( this%nR == n_r_cmb .and. l_b_nl_cmb ) then
             call get_br_v_bcs(this%gsa(threadid)%brc,this%gsa(threadid)%vtc,   &
                  &            this%gsa(threadid)%vpc,this%leg_helper%omegaMA,  &
-                 &            or2(this%nR),orho1(this%nR),nThetaStart,         &
-                 &            this%sizeThetaB,br_vt_lm_cmb,br_vp_lm_cmb)
+                 &            or2(this%nR),orho1(this%nR),br_vt_lm_cmb,br_vp_lm_cmb)
          else if ( this%nR == n_r_icb .and. l_b_nl_icb ) then
             call get_br_v_bcs(this%gsa(threadid)%brc,this%gsa(threadid)%vtc,   &
                  &            this%gsa(threadid)%vpc,this%leg_helper%omegaIC,  &
-                 &            or2(this%nR),orho1(this%nR),nThetaStart,         &
-                 &            this%sizeThetaB,br_vt_lm_icb,br_vp_lm_icb)
+                 &            or2(this%nR),orho1(this%nR),br_vt_lm_icb,br_vp_lm_icb)
          end if
          !PERFOFF
          !--------- Calculate Lorentz torque on inner core:
@@ -329,7 +327,6 @@ contains
          if ( this%nR == n_r_icb .and. l_mag_LF .and. l_rot_ic .and. l_cond_ic  ) then
             lorentz_torques_ic(nThetaB)=0.0_cp
             call get_lorentz_torque(lorentz_torques_ic(nThetaB),     &
-                 &                  nThetaStart,this%sizeThetaB,     &
                  &                  this%gsa(threadid)%brc,          &
                  &                  this%gsa(threadid)%bpc,this%nR)
             !y=lt-c
@@ -343,7 +340,6 @@ contains
          !          sign is reversed at the end of the theta blocking.
          if ( this%nR == n_r_cmb .and. l_mag_LF .and. l_rot_ma .and. l_cond_ma ) then
             call get_lorentz_torque(this%lorentz_torque_ma(threadid),   &
-                 &                  nThetaStart,this%sizeThetaB,        &
                  &                  this%gsa(threadid)%brc,             &
                  &                  this%gsa(threadid)%bpc,this%nR)
          end if
@@ -355,7 +351,7 @@ contains
             call courant(this%nR,this%dtrkc,this%dthkc,this%gsa(threadid)%vrc, &
                  &       this%gsa(threadid)%vtc,this%gsa(threadid)%vpc,        &
                  &       this%gsa(threadid)%brc,this%gsa(threadid)%btc,        &
-                 &       this%gsa(threadid)%bpc,nThetaStart,this%sizeThetaB)
+                 &       this%gsa(threadid)%bpc)
          end if
 
          !--------- Since the fields are given at gridpoints here, this is a good
