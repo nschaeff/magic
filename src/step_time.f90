@@ -850,7 +850,7 @@ contains
                if ( l_save_out ) close(n_log_file)
             end if
 #ifdef WITH_MPI
-            call MPI_File_open(comm_r,graph_file,             &
+            call MPI_File_open(comm_cart,graph_file,                  &
                  &             IOR(MPI_MODE_WRONLY,MPI_MODE_CREATE),  &
                  &             MPI_INFO_NULL,graph_mpi_fh,ierr)
 #else

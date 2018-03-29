@@ -229,13 +229,11 @@ contains
          if ( this%nR == n_r_cmb .and. l_b_nl_cmb ) then
             call get_br_v_bcs(this%gsa%brc,this%gsa%vtc,this%gsa%vpc, &
                  &            this%leg_helper%omegaMA,or2(this%nR),   &
-                 &            orho1(this%nR),nThetaStart,             &
-                 &            this%sizeThetaB,br_vt_lm_cmb,br_vp_lm_cmb)
+                 &            orho1(this%nR),br_vt_lm_cmb,br_vp_lm_cmb)
          else if ( this%nR == n_r_icb .and. l_b_nl_icb ) then
             call get_br_v_bcs(this%gsa%brc,this%gsa%vtc,this%gsa%vpc, &
                  &            this%leg_helper%omegaIC,or2(this%nR),   &
-                 &            orho1(this%nR),nThetaStart,             &
-                 &            this%sizeThetaB,br_vt_lm_icb,br_vp_lm_icb)
+                 &            orho1(this%nR),br_vt_lm_icb,br_vp_lm_icb)
          end if
          PERFOFF
          !--------- Calculate Lorentz torque on inner core:
@@ -243,8 +241,7 @@ contains
          !          lorentz_torque_ic
          PERFON('lorentz')
          if ( this%nR == n_r_icb .and. l_mag_LF .and. l_rot_ic .and. l_cond_ic  ) then
-            call get_lorentz_torque(lorentz_torque_ic,nThetaStart,     &
-                 &                  this%sizeThetaB,this%gsa%brc,      &
+            call get_lorentz_torque(lorentz_torque_ic,this%gsa%brc,   &
                  &                  this%gsa%bpc,this%nR)
          end if
   
@@ -252,8 +249,7 @@ contains
          !          note: this calculates a torque of a wrong sign.
          !          sign is reversed at the end of the theta blocking.
          if ( this%nR == n_r_cmb .and. l_mag_LF .and. l_rot_ma .and. l_cond_ma ) then
-            call get_lorentz_torque(lorentz_torque_ma,nThetaStart,     &
-                 &                  this%sizeThetaB,this%gsa%brc,      &
+            call get_lorentz_torque(lorentz_torque_ma,this%gsa%brc,   &
                  &                  this%gsa%bpc,this%nR)
          end if
          PERFOFF
@@ -262,8 +258,7 @@ contains
             !PRINT*,"Calling courant with this%nR=",this%nR
             call courant(this%nR,this%dtrkc,this%dthkc,this%gsa%vrc, &
                  &       this%gsa%vtc,this%gsa%vpc,this%gsa%brc,     &
-                 &       this%gsa%btc,this%gsa%bpc,nThetaStart,      &
-                 &       this%sizeThetaB)
+                 &       this%gsa%btc,this%gsa%bpc)
          end if
   
          !--------- Since the fields are given at gridpoints here, this is a good
@@ -277,6 +272,9 @@ contains
                  &            this%gsa%xic,nThetaStart,this%sizeThetaB,&
                  &            lGraphHeader)
             PERFOFF
+            
+            PRINT *, "PANIIIIC"
+            stop
 #else
             call graphOut(time,this%nR,this%gsa%vrc,this%gsa%vtc,   &
                  &        this%gsa%vpc,this%gsa%brc,this%gsa%btc,   &

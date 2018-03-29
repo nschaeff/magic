@@ -1,8 +1,74 @@
+2018-03-28
+------------------------------------------------------------------------
+✔ courant.f90:courant parallelized
+    - OMP & thetaBlock removed
+    - (nrp,nfs) => (n_phi_max,n_theta_beg:n_theta_end)
+    - n_theta_rel=1,n_theta_block => n_theta=n_theta_beg,n_theta_end
+    
+    
+✔ outRot.f90:get_lorentz_torque parallelized
+    - OMP & thetaBlock removed
+    - (nrp,*) => (n_phi_max,n_theta_beg:n_theta_end)
+    - added mpi_allreduce 
+
+✘ [TODO] in do_iteration_ThetaBlocking_shtns, do I need to set the 
+  br_vt_lm_cmb (and its relatives) to zero *every* function call, or 
+  just when n_r_cmb (and relatives) are true?
+  
+✔ Some equivalence between variables if n_procs_theta=1
+   - n_theta_beg = 1
+   - nfs = n_theta_end = n_theta_max = n_theta_loc
+   - lmP_loc = lmP_max
+   - nrp = n_phi_max
+   - rIterThetaBlocking_shtns_t%sizeThetaB = n_theta_loc
+
+✔ nonlinear_bcs.f90:get_br_v_bcs parallelized
+   - OMP & thetaBlock removed
+   - thetaBlock removed
+   - lmP_max => lmP_loc
+   - (nrp,*) => (n_phi_max,n_theta_beg:n_theta_end)
+
+✔ get_nl.f90:get_nl_shtns parallelized
+    - nTheta=1,sizeThetaB => nTheta=n_theta_beg,n_theta_end (loops)
+
+✔ To run interactive tests:
+    ./run_interactive n_procs_r=8 n_procs_theta=4
+  for instance. 
+
+2017-12-18
+------------------------------------------------------------------------
+✔ Scalability tests performed (added in the beamer). Little loop used to 
+  submit many jobs at once:
+  for i in 1 2 4 8 16 32 64 128 256 ; do  ./draco_job.sh -n_procs_theta=$i -r0=8 -theta0=6144 -template=strong -name=strong_r2_t$i ; done;
+
+✘ [TODO] Modify  gather_all and slice_all subroutines to start with
+     if (n_procs_theta <= 1) return
+  so that I can freely call it without checking n_procs_theta
+✘ [TODO] Modify transform_to_grid_space_dist to have 
+     if (n_procs_theta <= 1) call this%transform_to_grid_space_shtns(this%gsa)
+  so that I can freely call it without having to check n_procs_theta 
+✔ [TODO] Continue the porting of do_iteration procedure. Next step is get_br_v_bcs
+  
+
+2017-12-12
+------------------------------------------------------------------------
+✔ Temporarily adding this to CMakeLists.txt
+   add_definitions(-DWITHPERF)
+   add_library(ooperf SHARED IMPORTED)
+   set_property(TARGET ooperf PROPERTY IMPORTED_LOCATION /u/system/soft/SLES122/common/perflib/3.2/amd64_sles12/gnu-6.3/lib/libooperf.so)
+   include_directories(/u/system/soft/SLES122/common/perflib/3.2/amd64_sles12/gnu-6.3/include/)
+   link_libraries(ooperf)
+   add_library(spina SHARED IMPORTED)
+   set_property(TARGET spina PROPERTY IMPORTED_LOCATION /u/lrafa/local/libspina/intel-17/impi-17.3/lib/libspina.so)
+   include_directories(/u/lrafa/local/libspina/intel-17/impi-17.3/include)
+  to include and link against perflib and libspina. I am yet to properly add 
+  those options to cmake.
+
 2017-12-12
 ------------------------------------------------------------------------
 ✔ git-rebase completed
    ✘ Many problems were found because I have duplicated some
-     modules. For instance, . rIterDistributed was a minor-modified clone of 
+     modules. For instance, rIterDistributed was a minor-modified clone of 
      rIterThetaBlocking_shtns. Git updated rIterThetaBlocking_shtns, but let
      rIterDistributed untouched.
 
@@ -24,23 +90,24 @@
    ./magic_wizard.py --use-mpi --use-mkl --use-shtns --mpicmd=srun --extracmd="n_procs_r=4 n_procs_theta=2" --nranks=8
    run from samples directory.
 
-✘ Some of the notation is inconsistent; I'm not sure if the name of the input
+✘ [TODO] Some of the notation is inconsistent; I'm not sure if the name of the input
   of some of the functions make sense (specially the torpol_ and pol_ ones). 
   That can be arranged later.
 
-✘ The code uses nRStart:nRStop for the partition of the radial
+✘ [TODO] The code uses nRStart:nRStop for the partition of the radial
   points, but nThetaStart:nThetaStop are related to the blocking.f90 
   module (implemented to favour cache-hit). I cannot use the same nomenclature
   for θ-partition. At the moment, I'm using n_theta_beg:n_theta_end.
   
 ✔ Build command:
+   module purge && module load intel/17.0 impi/2017.3 hdf5-mpi fftw mkl cmake anaconda/2
    export FC=mpiifort
    export CC=mpiicc
    export CXX=mpiicpc
    cmake .. -DUSE_MPI=yes -DCMAKE_BUILD_TYPE=Release -DUSE_PRECOND=yes -DUSE_FFTLIB=MKL -DUSE_LAPACKLIB=MKL -DUSE_OMP=no -DUSE_SHTNS=yes
    make -j VERBOSE=1
 
-✘ Todo: review the callstack (it changed, since now I'm using shtns)
+✘ [TODO] review the callstack (it changed, since now I'm using shtns)
    
 2017-12-10
 ------------------------------------------------------------------------

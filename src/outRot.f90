@@ -2,7 +2,8 @@ module outRot
 
    use parallel_mod
    use precision_mod
-   use truncation, only: n_r_max, n_r_maxMag, minc, nrp, n_phi_max
+   use truncation, only: n_r_max, n_r_maxMag, minc, nrp, n_phi_max, n_theta_beg, n_theta_end, &
+       &            comm_theta
    use radial_data, only: n_r_CMB, n_r_ICB
    use radial_functions, only: r_icb, r_cmb, r, rscheme_oc
    use physical_parameters, only: kbotv, ktopv
@@ -484,14 +485,10 @@ contains
 
    end subroutine get_viscous_torque_complex
 !-----------------------------------------------------------------------
-   subroutine get_lorentz_torque(lorentz_torque,nThetaStart, &
-                                 sizeThetaB,br,bp,nR)
+   subroutine get_lorentz_torque(lorentz_torque,br,bp,nR)
       !
       !  Purpose of this subroutine is to calculate the lorentz torque    
       !  on mantle or inner core respectively.                            
-      !  Blocking in theta can be used to increased performance.          
-      !  If no blocking required set n_theta_block=n_theta_max,           
-      !  where n_theta_max is the absolut number of thetas used.          
       !
       !  .. note:: Lorentz_torque must be set to zero before loop over        
       !            theta blocks is started.                                   
@@ -508,10 +505,8 @@ contains
       !
 
       !-- Input variables:
-      integer,  intent(in) :: nThetaStart    ! first number of theta in block
-      integer,  intent(in) :: sizeThetaB     ! size of theta bloching
-      real(cp), intent(in) :: br(nrp,*)      ! array containing
-      real(cp), intent(in) :: bp(nrp,*)      ! array containing
+      real(cp), intent(in) :: br(n_phi_max,n_theta_beg:n_theta_end)      ! array containing
+      real(cp), intent(in) :: bp(n_phi_max,n_theta_beg:n_theta_end)      ! array containing
       integer,  intent(in) :: nR
 
       real(cp), intent(inout) :: lorentz_torque ! lorentz_torque for theta(1:n_theta)
@@ -519,31 +514,12 @@ contains
 
       !-- local variables:
       integer :: nTheta,nPhi,nThetaNHS
-      integer :: nThetaB
       real(cp) :: fac,b0r
 
-      ! to avoid rounding errors for different theta blocking, we do not
-      ! calculate sub sums with lorentz_torque_local, but keep on adding
-      ! the contributions to the total lorentz_torque given as argument.
-
-      if ( nThetaStart == 1 ) then
-         lorentz_torque=0.0_cp
-      end if
-
-      !lorentz_torque_local=0.0_cp
+      lorentz_torque=0.0_cp
       fac=two*pi/real(n_phi_max,cp) ! 2 pi/n_phi_max
 
-      nTheta=nThetaStart-1
-#ifdef WITH_SHTNS
-      !$OMP PARALLEL DO default(none) &
-      !$OMP& private(nThetaB, nTheta, nPhi, nThetaNHS, b0r) &
-      !$OMP& shared(n_phi_max, sizeThetaB, r_icb, r, nR) &
-      !$OMP& shared(lGrenoble, nThetaStart, BIC, cosTheta, r_cmb) &
-      !$OMP& shared(fac, gauss) &
-      !$OMP& reduction(+: lorentz_torque)
-#endif
-      do nThetaB=1,sizeThetaB
-         nTheta=nThetaStart+nThetaB-1
+      do nTheta=n_theta_beg,n_theta_end
          nThetaNHS=(nTheta+1)/2 ! northern hemisphere=odd n_theta
          if ( lGrenoble ) then
             if ( r(nR) == r_icb ) then
@@ -556,21 +532,13 @@ contains
          end if
 
          do nPhi=1,n_phi_max
-            !lorentz_torque_local=lorentz_torque_local + &
-            !                          gauss(nThetaNHS) * &
-            !       (br(nPhi,nThetaB)-b0r)*bp(nPhi,nThetaB)
             lorentz_torque=lorentz_torque + fac * gauss(nThetaNHS) * &
-                   (br(nPhi,nThetaB)-b0r)*bp(nPhi,nThetaB)
+                   (br(nPhi,nTheta)-b0r)*bp(nPhi,nTheta)
          end do
-         !lorentz_torque_local = lorentz_torque_local + gauss(nThetaNHS)*phisum
       end do
-#ifdef WITH_SHTNS
-      !$OMP END PARALLEL DO
-#endif
+      
+      call mpi_allreduce(MPI_IN_PLACE, lorentz_torque, 1, MPI_DEF_REAL, MPI_SUM, comm_theta, ierr)
 
-      !-- normalisation of phi-integration and division by Pm:
-      !lorentz_torque=lorentz_torque+fac*lorentz_torque_local
-              
    end subroutine get_lorentz_torque
 !-----------------------------------------------------------------------
 

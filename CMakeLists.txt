@@ -223,6 +223,18 @@ else()
    message(STATUS "Use SHTNS: no")
 endif()
 
+
+add_definitions(-DWITHPERF)
+add_library(ooperf SHARED IMPORTED)
+# set_property(TARGET ooperf PROPERTY IMPORTED_LOCATION /u/system/soft/SLES122/common/perflib/3.1/gnu-6.3.0/lib/libooperf.a)
+# include_directories(/u/system/soft/SLES122/common/perflib/3.1/gnu-6.3.0/include/)
+set_property(TARGET ooperf PROPERTY IMPORTED_LOCATION /u/system/soft/SLES122/common/perflib/3.2/amd64_sles12/gnu-6.3/lib/libooperf.so)
+include_directories(/u/system/soft/SLES122/common/perflib/3.2/amd64_sles12/gnu-6.3/include/)
+link_libraries(ooperf)
+add_library(spina SHARED IMPORTED)
+set_property(TARGET spina PROPERTY IMPORTED_LOCATION /u/lrafa/local/libspina/intel-17/impi-17.3/lib/libspina.so)
+include_directories(/u/lrafa/local/libspina/intel-17/impi-17.3/include)
+
 # Final Fortran flags (after OpenMP/MPI to avoid the conflict
 set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${FFLAG_ARCH} ${FFLAG_STD} -g ${FFLAG_TRACEBACK} ${FFLAG_CONVERT} ${FFLAG_PREPROCESSOR}")
 
