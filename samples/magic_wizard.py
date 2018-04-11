@@ -440,7 +440,7 @@ if __name__ == '__main__':
 
     ## Run cmake
     if args.link:
-      print('1/2.    Linking       ')
+      print('1/2. Symbolic Linking   ')
       print('----------------------\n')
       try:
          os.mkdir(execDir)

@@ -260,7 +260,8 @@ contains
 !-------------------------------------------------------------------------------
    subroutine finalize_step_time
 
-      deallocate( dflowdt_Rloc_container, dsdt_Rloc_container )
+      deallocate( dflowdt_Rloc_container )
+      deallocate( dsdt_Rloc_container )
       deallocate( dbdt_Rloc_container, dflowdt_LMloc_container )
       deallocate( dsdt_LMloc_container, dbdt_LMloc_container )
       deallocate( dbdt_CMB_LMloc )

@@ -1,3 +1,74 @@
+2018-04-11
+-----------------------------------------------------------------------
+✔ added rank2cart_r, rank2cart_theta and cart2rank variables to help
+  identifying the distribution of the cartesian grid.
+  
+✘ [TODO] I need to review the cart_comm. Maybe it would be best to 
+  flip the r/θ coordinates because right now, the gather_Flm routines
+  (and related) are communicating with faraway neighbours (e.g.
+  0,4,8,16 instead of 0,1,2,3)
+
+2018-04-03
+------------------------------------------------------------------------
+✔ distributed_theta.f90
+  - Created this module to workaround some circular dependencies. Lots
+  of things which are in blocking.f90, truncation.f90 and parallel.f90
+  should be moved in here in the future, if possible. For the moment,
+  this is merely doing the distributed mapping part. In the future, we 
+  will maybe have the following replacements
+    - initialize_distributed_theta => initialize_blocking
+
+
+✔ get_td.f90
+  - copied get_td function into arrays_dist's get_td_dist. It receives
+  nl_lm_glb as argument
+  - I'm reworking those indexes because they are quite confusing.
+  First, I'm not using anything like lm2 mapping arrays. I just store
+  the first position in lm_dist(coord_theta,m,3) and the last in 
+  lm_dist(coord_theta,m,4). Here are some equivalences:
+    - lm   = lm_dist(coord_theta,m,3) + l
+    - lmP  = the same as lm, but for l_max+1 (use lmP_dist)
+    - lmA  = the same as lm, but for l+1 (shifted)
+    - lmPA = the same as lmP, but for l+1 (shifted)
+
+2018-03-29
+------------------------------------------------------------------------
+✔ Theta Blocking
+  - in the shtns version, the Theta Blocking is mostly disabled already,
+  because sizeThetaB is set to n_theta_max (n_theta_loc, after the 
+  parallelization) and thetaStart is always equal 1. So these are the
+  common changes:
+  - sizeThetaB => n_theta_loc
+  - nThetaStart = n_theta_beg
+  - nThetaStop = n_theta_end (eq. n_theta_beg + n_theta_loc - 1)
+  - nThetaBlocks = 1
+
+
+- The reviewed callstack for the do_iteration, starting from do_iteration is:
+   ⚫    this%TO_arrays%set_zero
+   ⚪    this%leg_helper%legPrepG
+   ⚫    this%nl_lm%set_zero
+   ⚫    this%transform_to_grid_space
+   ⚫    this%gsa%get_nl              
+   ⚫    this%transform_to_lm_space   
+   ⚫    get_br_v_bcs                 
+   ⚫    get_lorentz_torque           
+   ⚫    courant                      
+   ⚪    graphOut_mpi                 
+   ⚪    probe_out                    
+   ⚪    get_helicity                 
+   ⚪    get_visc_heat                
+   ⚪    get_nlBLayers                
+   ⚪    get_fluxes                   
+   ⚪    get_perpPar                  
+   ⚪    store_movie_frame            
+   ⚪    get_dtBLM                    
+   ⚪    getTOnext                    
+   ⚪    getTO                        
+   ⚪    this%nl_lm%get_td            
+   ⚪    getTOfinish                  
+   ⚪    get_dH_dtBLM                 
+
 2018-03-28
 ------------------------------------------------------------------------
 ✔ courant.f90:courant parallelized
@@ -14,7 +85,7 @@
 ✘ [TODO] in do_iteration_ThetaBlocking_shtns, do I need to set the 
   br_vt_lm_cmb (and its relatives) to zero *every* function call, or 
   just when n_r_cmb (and relatives) are true?
-  
+
 ✔ Some equivalence between variables if n_procs_theta=1
    - n_theta_beg = 1
    - nfs = n_theta_end = n_theta_max = n_theta_loc
@@ -328,28 +399,28 @@ be better to keep current structure.
 ------------------------------------------------------------------------
 The callstack for the do_iteration, starting from rIterThetaParallel is:
 
-⚪ do_iteration_ThetaParallel (rIterThetaParallel:450)
-⚪    loop                (rIterThetaParallel:557)
-⚪    this%transform_to_grid_space (rIterThetaParallel:154)
-⚪       legTFG           (legendre_spec_to_grid:27)
-⚪          leg_helper_t%__ATTRIBUTES__    
-⚪       loop             (legendre_spec_to_grid:181)
-⚪       legTFGnomag      (legendre_spec_to_grid:733)
-⚪          leg_helper_t%__ATTRIBUTES__    
-⚪       fft_thetab       (fft:156)
-⚪         fftJW          (fft:169)
-⚪           fft99aJW     (fft:383)
-⚪           wpass2JW     (fft:483)
-⚪           wpass3JW     (fft:518)
-⚪           wpass4JW     (fft:621)
-⚪           wpass5JW     (fft:729)
-⚪           fft99bJW     (fft:426)
-⚪       v_rigid_boundary (nonlinear_bcs:195)
-⚪    this%gsa%get_nl                      ?
-⚪    this%transform_to_lm_space           ?
-⚪    get_br_v_bcs                         ?
-⚪    get_lorentz_torque                   ?
-⚪    courant                              ?
+- do_iteration_ThetaParallel (rIterThetaParallel:450)
+-    loop                (rIterThetaParallel:557)
+✔    this%transform_to_grid_space (rIterThetaParallel:154)
+-       legTFG           (legendre_spec_to_grid:27)
+-          leg_helper_t%__ATTRIBUTES__    
+-       loop             (legendre_spec_to_grid:181)
+-       legTFGnomag      (legendre_spec_to_grid:733)
+-          leg_helper_t%__ATTRIBUTES__    
+-       fft_thetab       (fft:156)
+-         fftJW          (fft:169)
+-           fft99aJW     (fft:383)
+-           wpass2JW     (fft:483)
+-           wpass3JW     (fft:518)
+-           wpass4JW     (fft:621)
+-           wpass5JW     (fft:729)
+-           fft99bJW     (fft:426)
+-       v_rigid_boundary (nonlinear_bcs:195)
+✔    this%gsa%get_nl                      ?
+✔    this%transform_to_lm_space           ?
+✔    get_br_v_bcs                         ?
+✔    get_lorentz_torque                   ?
+✔    courant                              ?
 ⚪    graphOut_mpi                         ?
 ⚪    probe_out                            ?
 ⚪    get_helicity                         ?

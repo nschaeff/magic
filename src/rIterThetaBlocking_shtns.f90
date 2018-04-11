@@ -179,6 +179,8 @@ contains
            &                        this%lPressCalc,this%l_frame,this%lTOnext,  &
            &                        this%lTOnext2,this%lTOcalc)
 
+      call this%slice_all(this%nR)
+      
       if (DEBUG_OUTPUT) then
          write(*,"(I3,A,I1,2(A,L1))") this%nR,": nBc = ", &
               & this%nBc,", lDeriv = ",this%lDeriv,", l_mag = ",l_mag
@@ -217,9 +219,9 @@ contains
       EperpaxiLMr=0.0_cp
       EparaxiLMr =0.0_cp
 
-      call this%nl_lm%set_zero()
+      
+      call this%nl_lm_dist%set_zero()
 
-      call this%slice_all(this%nR)
       call this%transform_to_grid_space_dist
 
       !--------- Calculation of nonlinear products in grid space:
@@ -290,10 +292,10 @@ contains
               &       this%gsa_dist%brc,this%gsa_dist%btc,             &
               &       this%gsa_dist%bpc)
       end if
-      call this%gather_all(this%nR)
 
       !--------- Since the fields are given at gridpoints here, this is a good
       !          point for graphical output:
+      !< parallelization postponed >
       if ( this%l_graph ) then
 #ifdef WITH_MPI
             PERFON('graphout')
@@ -302,7 +304,7 @@ contains
                  &            this%gsa%brc,this%gsa%btc,           &
                  &            this%gsa%bpc,this%gsa%sc,            &
                  &            this%gsa%pc,this%gsa%xic,            &
-                 &            1 ,this%sizeThetaB,lGraphHeader)
+                 &            1 ,this%sizeThetaB, lGraphHeader)
             PERFOFF
 #else
             call graphOut(time,this%nR,this%gsa%vrc,           &
@@ -313,11 +315,13 @@ contains
                  &        1 ,this%sizeThetaB,lGraphHeader)
 #endif
       end if
+      
 
       if ( this%l_probe_out ) then
          call probe_out(time,this%nR,this%gsa%vpc, 1,this%sizeThetaB)
       end if
-
+      !< / parallelization postponed >
+      
       !--------- Helicity output:
       if ( this%lHelCalc ) then
          PERFON('hel_out')
@@ -439,6 +443,7 @@ contains
               &     dtLast,this%nR,1,this%sizeThetaB)
       end if
       PERFOFF
+      
 
       lorentz_torque_ic = lorentz_torques_ic
       this%lorentz_torque_ic = lorentz_torques_ic
@@ -457,10 +462,18 @@ contains
       !write(*,"(A,I4,2ES20.13)") "before_td: ", &
       !     &  this%nR,sum(real(conjg(VxBtLM)*VxBtLM)),sum(real(conjg(VxBpLM)*VxBpLM))
       !PERFON('get_td')
+      
+      call this%gather_all(this%nR)   
+      
+!       call this%nl_lm_dist%get_td_dist(this%nR, this%nBc, this%lRmsCalc, &
+!            &                 this%lPressCalc, dVSrLM, dVPrLM, dVXirLM,   &
+!            &                 dVxVhLM, dVxBhLM, dwdt, dzdt, dpdt, dsdt,   &
+!            &                 dxidt, dbdt, djdt, this%leg_helper, this%nl_lm)
       call this%nl_lm%get_td(this%nR, this%nBc, this%lRmsCalc,           &
            &                 this%lPressCalc, dVSrLM, dVPrLM, dVXirLM,   &
            &                 dVxVhLM, dVxBhLM, dwdt, dzdt, dpdt, dsdt,   &
            &                 dxidt, dbdt, djdt, this%leg_helper)
+
 
       !PERFOFF
       !write(*,"(A,I4,ES20.13)") "after_td:  ", &

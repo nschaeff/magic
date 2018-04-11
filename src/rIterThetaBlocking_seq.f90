@@ -272,9 +272,6 @@ contains
                  &            this%gsa%xic,nThetaStart,this%sizeThetaB,&
                  &            lGraphHeader)
             PERFOFF
-            
-            PRINT *, "PANIIIIC"
-            stop
 #else
             call graphOut(time,this%nR,this%gsa%vrc,this%gsa%vtc,   &
                  &        this%gsa%vpc,this%gsa%brc,this%gsa%btc,   &

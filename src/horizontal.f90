@@ -6,7 +6,7 @@ module horizontal_data
 
    use truncation, only: l_max, lmP_max, n_theta_max, n_phi_max, &
        &                 lm_max, lm_loc, n_m_max, minc, m_max, l_axi, &
-       &                 slice_fLM
+       &                 slice_Flm
    use radial_functions, only: r_cmb
    use physical_parameters, only: ek
    use num_param, only: difeta, difnu, difkap, ldif, ldifexp, difchem
@@ -52,21 +52,34 @@ module horizontal_data
    complex(cp), public, allocatable :: dPhi0(:)
    complex(cp), public, allocatable :: dPhi02(:)
    real(cp), public, allocatable :: dLh(:)
-   real(cp), public, allocatable :: dLh_loc(:)
    real(cp), public, allocatable :: dTheta1S(:),dTheta1A(:)
    real(cp), public, allocatable :: dTheta2S(:),dTheta2A(:)
    real(cp), public, allocatable :: dTheta3S(:),dTheta3A(:)
    real(cp), public, allocatable :: dTheta4S(:),dTheta4A(:)
-   real(cp), public, allocatable :: D_m(:),D_m_loc(:),D_l(:),D_lP1(:)
+   real(cp), public, allocatable :: D_l(:),D_lP1(:)
    real(cp), public, allocatable :: D_mc2m(:)
    real(cp), public, allocatable :: hdif_B(:),hdif_V(:),hdif_S(:),hdif_Xi(:)
  
+   !-- Distributed arrays depending on l and m:
+   complex(cp), public, allocatable :: dPhi_loc(:)
+   complex(cp), public, allocatable :: dPhi0_loc(:)
+   real(cp), public, allocatable :: D_m_loc(:)
+   real(cp), public, allocatable :: dLH_loc(:)
+   real(cp), public, allocatable :: dTheta1S_loc(:),dTheta1A_loc(:)
+   real(cp), public, allocatable :: dTheta2S_loc(:),dTheta2A_loc(:)
+   real(cp), public, allocatable :: dTheta3S_loc(:),dTheta3A_loc(:)
+   real(cp), public, allocatable :: dTheta4S_loc(:),dTheta4A_loc(:)
+   
+   !-- DEPRECATED arrays depending on l and m:
+   real(cp), private, allocatable :: D_m(:) ! To be removed; D_m_loc replaces it
+   
    !-- Limiting l for a given m, used in legtf
    integer, public, allocatable :: lStart(:),lStop(:)
    integer, public, allocatable :: lStartP(:),lStopP(:)
    logical, public, allocatable :: lmOdd(:),lmOddP(:)
 
    public :: initialize_horizontal_data, horizontal, finalize_horizontal_data
+   
 
 contains
 
@@ -109,17 +122,25 @@ contains
       allocate( dPhi0(lm_max) )
       allocate( dPhi02(lm_max) )
       allocate( dLh(lm_max) )
-      if (n_procs_theta>1) allocate( dLh_loc(lm_loc) )
       allocate( dTheta1S(lm_max),dTheta1A(lm_max) )
       allocate( dTheta2S(lm_max),dTheta2A(lm_max) )
       allocate( dTheta3S(lm_max),dTheta3A(lm_max) )
       allocate( dTheta4S(lm_max),dTheta4A(lm_max) )
       allocate( D_m(lm_max),D_l(lm_max),D_lP1(lm_max) )
-      if (n_procs_theta>1) allocate( D_m_loc(lm_loc) )
       allocate( D_mc2m(n_m_max) )
       allocate( hdif_B(lm_max),hdif_V(lm_max),hdif_S(lm_max) )
       allocate( hdif_Xi(lm_max) )
       bytes_allocated = bytes_allocated+(19*lm_max+n_m_max)*SIZEOF_DEF_REAL
+      
+      !-- Distributed arrays depending on l and m:
+      allocate( dPhi_loc(lm_loc) )
+      allocate( dPhi0_loc(lm_loc) )
+      allocate( dTheta1S_loc(lm_loc), dTheta1A_loc(lm_loc) )
+      allocate( dTheta2S_loc(lm_loc), dTheta2A_loc(lm_loc) )
+      allocate( dTheta3S_loc(lm_loc), dTheta3A_loc(lm_loc) )
+      allocate( dTheta4S_loc(lm_loc), dTheta4A_loc(lm_loc) )     
+      allocate( dLH_loc(lm_loc) )
+      allocate( D_m_loc(lm_loc) )
 
       !-- Limiting l for a given m, used in legtf
       allocate( lStart(n_m_max),lStop(n_m_max) )
@@ -136,11 +157,14 @@ contains
       deallocate( Plm, wPlm, dPlm, gauss, dPl0Eq )
       if ( l_RMS ) deallocate( wdPlm )
       deallocate( dPhi, dPhi0, dPhi02, dLh, dTheta1S, dTheta1A )
-      if (n_procs_theta>1) deallocate( dLh_loc )
       deallocate( dTheta2S, dTheta2A, dTheta3S, dTheta3A, dTheta4S, dTheta4A )
       deallocate( D_m, D_l, D_lP1, D_mc2m, hdif_B, hdif_V, hdif_S, hdif_Xi )
-      if (n_procs_theta>1) deallocate( D_m_loc)
       deallocate( lStart, lStop, lStartP, lStopP, lmOdd, lmOddP )
+      
+      !-- Distributed arrays
+      deallocate( dPhi_loc, dPhi0_loc, dLH_loc, D_m_loc)
+      deallocate( dTheta1S_loc, dTheta2S_loc, dTheta3S_loc, dTheta4S_loc )
+      deallocate( dTheta1A_loc, dTheta2A_loc, dTheta3A_loc, dTheta4A_loc )
 
       if ( .not. l_axi ) call finalize_fft()
 
@@ -337,12 +361,6 @@ contains
 
       end do ! lm
       
-      if (n_procs_theta > 1) then
-         call slice_fLM(dLh, dLh_loc)
-         call slice_fLM(D_m, D_m_loc)
-      end if
-
-
       !-- Build auxiliary index arrays for Legendre transform:
       !   lStartP, lStopP give start and end positions in lmP-block.
       !   lStart, lStop give start and end positions in lm-block.
@@ -390,6 +408,20 @@ contains
       call print_cache_info_dreal("R: dTheta4S"//C_NULL_CHAR,dTheta4S(1))
 #endif
 
+      !@TODO: write a loop specially for these guys here
+      call slice_Flm(dPhi, dPhi_loc)
+      call slice_Flm(dPhi0, dPhi0_loc)
+      call slice_Flm(dLh, dLH_loc)
+      call slice_Flm(D_m, D_m_loc)
+      call slice_Flm(dTheta1A, dTheta1A_loc)
+      call slice_Flm(dTheta2A, dTheta2A_loc)
+      call slice_Flm(dTheta3A, dTheta3A_loc)
+      call slice_Flm(dTheta4A, dTheta4A_loc)
+      call slice_Flm(dTheta1S, dTheta1S_loc)
+      call slice_Flm(dTheta2S, dTheta2S_loc)
+      call slice_Flm(dTheta3S, dTheta3S_loc)
+      call slice_Flm(dTheta4S, dTheta4S_loc)
+      
    end subroutine horizontal
 !------------------------------------------------------------------------------
    subroutine gauleg(sinThMin,sinThMax,theta_ord,gauss,n_th_max)

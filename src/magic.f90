@@ -132,6 +132,7 @@ program magic
    use mem_alloc
    use useful, only: abortRun
    use probe_mod, only: initialize_probes, finalize_probes
+   use distributed_theta, only: initialize_distributed_theta
    !use rIterThetaBlocking_mod,ONLY: initialize_rIterThetaBlocking
 #ifdef WITH_LIKWID
 #  include "likwid_f90.h"
@@ -250,9 +251,14 @@ program magic
 
    !-- Blocking/radial/horizontal
    call initialize_blocking
+   
+   !>@TODO merge the two following calls
    call distribute_truncation(lmP2, lm2)
+   
    local_bytes_used=bytes_allocated
    call initialize_radial_data
+   call initialize_distributed_theta
+   
    call initialize_LMLoop_data ! needed before radial_functions
    call initialize_radial_functions
    call initialize_horizontal_data
@@ -427,6 +433,7 @@ program magic
    call finalize_kinetic_energy
    if ( l_probe ) call finalize_probes
    call finalize_communications
+   call finalize_cartesian
    call finalize_step_time
    call finalize_fieldsLast
    call finalize_fields

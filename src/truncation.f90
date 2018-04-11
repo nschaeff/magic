@@ -362,7 +362,7 @@ contains
       end if
 
    end subroutine checkTruncation
-   
+
 !-------------------------------------------------------------------------------
    subroutine slice_f(f_global, f_local)
 !@>details Copies the relevant part of f_global into f_local

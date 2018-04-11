@@ -21,7 +21,7 @@ module parallel_mod
    integer :: rank_with_l1m0
    integer :: chunksize
    integer :: ierr
-   
+   integer, allocatable, protected :: cart2rank(:,:), rank2cart_theta(:), rank2cart_r(:)
 
 contains
 
@@ -50,10 +50,11 @@ contains
 !------------------------------------------------------------------------------
    subroutine initialize_cartesian
 #ifdef WITH_MPI
-      integer :: dims(2), coords(2), colour
+      integer :: dims(2), coords(2), colour, i
       logical :: periods(2)
       dims    = (/n_procs_theta, n_procs_r/)
       periods = (/.true., .false./)
+      
       
       call MPI_Cart_Create(MPI_COMM_WORLD, 2, dims, periods, .true., comm_cart, ierr)
       call check_MPI_error(ierr)
@@ -76,6 +77,18 @@ contains
       
       if (rank .ne. 0) l_save_out = .false.
       if (rank .ne. 0) lVerbose   = .false.
+      
+      allocate(rank2cart_theta(0:n_procs-1))
+      allocate(rank2cart_r(0:n_procs-1))
+      allocate(cart2rank(0:n_procs_theta-1,0:n_procs_r-1))
+      
+      do i=0,n_procs-1
+         call mpi_cart_coords(comm_cart, i, 2, coords, ierr)
+         rank2cart_theta(i) = coords(1)
+         rank2cart_r(i)     = coords(2)
+         cart2rank(coords(1),coords(2)) = i
+      end do
+      
 #endif WITH_MPI
    end subroutine initialize_cartesian
 !------------------------------------------------------------------------------
@@ -101,5 +114,17 @@ contains
 #endif
 
    end subroutine check_MPI_error
+!------------------------------------------------------------------------------
+   subroutine finalize_cartesian
+#ifdef WITH_MPI
+      
+      ! Overwrite "rank" ! Make sure later that 0 in MPI_COMM_WORLD is the same 0 as in this comm!
+      call MPI_Comm_Free(comm_cart, ierr) 
+      call MPI_Comm_Free(comm_r, ierr) 
+      call MPI_Comm_Free(comm_theta, ierr) 
+      
+      deallocate(rank2cart_theta, rank2cart_r, cart2rank)
+#endif WITH_MPI
+   end subroutine finalize_cartesian
 !------------------------------------------------------------------------------
 end module parallel_mod

@@ -132,5 +132,4 @@ contains
       deallocate( self%lm22m )
 
    end subroutine deallocate_subblocks_mappings
-!-------------------------------------------------------------------------------
 end module LMmapping

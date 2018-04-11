@@ -233,7 +233,7 @@ contains
       lm2mc(1:lm_max)=> st_map%lm2mc
       l2lmAS(0:l_max)=> st_map%l2lmAS
       lm2lmS(1:lm_max) => st_map%lm2lmS
-      lm2lmA(1:lm_max) => st_map%lm2lmA
+      lm2lmA(1:lm_max) => st_map%lm2lmA     ! I don't get why lo_map also sets lm2lmA, since it is absolutely never used - Lago
       lmP2(0:,0:) => st_map%lmP2
       lmP2l(1:lmP_max) => st_map%lmP2l
       lmP2lmPS(1:lmP_max) => st_map%lmP2lmPS

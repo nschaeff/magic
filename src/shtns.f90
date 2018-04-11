@@ -3,7 +3,7 @@ module shtns
    use precision_mod, only: cp
    use constants, only: ci
    use truncation
-   use horizontal_data, only: dLh, D_m, O_sin_theta_E2, dLh_loc, D_m_loc
+   use horizontal_data, only: dLh, O_sin_theta_E2, dLh_loc, D_m_loc
    use radial_functions, only: or2
    use parallel_mod
    use fft, only: init_fft_phi, finalize_fft_phi, fft_phi_loc
@@ -148,7 +148,7 @@ contains
       real(cp) :: m
 
       do lm = 1, lm_max
-         m = D_m(lm)
+         m = D_m_loc(lm)
          Slm(lm) = ci*m*dWlm(lm)
          Tlm(lm) = ci*m*Zlm(lm)
       end do
