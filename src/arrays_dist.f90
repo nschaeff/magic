@@ -36,7 +36,9 @@ module arrays_dist
        &                      dTheta1A_loc, dTheta2A_loc, dTheta3A_loc,&
        &                      dTheta4A_loc, dTheta1S_loc, dTheta2S_loc,&
        &                      dTheta3S_loc, dTheta4S_loc, dLH_loc,     &
-       &                      dPhi_loc, dPhi0_loc
+       &                      dPhi_loc, dPhi0_loc, hdif_B_loc, &
+       &                      hdif_V_loc, hdif_S_loc, hdif_Xi_loc
+       
    use RMS, only: Adv2hInt, Pre2hInt, Buo2hInt, Cor2hInt, LF2hInt,  &
        &          Geo2hInt, Mag2hInt, ArcMag2hInt, CLF2hInt, PLF2hInt, &
        &          CIA2hInt, Arc2hInt
@@ -488,8 +490,8 @@ contains
       complex(cp), intent(out) :: dwdt(lm_max),dzdt(lm_max)
       complex(cp), intent(out) :: dpdt(lm_max),dsdt(lm_max)
       complex(cp), intent(out) :: dxidt(lm_max)
-      complex(cp), intent(out) :: dbdt(lm_max),djdt(lm_max)
-      complex(cp), intent(out) :: dVxBhLM(lm_max)
+      complex(cp), intent(out) :: dbdt(lm_maxMag),djdt(lm_maxMag)
+      complex(cp), intent(out) :: dVxBhLM(lm_maxMag)
       complex(cp), intent(out) :: dVxVhLM(lm_max)
       complex(cp), intent(out) :: dVSrLM(lm_max)
       complex(cp), intent(out) :: dVXirLM(lm_max)
@@ -508,7 +510,7 @@ contains
     
       integer, parameter :: DOUBLE_COMPLEX_PER_CACHELINE=4
       
-!       ! Duplications - yay -.-"
+      !--- Duplications - yay -.-"
       complex(cp) :: CorPol_dist(lm_loc)
       complex(cp) :: AdvPol_dist(lm_loc),AdvTor_dist(lm_loc)
       complex(cp) :: LFPol_dist(lm_loc),LFTor_dist(lm_loc)
@@ -526,7 +528,20 @@ contains
       complex(cp) :: dVXirLM_dist(lm_loc)
       complex(cp) :: dVPrLM_dist(lm_loc)    
       
+      integer :: Rq(10)
+      integer :: lm_maybe_skip_first
       integer :: lm_dist
+!       integer :: lmS_dist 
+!       integer :: lmA_dist 
+!       integer :: lmP_dist 
+!       integer :: lmPS_dist
+!       integer :: lmPA_dist
+      integer :: lm_glb 
+!       integer :: lmS_glb
+!       integer :: lmA_glb
+!       integer :: lmP_glb
+!       integer :: lmPS_glb
+!       integer :: lmPA_glb
       
       dwdt_dist    = zero
       dzdt_dist    = zero
@@ -537,120 +552,104 @@ contains
       Buo_dist     = zero
       LFPol_dist   = zero
       LFTor_dist   = zero
+      
+      lm_maybe_skip_first = 1
+      if (dist_map%lm2(0,0) > 0) lm_maybe_skip_first = 2
     
       if (nBc == 0 .or. lRmsCalc ) then
     
          if ( l_conv ) then  ! Convection
             
-!---------------------------------------------------------------------------------------------------
-!---------------------------------------------------------------------------------------------------
-!
-!           BEGINNING OF FIRST LOOP
-!
-!---------------------------------------------------------------------------------------------------
-!---------------------------------------------------------------------------------------------------
-            call slice_Flm(dwdt   (1:lm_max), dwdt_dist   (1:lm_loc)) 
-            call slice_Flm(dzdt   (1:lm_max), dzdt_dist   (1:lm_loc)) 
-            call slice_Flm(AdvPol (1:lm_max), AdvPol_dist (1:lm_loc)) 
-            call slice_Flm(AdvTor (1:lm_max), AdvTor_dist (1:lm_loc)) 
-            call slice_Flm(CorPol (1:lm_max), CorPol_dist (1:lm_loc)) 
-            call slice_Flm(dVxVhLM(1:lm_max), dVxVhLM_dist(1:lm_loc))
-            call slice_Flm(Buo    (1:lm_max), Buo_dist    (1:lm_loc)) 
-            call slice_Flm(LFPol  (1:lm_max), LFPol_dist  (1:lm_loc)) 
-            call slice_Flm(LFTor  (1:lm_max), LFTor_dist  (1:lm_loc)) 
-    
-            do lm_dist=1,lm_loc
-               l   =dist_map%lm2l(lm_dist)
-               m   =dist_map%lm2m(lm_dist)
+            if (dist_map%lm2(0,0) > 0) then  ! if m=0 is in this rank
+               lm  = dist_map%lm2(0,0)
+               lmA = dist_map%lm2lmA(lm)
+               lmP = dist_map%lm2lmP(lm)
+               lmPA= dist_map%lmP2lmPA(lmP)
+               lm_glb = lm2(0,0) ! needed for leg_helper only!
                
-               if ((l==0) .and. (m==0)) then
-                  lm =1   ! This is l=0,m=0
-                  lmA=lm2lmA(lm)
-                  lmP=1
-                  lmPA=lmP2lmPA(lmP)
-                  if ( l_conv_nl ) then
-                     AdvPol_loc=      or2(nR)*this%AdvrLM(lm)
-                     AdvTor_loc=-dTheta1A(lm)*this%AdvpLM(lmPA)
-                  else
-                     AdvPol_loc=zero
-                     AdvTor_loc=zero
-                  end if
-                  if ( l_corr ) then
-                     CorPol_loc=two*CorFac*or1(nR) * dTheta2A(lm)* z_Rloc(lmA,nR)
-                     CorTor_loc= two*CorFac*or2(nR) * (                 &
-                     &                dTheta3A(lm)*dw_Rloc(lmA,nR) +    &
-                     &        or1(nR)*dTheta4A(lm)* w_Rloc(lmA,nR) )
-                  else
-                     CorPol_loc=zero
-                     CorTor_loc=zero
-                  end if
-
-                  if ( l_single_matrix ) then
-                     dwdt_dist(lm_dist)=AdvPol_loc!+CorPol_loc
-                  else
-                     dwdt_dist(lm_dist)=AdvPol_loc+CorPol_loc
-                  end if
-
-                  dzdt_dist(lm_dist)=AdvTor_loc+CorTor_loc
-
-                  if ( lRmsCalc ) then
-
-                     Buo_dist(lm_dist) =BuoFac*rgrav(nR)*rho0(nR)*leg_helper%sR(lm)
-                     if ( l_mag_LF .and. nR>n_r_LCR ) then
-                        LFPol_dist(lm_dist) =      or2(nR)*this%LFrLM(lm)
-                        LFTor_dist(lm_dist) =-dTheta1A(lm)*this%LFpLM(lmPA)
-                        AdvPol_dist(lm_dist)=AdvPol_loc-LFPol_dist(lm_dist)
-                        AdvTor_dist(lm_dist)=AdvTor_loc-LFTor_dist(lm_dist)
-                     else
-                        AdvPol_dist(lm_dist)=AdvPol_loc
-                        AdvTor_dist(lm_dist)=AdvTor_loc
-                     end if
-                     CorPol_dist(lm_dist)=CorPol_loc
-
-                  end if
-                  cycle
+               if ( l_conv_nl ) then
+                  AdvPol_loc=      or2(nR)*this_dist%AdvrLM(lm)
+                  AdvTor_loc=-dTheta1A_loc(lm)*this_dist%AdvpLM(lmPA)
+               else
+                  AdvPol_loc=zero
+                  AdvTor_loc=zero
                end if
+               if ( l_corr ) then
+                  CorPol_loc=two*CorFac*or1(nR) * dTheta2A_loc(lm)* z_dist(lmA,nR)
+                  CorTor_loc= two*CorFac*or2(nR) * (                 &
+                  &                dTheta3A_loc(lm)*dw_dist(lmA,nR) +    &
+                  &        or1(nR)*dTheta4A_loc(lm)* w_dist(lmA,nR) )
+               else
+                  CorPol_loc=zero
+                  CorTor_loc=zero
+               end if
+
+               if ( l_single_matrix ) then
+                  dwdt_dist(lm)=AdvPol_loc!+CorPol_loc
+               else
+                  dwdt_dist(lm)=AdvPol_loc+CorPol_loc
+               end if
+
+               dzdt_dist(lm)=AdvTor_loc+CorTor_loc
+
+               if ( lRmsCalc ) then
+
+                  Buo_dist(lm) =BuoFac*rgrav(nR)*rho0(nR)*leg_helper%sR(lm_glb)
+                  if ( l_mag_LF .and. nR>n_r_LCR ) then
+                     LFPol_dist(lm) =      or2(nR)*this_dist%LFrLM(lm)
+                     LFTor_dist(lm) =-dTheta1A_loc(lm)*this_dist%LFpLM(lmPA)
+                     AdvPol_dist(lm)=AdvPol_loc-LFPol_dist(lm)
+                     AdvTor_dist(lm)=AdvTor_loc-LFTor_dist(lm)
+                  else
+                     AdvPol_dist(lm)=AdvPol_loc
+                     AdvTor_dist(lm)=AdvTor_loc
+                  end if
+                  CorPol_dist(lm)=CorPol_loc
+               end if
+            end if
+            
+            do lm=lm_maybe_skip_first,lm_loc
+               l   =dist_map%lm2l(lm)
+               m   =dist_map%lm2m(lm)
+               lmS =dist_map%lm2lmS(lm)
+               lmA =dist_map%lm2lmA(lm)
+               lmP =dist_map%lm2lmP(lm)
+               lmPS=dist_map%lmP2lmPS(lmP)
+               lmPA=dist_map%lmP2lmPA(lmP)
+               lm_glb = lm2(l,m) ! needed for leg_helper only!
                
-               lm = lm2(l,m)
-               
-               lmS =lm2lmS(lm)
-               lmA =lm2lmA(lm)
-               lmP =lm2lmP(lm)
-               lmPS=lmP2lmPS(lmP)
-               lmPA=lmP2lmPA(lmP)
-    
                if ( l_double_curl ) then ! Pressure is not needed
 
                   if ( l_corr ) then
                      if ( l < l_max .and. l > m ) then
                         CorPol_loc =two*CorFac*or2(nR)*orho1(nR)*(               &
-                        &                   dPhi0(lm)*(                          &
-                        &         -ddw_Rloc(lm,nR)+beta(nR)*dw_Rloc(lm,nR)     + &
+                        &                   dPhi0_loc(lm)*(                          &
+                        &         -ddw_dist(lm,nR)+beta(nR)*dw_dist(lm,nR)     + &
                         &             ( beta(nR)*or1(nR)+or2(nR))*               &
-                        &                         leg_helper%dLhw(lm) )        + &
-                        &             dTheta3A(lm)*( dz_Rloc(lmA,nR)-            &
-                        &                            beta(nR)*z_Rloc(lmA,nR) ) + &
-                        &             dTheta3S(lm)*( dz_Rloc(lmS,nR)-            &
-                        &                            beta(nR)*z_Rloc(lmS,nR) ) + &
+                        &                         leg_helper%dLhw(lm_glb) )        + &
+                        &             dTheta3A_loc(lm)*( dz_dist(lmA,nR)-            &
+                        &                            beta(nR)*z_dist(lmA,nR) ) + &
+                        &             dTheta3S_loc(lm)*( dz_dist(lmS,nR)-            &
+                        &                            beta(nR)*z_dist(lmS,nR) ) + &
                         &          or1(nR)* (                                    &
-                        &             dTheta4A(lm)* z_Rloc(lmA,nR)               &
-                        &            -dTheta4S(lm)* z_Rloc(lmS,nR) ) )
+                        &             dTheta4A_loc(lm)* z_dist(lmA,nR)               &
+                        &            -dTheta4S_loc(lm)* z_dist(lmS,nR) ) )
                      else if ( l == l_max ) then
                         CorPol_loc =two*CorFac*or2(nR)*orho1(nR)*(               &
-                        &                   dPhi0(lm)*(                          &
-                        &         -ddw_Rloc(lm,nR)+beta(nR)*dw_Rloc(lm,nR)     + &
+                        &                   dPhi0_loc(lm)*(                          &
+                        &         -ddw_dist(lm,nR)+beta(nR)*dw_dist(lm,nR)     + &
                         &             ( beta(nR)*or1(nR)+or2(nR))*               &
-                        &                         leg_helper%dLhw(lm) ) )
+                        &                         leg_helper%dLhw(lm_glb) ) )
                      else if ( l == m ) then
                         CorPol_loc =two*CorFac*or2(nR)*orho1(nR)*(               &
-                        &                   dPhi0(lm)*(                          &
-                        &         -ddw_Rloc(lm,nR)+beta(nR)*dw_Rloc(lm,nR)     + &
+                        &                   dPhi0_loc(lm)*(                          &
+                        &         -ddw_dist(lm,nR)+beta(nR)*dw_dist(lm,nR)     + &
                         &             ( beta(nR)*or1(nR)+or2(nR))*               &
-                        &                         leg_helper%dLhw(lm) )        + &
-                        &             dTheta3A(lm)*( dz_Rloc(lmA,nR)-            &
-                        &                            beta(nR)*z_Rloc(lmA,nR) ) + &
+                        &                         leg_helper%dLhw(lm_glb) )        + &
+                        &             dTheta3A_loc(lm)*( dz_dist(lmA,nR)-            &
+                        &                            beta(nR)*z_dist(lmA,nR) ) + &
                         &          or1(nR)* (                                    &
-                        &             dTheta4A(lm)* z_Rloc(lmA,nR) ) )
+                        &             dTheta4A_loc(lm)* z_dist(lmA,nR) ) )
                      end if
                   else
                      CorPol_loc=zero
@@ -659,22 +658,22 @@ contains
                   if ( l_conv_nl ) then
 
                      if ( l > m ) then
-                        dVxVhLM_dist(lm_dist)=      orho1(nR)*r(nR)*r(nR)* ( &
-                        &        dTheta1S(lm)*this%AdvtLM(lmPS) -  &
-                        &        dTheta1A(lm)*this%AdvtLM(lmPA) +  &
-                        &             dPhi(lm)*this%AdvpLM(lmP)  )
+                        dVxVhLM_dist(lm)=      orho1(nR)*r(nR)*r(nR)* ( &
+                        &        dTheta1S_loc(lm)*this_dist%AdvtLM(lmPS) -  &
+                        &        dTheta1A_loc(lm)*this_dist%AdvtLM(lmPA) +  &
+                        &             dPhi_loc(lm)*this_dist%AdvpLM(lmP)  )
                      else if ( l == m ) then
-                        dVxVhLM_dist(lm_dist)=      orho1(nR)*r(nR)*r(nR)* ( &
-                        &      - dTheta1A(lm)*this%AdvtLM(lmPA) +  &
-                        &        dPhi(lm)*this%AdvpLM(lmP)  )
+                        dVxVhLM_dist(lm)=      orho1(nR)*r(nR)*r(nR)* ( &
+                        &      - dTheta1A_loc(lm)*this_dist%AdvtLM(lmPA) +  &
+                        &        dPhi_loc(lm)*this_dist%AdvpLM(lmP)  )
                      end if
 
-                     AdvPol_loc=dLh(lm)*or4(nR)*orho1(nR)*this%AdvrLM(lmP)
+                     AdvPol_loc=dLh_loc(lm)*or4(nR)*orho1(nR)*this_dist%AdvrLM(lmP)
 
                   else
 
                      AdvPol_loc =zero
-                     dVxVhLM_dist(lm_dist)=zero
+                     dVxVhLM_dist(lm)=zero
 
                   endif
 
@@ -683,40 +682,40 @@ contains
                   if ( l_corr .and. nBc /= 2 ) then
                      if ( l < l_max .and. l > m ) then
                         CorPol_loc =two*CorFac*or1(nR) * (  &
-                        &       dPhi0(lm)*dw_Rloc(lm,nR) +  & ! phi-deriv of dw/dr
-                        &    dTheta2A(lm)*z_Rloc(lmA,nR) -  & ! sin(theta) dtheta z
-                        &    dTheta2S(lm)*z_Rloc(lmS,nR) )
+                        &       dPhi0_loc(lm)*dw_dist(lm,nR) +  & ! phi-deriv of dw/dr
+                        &    dTheta2A_loc(lm)*z_dist(lmA,nR) -  & ! sin(theta) dtheta z
+                        &    dTheta2S_loc(lm)*z_dist(lmS,nR) )
                      else if ( l == l_max ) then
                         CorPol_loc= two*CorFac*or1(nR) * ( &
-                        &            dPhi0(lm)*dw_Rloc(lm,nR)  )
+                        &            dPhi0_loc(lm)*dw_dist(lm,nR)  )
                      else if ( l == m ) then
                         CorPol_loc = two*CorFac*or1(nR) * (  &
-                        &        dPhi0(lm)*dw_Rloc(lm,nR)  + &
-                        &     dTheta2A(lm)*z_Rloc(lmA,nR) )
+                        &        dPhi0_loc(lm)*dw_dist(lm,nR)  + &
+                        &     dTheta2A_loc(lm)*z_dist(lmA,nR) )
                      end if
                   else
                      CorPol_loc=zero
                   end if
 
                   if ( l_conv_nl ) then
-                     AdvPol_loc=or2(nR)*this%AdvrLM(lmP)
+                     AdvPol_loc=or2(nR)*this_dist%AdvrLM(lmP)
                   else
                      AdvPol_loc=zero
                   endif
 
                end if ! Double curl or not for the poloidal equation
 
-               dwdt_dist(lm_dist)=AdvPol_loc+CorPol_loc
+               dwdt_dist(lm)=AdvPol_loc+CorPol_loc
 
                if ( lRmsCalc ) then ! RMS force balance
 
                   if ( l_TP_form .or. l_anelastic_liquid ) then
-                     Buo_dist(lm_dist) =BuoFac*alpha0(nR)*rgrav(nR)*(              &
-                     &        rho0(nR)*leg_helper%sR(lm)-ViscHeatFac*    &
+                     Buo_dist(lm) =BuoFac*alpha0(nR)*rgrav(nR)*(              &
+                     &        rho0(nR)*leg_helper%sR(lm_glb)-ViscHeatFac*    &
                      &        (ThExpNb*alpha0(nR)*temp0(nR)+ogrun(nR))*  &
-                     &        leg_helper%preR(lm) )
+                     &        leg_helper%preR(lm_glb) )
                   else
-                     Buo_dist(lm_dist) =BuoFac*rho0(nR)*rgrav(nR)*leg_helper%sR(lm)
+                     Buo_dist(lm) =BuoFac*rho0(nR)*rgrav(nR)*leg_helper%sR(lm_glb)
                   end if
 
                   if ( l_double_curl ) then 
@@ -725,16 +724,16 @@ contains
                      if ( l_corr .and. nBc /= 2 ) then
                         if ( l < l_max .and. l > m ) then
                            CorPol_loc =two*CorFac*or1(nR) * (  &
-                           &       dPhi0(lm)*dw_Rloc(lm,nR) +  & ! phi-deriv of dw/dr
-                           &    dTheta2A(lm)*z_Rloc(lmA,nR) -  & ! sin(theta) dtheta z
-                           &    dTheta2S(lm)*z_Rloc(lmS,nR) )
+                           &       dPhi0_loc(lm)*dw_dist(lm,nR) +  & ! phi-deriv of dw/dr
+                           &    dTheta2A_loc(lm)*z_dist(lmA,nR) -  & ! sin(theta) dtheta z
+                           &    dTheta2S_loc(lm)*z_dist(lmS,nR) )
                         else if ( l == l_max ) then
                            CorPol_loc= two*CorFac*or1(nR) * ( &
-                           &            dPhi0(lm)*dw_Rloc(lm,nR)  )
+                           &            dPhi0_loc(lm)*dw_dist(lm,nR)  )
                         else if ( l == m ) then
                            CorPol_loc = two*CorFac*or1(nR) * (  &
-                           &        dPhi0(lm)*dw_Rloc(lm,nR)  + &
-                           &     dTheta2A(lm)*z_Rloc(lmA,nR) )
+                           &        dPhi0_loc(lm)*dw_dist(lm,nR)  + &
+                           &     dTheta2A_loc(lm)*z_dist(lmA,nR) )
                         end if
                      else
                         CorPol_loc=zero
@@ -742,7 +741,7 @@ contains
 
                      ! We also need to recompute AdvPol_loc here
                      if ( l_conv_nl ) then
-                        AdvPol_loc=or2(nR)*this%AdvrLM(lmP)
+                        AdvPol_loc=or2(nR)*this_dist%AdvrLM(lmP)
                      else
                         AdvPol_loc=zero
                      endif
@@ -750,31 +749,31 @@ contains
                   end if
 
                   if ( l_mag_LF .and. nR>n_r_LCR ) then
-                     LFPol_dist(lm_dist) =or2(nR)*this%LFrLM(lmP)
-                     AdvPol_dist(lm_dist)=AdvPol_loc-LFPol_dist(lm_dist)
+                     LFPol_dist(lm) =or2(nR)*this_dist%LFrLM(lmP)
+                     AdvPol_dist(lm)=AdvPol_loc-LFPol_dist(lm)
                   else
-                     AdvPol_dist(lm_dist)=AdvPol_loc
+                     AdvPol_dist(lm)=AdvPol_loc
                   end if
-                  CorPol_dist(lm_dist)=CorPol_loc
+                  CorPol_dist(lm)=CorPol_loc
 
                end if
 
                if ( l_corr ) then
                   if ( l < l_max .and. l > m ) then
                      CorTor_loc=          two*CorFac*or2(nR) * (  &
-                     &                dPhi0(lm)*z_Rloc(lm,nR)   + &
-                     &            dTheta3A(lm)*dw_Rloc(lmA,nR)  + &
-                     &    or1(nR)*dTheta4A(lm)* w_Rloc(lmA,nR)  + &
-                     &            dTheta3S(lm)*dw_Rloc(lmS,nR)  - &
-                     &    or1(nR)*dTheta4S(lm)* w_Rloc(lmS,nR)  )
+                     &                dPhi0_loc(lm)*z_dist(lm,nR)   + &
+                     &            dTheta3A_loc(lm)*dw_dist(lmA,nR)  + &
+                     &    or1(nR)*dTheta4A_loc(lm)* w_dist(lmA,nR)  + &
+                     &            dTheta3S_loc(lm)*dw_dist(lmS,nR)  - &
+                     &    or1(nR)*dTheta4S_loc(lm)* w_dist(lmS,nR)  )
                   else if ( l == l_max ) then
                      CorTor_loc=two*CorFac*or2(nR) * ( &
-                     &            dPhi0(lm)*z_Rloc(lm,nR)   )
+                     &            dPhi0_loc(lm)*z_dist(lm,nR)   )
                   else if ( l == m ) then
                      CorTor_loc=  two*CorFac*or2(nR) * (  &
-                     &        dPhi0(lm)*z_Rloc(lm,nR)   + &
-                     &    dTheta3A(lm)*dw_Rloc(lmA,nR)  + &
-                     &    or1(nR)*dTheta4A(lm)* w_Rloc(lmA,nR)  )
+                     &        dPhi0_loc(lm)*z_dist(lm,nR)   + &
+                     &    dTheta3A_loc(lm)*dw_dist(lmA,nR)  + &
+                     &    or1(nR)*dTheta4A_loc(lm)* w_dist(lmA,nR)  )
                   end if
                else
                   CorTor_loc=zero
@@ -782,18 +781,18 @@ contains
     
                if ( l_conv_nl ) then
                   if ( l > m ) then
-                     AdvTor_loc=   -dPhi(lm)*this%AdvtLM(lmP)  + &
-                     &          dTheta1S(lm)*this%AdvpLM(lmPS) - &
-                     &          dTheta1A(lm)*this%AdvpLM(lmPA)
+                     AdvTor_loc=   -dPhi_loc(lm)*this_dist%AdvtLM(lmP)  + &
+                     &          dTheta1S_loc(lm)*this_dist%AdvpLM(lmPS) - &
+                     &          dTheta1A_loc(lm)*this_dist%AdvpLM(lmPA)
                   else if ( l == m ) then
-                     AdvTor_loc=   -dPhi(lm)*this%AdvtLM(lmP)  - &
-                     &          dTheta1A(lm)*this%AdvpLM(lmPA)
+                     AdvTor_loc=   -dPhi_loc(lm)*this_dist%AdvtLM(lmP)  - &
+                     &          dTheta1A_loc(lm)*this_dist%AdvpLM(lmPA)
                   end if
                else
                   AdvTor_loc=zero
                end if
     
-               dzdt_dist(lm_dist)=CorTor_loc+AdvTor_loc
+               dzdt_dist(lm)=CorTor_loc+AdvTor_loc
                ! until here
     
                if ( lRmsCalc ) then
@@ -803,38 +802,32 @@ contains
        
                      if ( l > m ) then
                         !------- LFTor= 1/(E*Pm) * curl( curl(B) x B )_r
-                        LFTor_dist(lm_dist) =   -dPhi(lm)*this%LFtLM(lmP)  + &
-                        &          dTheta1S(lm)*this%LFpLM(lmPS) - &
-                        &          dTheta1A(lm)*this%LFpLM(lmPA)
+                        LFTor_dist(lm) =   -dPhi_loc(lm)*this_dist%LFtLM(lmP)  + &
+                        &          dTheta1S_loc(lm)*this_dist%LFpLM(lmPS) - &
+                        &          dTheta1A_loc(lm)*this_dist%LFpLM(lmPA)
                      else if ( l == m ) then
-                        LFTor_dist(lm_dist) =   -dPhi(lm)*this%LFtLM(lmP)  - &
-                        &          dTheta1A(lm)*this%LFpLM(lmPA)
+                        LFTor_dist(lm) =   -dPhi_loc(lm)*this_dist%LFtLM(lmP)  - &
+                        &          dTheta1A_loc(lm)*this_dist%LFpLM(lmPA)
                      end if
-                     AdvTor_dist(lm_dist)=AdvTor_loc-LFTor_dist(lm_dist)
+                     AdvTor_dist(lm)=AdvTor_loc-LFTor_dist(lm)
                   else
-                     AdvTor_dist(lm_dist)=AdvTor_loc
+                     AdvTor_dist(lm)=AdvTor_loc
                   end if
                end if
     
             end do
+
 !---------------------------------------------------------------------------------------------------
 !---------------------------------------------------------------------------------------------------
 !
-!           END OF FIRST LOOP
+!           BEGIN OF POSTPONED
+!           Postponed. This has to do with Diagnostics!
 !           
 !---------------------------------------------------------------------------------------------------
-!---------------------------------------------------------------------------------------------------            
-            call gather_Flm(dwdt_dist   (1:lm_loc),dwdt   (1:lm_max)) 
-            call gather_Flm(dzdt_dist   (1:lm_loc),dzdt   (1:lm_max)) 
-            call gather_Flm(AdvPol_dist (1:lm_loc),AdvPol (1:lm_max)) 
-            call gather_Flm(AdvTor_dist (1:lm_loc),AdvTor (1:lm_max)) 
-            call gather_Flm(CorPol_dist (1:lm_loc),CorPol (1:lm_max)) 
-            call gather_Flm(dVxVhLM_dist(1:lm_loc),dVxVhLM(1:lm_max))
-            call gather_Flm(Buo_dist    (1:lm_loc),Buo    (1:lm_max)) 
-            call gather_Flm(LFPol_dist  (1:lm_loc),LFPol  (1:lm_max)) 
-            call gather_Flm(LFTor_dist  (1:lm_loc),LFTor  (1:lm_max)) 
-    
+!---------------------------------------------------------------------------------------------------    
             if ( lRmsCalc ) then
+               print *, "lRmsCalc not yet parallelized! @", __LINE__, __FILE__
+               stop
     
                if ( l_conv_nl ) then
                   call hIntRms(AdvPol,nR,1,lm_max,0,Adv2hInt(:,nR),st_map, .false.)
@@ -870,31 +863,19 @@ contains
                   call hIntRms(this%LFp2LM,nR,1,lmP_max,1,LF2hInt(:,nR),st_map,.true.)
                end if
 
-!---------------------------------------------------------------------------------------------------
-               do lm_dist=1,lm_loc
-                  l = dist_map%lm2l(lm_dist)
-                  m = dist_map%lm2m(lm_dist)
-                  lm = lm2(l,m)
-                  
-                  Geo_dist(lm_dist)=CorPol(lm)-leg_helper%dpR(lm)+beta(nR)*leg_helper%preR(lm)
-                  CLF_dist(lm_dist)=CorPol(lm)+LFPol(lm)
-                  PLF_dist(lm_dist)=LFPol(lm)-leg_helper%dpR(lm)+beta(nR)*leg_helper%preR(lm)
-                  Mag_dist(lm_dist)=Geo(lm)+LFPol(lm)
-                  Arc_dist(lm_dist)=Geo(lm)+Buo(lm)
-                  ArcMag_dist(lm_dist)=Mag(lm)+Buo(lm)
-                  CIA_dist(lm_dist)=ArcMag(lm)+AdvPol(lm)
-                  !CIA_dist(lm_dist)=CorPol(lm)+Buo(lm)+AdvPol(lm)
+      !---------------------------------------------------------------------------------------------
+      ! This is the original:
+      !---------------------------------------------------------------------------------------------
+               do lm=1,lm_max
+                  Geo(lm)=CorPol(lm)-leg_helper%dpR(lm)+beta(nR)*leg_helper%preR(lm)
+                  CLF(lm)=CorPol(lm)+LFPol(lm)
+                  PLF(lm)=LFPol(lm)-leg_helper%dpR(lm)+beta(nR)*leg_helper%preR(lm)
+                  Mag(lm)=Geo(lm)+LFPol(lm)
+                  Arc(lm)=Geo(lm)+Buo(lm)
+                  ArcMag(lm)=Mag(lm)+Buo(lm)
+                  CIA(lm)=ArcMag(lm)+AdvPol(lm)
+                  !CIA(lm)=CorPol(lm)+Buo(lm)+AdvPol(lm)
                end do
-               
-               call gather_Flm(Geo_dist   , Geo)
-               call gather_Flm(CLF_dist   , CLF)
-               call gather_Flm(PLF_dist   , PLF)
-               call gather_Flm(Mag_dist   , Mag)
-               call gather_Flm(Arc_dist   , Arc)
-               call gather_Flm(ArcMag_dist, ArcMag)
-               call gather_Flm(CIA_dist   , CIA)
-!---------------------------------------------------------------------------------------------------
-               
                call hIntRms(Geo,nR,1,lm_max,0,Geo2hInt(:,nR),st_map,.false.)
                call hIntRms(CLF,nR,1,lm_max,0,CLF2hInt(:,nR),st_map,.false.)
                call hIntRms(PLF,nR,1,lm_max,0,PLF2hInt(:,nR),st_map,.false.)
@@ -902,6 +883,54 @@ contains
                call hIntRms(Arc,nR,1,lm_max,0,Arc2hInt(:,nR),st_map,.false.)
                call hIntRms(ArcMag,nR,1,lm_max,0,ArcMag2hInt(:,nR),st_map,.false.)
                call hIntRms(CIA,nR,1,lm_max,0,CIA2hInt(:,nR),st_map,.false.)
+      !---------------------------------------------------------------------------------------------
+      ! This is (more or less) how this specific piece will look like afterwards: 
+      !---------------------------------------------------------------------------------------------
+      !                do lm=1,lm_loc
+      !                   l = dist_map%lm2l(lm)
+      !                   m = dist_map%lm2m(lm)
+      !                   lm_glb = lm2(l,m)
+      !                   
+      !                   Geo_dist(lm)=CorPol_dist(lm)-leg_helper%dpR(lm_glb)+beta(nR)*leg_helper%preR(lm_glb)
+      !                   CLF_dist(lm)=CorPol_dist(lm)+LFPol_dist(lm)
+      !                   PLF_dist(lm)=LFPol_dist(lm)-leg_helper%dpR(lm_glb)+beta(nR)*leg_helper%preR(lm_glb)
+      !                   Mag_dist(lm)=Geo_dist(lm)+LFPol_dist(lm)
+      !                   Arc_dist(lm)=Geo_dist(lm)+Buo_dist(lm)
+      !                   ArcMag_dist(lm)=Mag_dist(lm)+Buo_dist(lm)
+      !                   CIA_dist(lm)=ArcMag_dist(lm)+AdvPol_dist(lm)
+      !                   !CIA_dist(lm)=CorPol(lm_glb)+Buo(lm_glb)+AdvPol(lm_glb)
+      !                end do
+      !
+      !                call hIntRms(Geo_dist(1:lm_loc),nR,1,lm_loc,0,Geo2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(CLF_dist(1:lm_loc),nR,1,lm_loc,0,CLF2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(PLF_dist(1:lm_loc),nR,1,lm_loc,0,PLF2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(Mag_dist(1:lm_loc),nR,1,lm_loc,0,Mag2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(Arc_dist(1:lm_loc),nR,1,lm_loc,0,Arc2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(ArcMag_dist(1:lm_loc),nR,1,lm_loc,0,ArcMag2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(CIA_dist(1:lm_loc),nR,1,lm_loc,0,CIA2hInt(0:l_max,nR),dist_map,.false.)               
+      !                
+      !                call mpi_iallreduce(MPI_IN_PLACE, Geo2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(1), ierr)
+      !                call mpi_iallreduce(MPI_IN_PLACE, CLF2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(2), ierr)
+      !                call mpi_iallreduce(MPI_IN_PLACE, PLF2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(3), ierr)
+      !                call mpi_iallreduce(MPI_IN_PLACE, Mag2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(4), ierr)
+      !                call mpi_iallreduce(MPI_IN_PLACE, Arc2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(5), ierr)
+      !                call mpi_iallreduce(MPI_IN_PLACE, CIA2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(6), ierr)
+      !                call mpi_iallreduce(MPI_IN_PLACE, ArcMag2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(7), ierr)
+      !                
+      !                call mpi_waitall(7, Rq(1:7), MPI_STATUSES_IGNORE, ierr )
+      !                
+      !                call gather_Flm(Geo_dist   , Geo)
+      !                call gather_Flm(CLF_dist   , CLF)
+      !                call gather_Flm(PLF_dist   , PLF)
+      !                call gather_Flm(Mag_dist   , Mag)
+      !                call gather_Flm(Arc_dist   , Arc)
+      !                call gather_Flm(ArcMag_dist, ArcMag)
+      !                call gather_Flm(CIA_dist   , CIA)
+      !---------------------------------------------------------------------------------------------
+      ! Not very charming, but the gathers will drop (those are local variables)
+      ! I am not sure yet, but maybe I can afford to do only a single mpi_iallreduce after ALL those 
+      ! lm loops which appear next. I think it is just a sum, but I need to double check it.
+      !---------------------------------------------------------------------------------------------
 
                do lm=1,lm_max
                   lmP =lm2lmP(lm)
@@ -942,51 +971,48 @@ contains
                call hIntRms(CIA,nR,1,lm_max,0,CIA2hInt(:,nR),st_map,.true.)
 
             end if
+!---------------------------------------------------------------------------------------------------
+!---------------------------------------------------------------------------------------------------
+!
+!           END OF POSTPONED
+!
+!---------------------------------------------------------------------------------------------------
+!---------------------------------------------------------------------------------------------------
 
             ! In case double curl is calculated dpdt is useless
             if ( (.not. l_double_curl) .or. lPressCalc ) then 
-               !PERFON('td_cv2')
-               !$OMP PARALLEL default(none) &
-               !$OMP private(lm,l,m,lmS,lmA,lmP,lmPS,lmPA) &
-               !$OMP private(AdvPol_loc,CorPol_loc) &
-               !$OMP shared(lm2l,lm2m,lm2lmS,lm2lmA,lm2lmP,lmP2lmpS,lmP2lmPA) &
-               !$OMP shared(lm_max,l_max,nR,l_corr,l_conv_nl) &
-               !$OMP shared(CorFac,or1,or2,dPhi0,dTheta3A,dTheta3S,dTheta1S,dTheta1A) &
-               !$OMP shared(z_Rloc,dPhi,leg_helper,dw_Rloc) &
-               !$OMP shared(CorPol,AdvPol,dpdt,this)
-               !LIKWID_ON('td_cv2')
-               !$OMP DO
-               do lm=2,lm_max
-                  l   =lm2l(lm)
-                  m   =lm2m(lm)
-                  lmS =lm2lmS(lm)
-                  lmA =lm2lmA(lm)
-                  lmP =lm2lmP(lm)
-                  lmPS=lmP2lmPS(lmP)
-                  lmPA=lmP2lmPA(lmP)
+               do lm=lm_maybe_skip_first,lm_loc
+                  l   =dist_map%lm2l(lm)
+                  m   =dist_map%lm2m(lm)
+                  lmS =dist_map%lm2lmS(lm)
+                  lmA =dist_map%lm2lmA(lm)
+                  lmP =dist_map%lm2lmP(lm)
+                  lmPS=dist_map%lmP2lmPS(lmP)
+                  lmPA=dist_map%lmP2lmPA(lmP)
+                  lm_glb = lm2(l,m) ! needed for leg_helper only!
        
                   !------ Recycle CorPol and AdvPol:
                   if ( l_corr ) then
                      !PERFON('td_cv2c')
                      if ( l < l_max .and. l > m ) then
                         CorPol_loc=                    two*CorFac*or2(nR) *  &
-                        &                    ( -dPhi0(lm) * ( dw_Rloc(lm,nR) &
-                        &                       +or1(nR)*leg_helper%dLhw(lm) &
+                        &                    ( -dPhi0_loc(lm) * ( dw_dist(lm,nR) &
+                        &                       +or1(nR)*leg_helper%dLhw(lm_glb) &
                         &                                                  ) &
-                        &                       +dTheta3A(lm)*z_Rloc(lmA,nR) &
-                        &                       +dTheta3S(lm)*z_Rloc(lmS,nR) &
+                        &                       +dTheta3A_loc(lm)*z_dist(lmA,nR) &
+                        &                       +dTheta3S_loc(lm)*z_dist(lmS,nR) &
                         &                    )
        
                      else if ( l == l_max ) then
-                        CorPol_loc=  two*CorFac*or2(nR) * ( -dPhi0(lm) *  &
-                                    ( dw_Rloc(lm,nR) + or1(nR)*leg_helper%dLhw(lm) ) )
+                        CorPol_loc=  two*CorFac*or2(nR) * ( -dPhi0_loc(lm) *  &
+                                    ( dw_dist(lm,nR) + or1(nR)*leg_helper%dLhw(lm_glb) ) )
        
                      else if ( l == m ) then
                         CorPol_loc=                    two*CorFac*or2(nR) *  &
-                        &                    ( -dPhi0(lm) * ( dw_Rloc(lm,nR) &
-                        &                       +or1(nR)*leg_helper%dLhw(lm) &
+                        &                    ( -dPhi0_loc(lm) * ( dw_dist(lm,nR) &
+                        &                       +or1(nR)*leg_helper%dLhw(lm_glb) &
                         &                                                   )&
-                        &                      +dTheta3A(lm)*z_Rloc(lmA,nR)  &
+                        &                      +dTheta3A_loc(lm)*z_dist(lmA,nR)  &
                         &                    )
        
                      end if
@@ -997,286 +1023,292 @@ contains
                   if ( l_conv_nl ) then
                      !PERFON('td_cv2nl')
                      if ( l > m ) then
-                        AdvPol_loc= dTheta1S(lm)*this%AdvtLM(lmPS) - &
-                        &           dTheta1A(lm)*this%AdvtLM(lmPA) + &
-                        &               dPhi(lm)*this%AdvpLM(lmP)
+                        AdvPol_loc= dTheta1S_loc(lm)*this_dist%AdvtLM(lmPS) - &
+                        &           dTheta1A_loc(lm)*this_dist%AdvtLM(lmPA) + &
+                        &               dPhi_loc(lm)*this_dist%AdvpLM(lmP)
                      else if ( l == m ) then
-                        AdvPol_loc=-dTheta1A(lm)*this%AdvtLM(lmPA) + &
-                        &               dPhi(lm)*this%AdvpLM(lmP)
+                        AdvPol_loc=-dTheta1A_loc(lm)*this_dist%AdvtLM(lmPA) + &
+                        &               dPhi_loc(lm)*this_dist%AdvpLM(lmP)
                      end if
                      !PERFOFF
                   else
                      AdvPol_loc=zero
                   end if
-                  dpdt(lm)=AdvPol_loc+CorPol_loc
+                  dpdt_dist(lm)=AdvPol_loc+CorPol_loc
        
                end do ! lm loop
-               !$OMP end do 
-               !LIKWID_OFF('td_cv2')
-               !$OMP END PARALLEL 
-               !PERFOFF
             end if
-
          else
-            do lm=2,lm_max
-               dwdt(lm) =0.0_cp
-               dzdt(lm) =0.0_cp
-               dpdt(lm) =0.0_cp
+            do lm=lm_maybe_skip_first,lm_loc
+               dwdt_dist(lm) =0.0_cp
+               dzdt_dist(lm) =0.0_cp
+               dpdt_dist(lm) =0.0_cp
             end do
          end if ! l_conv ?
 
       end if
-    
+!---------------------------------------------------------------------------------------------------
+!                    GATHER
+!---------------------------------------------------------------------------------------------------
+      !@>TODO: lots of things are set to zero (e.g. if some l_* flags are deactive)
+      !        those are, of course, unnecessary to gather. Others will bug everything
+      !        out if gathered e.g. dVxVhLM.
+      call gather_Flm(dwdt_dist   (1:lm_loc),dwdt   (1:lm_max)) 
+      call gather_Flm(dzdt_dist   (1:lm_loc),dzdt   (1:lm_max)) 
+      call gather_Flm(dpdt_dist   (1:lm_loc),dpdt   (1:lm_max)) 
+      call gather_Flm(AdvPol_dist (1:lm_loc),AdvPol (1:lm_max)) 
+      call gather_Flm(AdvTor_dist (1:lm_loc),AdvTor (1:lm_max)) 
+      call gather_Flm(CorPol_dist (1:lm_loc),CorPol (1:lm_max)) 
+      if (l_double_curl) call gather_Flm(dVxVhLM_dist(1:lm_loc),dVxVhLM(1:lm_max))
+      call gather_Flm(Buo_dist    (1:lm_loc),Buo    (1:lm_max)) 
+      call gather_Flm(LFPol_dist  (1:lm_loc),LFPol  (1:lm_max)) 
+      call gather_Flm(LFTor_dist  (1:lm_loc),LFTor  (1:lm_max)) 
+      
+!---------------------------------------------------------------------------------------------------
+!                    GATHER
+!---------------------------------------------------------------------------------------------------    
       if ( nBc == 0 ) then
-
+         
          if ( l_heat ) then
-            dsdt_loc  =epsc*epscProf(nR)!+opr/epsS*divKtemp0(nR)
-            dVSrLM(1)=this%VSrLM(1)
-            if ( l_TP_form ) dVPrLM(1)=this%VPrLM(1)
-            if ( l_anel ) then
-               if ( l_anelastic_liquid .or. l_TP_form ) then
-                  if ( l_mag_nl ) then
-                     dsdt_loc=dsdt_loc+                                        &
-                     &    ViscHeatFac*hdif_V(1)*temp0(nR)*this%ViscHeatLM(1)+  &
-                     &     OhmLossFac*hdif_B(1)*temp0(nR)*this%OhmLossLM(1)
+            
+            if (dist_map%lm2(0,0) > 0) then  ! if m=0 is in this rank
+               lm  = dist_map%lm2(0,0)
+
+               dsdt_loc  =epsc*epscProf(nR) !+opr/epsS*divKtemp0(nR)
+               dVSrLM_dist(lm)=this_dist%VSrLM(lm)
+               if ( l_TP_form ) dVPrLM_dist(lm)=this_dist%VPrLM(lm)
+               if ( l_anel ) then
+                  if ( l_anelastic_liquid .or. l_TP_form ) then
+                     if ( l_mag_nl ) then
+                        dsdt_loc=dsdt_loc+                                        &
+                        &    ViscHeatFac*hdif_V_loc(lm)*temp0(nR)*this_dist%ViscHeatLM(lm)+  &
+                        &     OhmLossFac*hdif_B_loc(lm)*temp0(nR)*this_dist%OhmLossLM(lm)
+                     else
+                        dsdt_loc=dsdt_loc+ &
+                        &    ViscHeatFac*hdif_V_loc(lm)*temp0(nR)*this_dist%ViscHeatLM(lm)
+                     end if
                   else
-                     dsdt_loc=dsdt_loc+ &
-                     &    ViscHeatFac*hdif_V(1)*temp0(nR)*this%ViscHeatLM(1)
-                  end if
-               else
-                  if ( l_mag_nl ) then
-                     dsdt_loc=dsdt_loc+ViscHeatFac*hdif_V(1)*this%ViscHeatLM(1)+ &
-                     &                  OhmLossFac*hdif_B(1)*this%OhmLossLM(1)
-                  else
-                     dsdt_loc=dsdt_loc+ViscHeatFac*hdif_V(1)*this%ViscHeatLM(1)
+                     if ( l_mag_nl ) then
+                        dsdt_loc=dsdt_loc+ViscHeatFac*hdif_V_loc(lm)*this_dist%ViscHeatLM(lm)+ &
+                        &                  OhmLossFac*hdif_B_loc(lm)*this_dist%OhmLossLM(lm)
+                     else
+                        dsdt_loc=dsdt_loc+ViscHeatFac*hdif_V_loc(lm)*this_dist%ViscHeatLM(lm)
+                     end if
                   end if
                end if
+               dsdt_dist(lm)=dsdt_loc
             end if
-            dsdt(1)=dsdt_loc
     
-            !PERFON('td_heat')
-            !$OMP PARALLEL DEFAULT(none) &
-            !$OMP private(lm,l,m,lmP,lmPS,lmPA,dsdt_loc) &
-            !$OMP shared(lm2l,lm2m,lm2lmP,lmP2lmPS,lmP2lmPA) &
-            !$OMP shared(lm_max,dsdt,dVSrLM,dTheta1S,dTheta1A,dPhi) &
-            !$OMP shared(l_anel,l_anelastic_liquid,l_mag_nl,nR) &
-            !$OMP shared(l_TP_form, dVPrLM) &
-            !$OMP shared(ViscHeatFac,hdif_V,OhmLossFac,hdif_B,temp0,this)
-            !LIKWID_ON('td_heat')
-            !$OMP DO
-            do lm=2,lm_max
-               l   =lm2l(lm)
-               m   =lm2m(lm)
-               lmP =lm2lmP(lm)
-               lmPS=lmP2lmPS(lmP)
-               lmPA=lmP2lmPA(lmP)
+            do lm=lm_maybe_skip_first,lm_loc
+               l   =dist_map%lm2l(lm)
+               m   =dist_map%lm2m(lm)
+               lmP =dist_map%lm2lmP(lm)
+               lmPS=dist_map%lmP2lmPS(lmP)
+               lmPA=dist_map%lmP2lmPA(lmP)
+               
                !------ This is horizontal heat advection:
                !PERFON('td_h1')
     
                if ( l > m ) then
-                  dsdt_loc= -dTheta1S(lm)*this%VStLM(lmPS) &
-                  &         +dTheta1A(lm)*this%VStLM(lmPA) &
-                  &         -dPhi(lm)*this%VSpLM(lmP)
+                  dsdt_loc= -dTheta1S_loc(lm)*this_dist%VStLM(lmPS) &
+                  &         +dTheta1A_loc(lm)*this_dist%VStLM(lmPA) &
+                  &         -dPhi_loc(lm)*this_dist%VSpLM(lmP)
                else if ( l == m ) then
-                  dsdt_loc=  dTheta1A(lm)*this%VStLM(lmPA) &
-                  &          -dPhi(lm)*this%VSpLM(lmP)
+                  dsdt_loc=  dTheta1A_loc(lm)*this_dist%VStLM(lmPA) &
+                  &          -dPhi_loc(lm)*this_dist%VSpLM(lmP)
                end if
                !PERFOFF
                !PERFON('td_h2')
                if ( l_anel ) then
                   if ( l_anelastic_liquid .or. l_TP_form ) then
                      dsdt_loc = dsdt_loc+ &
-                     &          ViscHeatFac*hdif_V(lm)*temp0(nR)*this%ViscHeatLM(lmP)
+                     &          ViscHeatFac*hdif_V_loc(lm)*temp0(nR)*this_dist%ViscHeatLM(lmP)
                      if ( l_mag_nl ) then
                         dsdt_loc = dsdt_loc+ &
-                        &          OhmLossFac*hdif_B(lm)*temp0(nR)*this%OhmLossLM(lmP)
+                        &          OhmLossFac*hdif_B_loc(lm)*temp0(nR)*this_dist%OhmLossLM(lmP)
                      end if
                   else
                      dsdt_loc = dsdt_loc+ &
-                     &          ViscHeatFac*hdif_V(lm)*this%ViscHeatLM(lmP)
+                     &          ViscHeatFac*hdif_V_loc(lm)*this_dist%ViscHeatLM(lmP)
                      if ( l_mag_nl ) then
                         dsdt_loc = dsdt_loc+ &
-                        &          OhmLossFac*hdif_B(lm)*this%OhmLossLM(lmP)
+                        &          OhmLossFac*hdif_B_loc(lm)*this_dist%OhmLossLM(lmP)
                      end if
                   end if
                end if
                !PERFOFF
                !-----   simplified form for linear onset !
                !        not ds not saved in the current program form!
-               !                 dsdt(lm)=
+               !                 dsdt_dist(lm)=
                !                    -dLh(lm)*w(lm,nR)*or2(nR)*dsR(1)
-               dVSrLM(lm)=this%VSrLM(lmP)
-               dsdt(lm) = dsdt_loc
-               if ( l_TP_form ) dVPrLM(lm)=this%VPrLM(lmP)
+               dVSrLM_dist(lm)=this_dist%VSrLM(lmP)
+               dsdt_dist(lm) = dsdt_loc
+               if ( l_TP_form ) dVPrLM_dist(lm)=this_dist%VPrLM(lmP)
             end do
-            !$OMP end do
-            !LIKWID_OFF('td_heat')
-            !$OMP END PARALLEL
-            !PERFOFF
          else
-            do lm=2,lm_max
-               dsdt(lm)  =0.0_cp
-               dVSrLM(lm)=0.0_cp
+            
+            do lm=lm_maybe_skip_first,lm_loc
+               dsdt_dist(lm)  =0.0_cp
+               dVSrLM_dist(lm)=0.0_cp
             end do
          end if
 
          if ( l_chemical_conv ) then
-            dVXirLM(1)=this%VXirLM(1)
-            dxidt(1)  =epscXi
+            if (dist_map%lm2(0,0) > 0) then  ! if m=0 is in this rank
+               lm  = dist_map%lm2(0,0)
+               dVXirLM_dist(lm)=this_dist%VXirLM(lm)
+               dxidt_dist(lm)  =epscXi
+            end if
     
-            !PERFON('td_xi_heat')
-            !$OMP PARALLEL DEFAULT(none) &
-            !$OMP private(lm,l,m,lmP,lmPS,lmPA,dxidt_loc) &
-            !$OMP shared(lm2l,lm2m,lm2lmP,lmP2lmPS,lmP2lmPA) &
-            !$OMP shared(lm_max,dxidt,dVXirLM,dTheta1S,dTheta1A,dPhi) &
-            !$OMP shared(nR,this) 
-            !LIKWID_ON('td_xi_heat')
-            !$OMP DO
-            do lm=2,lm_max
-               l   =lm2l(lm)
-               m   =lm2m(lm)
-               lmP =lm2lmP(lm)
-               lmPS=lmP2lmPS(lmP)
-               lmPA=lmP2lmPA(lmP)
+            do lm=lm_maybe_skip_first,lm_loc
+               l   =dist_map%lm2l(lm)
+               m   =dist_map%lm2m(lm)
+               lmP =dist_map%lm2lmP(lm)
+               lmPS=dist_map%lmP2lmPS(lmP)
+               lmPA=dist_map%lmP2lmPA(lmP)
                !------ This is horizontal heat advection:
-               !PERFON('td_h1')
     
                if ( l > m ) then
-                  dxidt_loc= -dTheta1S(lm)*this%VXitLM(lmPS) &
-                  &          +dTheta1A(lm)*this%VXitLM(lmPA) &
-                  &          -dPhi(lm)*this%VXipLM(lmP)
+                  dxidt_loc= -dTheta1S_loc(lm)*this_dist%VXitLM(lmPS) &
+                  &          +dTheta1A_loc(lm)*this_dist%VXitLM(lmPA) &
+                  &          -dPhi_loc(lm)*this_dist%VXipLM(lmP)
                else if ( l == m ) then
-                  dxidt_loc=  dTheta1A(lm)*this%VXitLM(lmPA) &
-                  &          -dPhi(lm)*this%VXipLM(lmP)
+                  dxidt_loc=  dTheta1A_loc(lm)*this_dist%VXitLM(lmPA) &
+                  &          -dPhi_loc(lm)*this_dist%VXipLM(lmP)
                end if
-               !PERFOFF
-               dVXirLM(lm)=this%VXirLM(lmP)
-               dxidt(lm) = dxidt_loc
+               dVXirLM_dist(lm)=this_dist%VXirLM(lmP)
+               dxidt_dist(lm)  =dxidt_loc
             end do
-            !$OMP end do
-            !LIKWID_OFF('td_xi_heat')
-            !$OMP END PARALLEL
-            !PERFOFF
          end if
     
          if ( l_mag_nl .or. l_mag_kin  ) then
-            !PERFON('td_magnl')
-    
-            !$OMP PARALLEL do default(none) &
-            !$OMP private(lm,l,m,lmP,lmPS,lmPA) &
-            !$OMP shared(lm_max,lm2l,lm2m,lm2lmP,lmP2lmPS,lmP2lmPA) &
-            !$OMP shared(dbdt,djdt,dTheta1S,dTheta1A,dPhi) &
-            !$OMP shared(dLh,or4,dVxBhLM,r,nR,this)
-            do lm=1,lm_max
-               if (lm == 1) then
-                  lmP=1
-                  lmPA=lmP2lmPA(lmP)
-                  dVxBhLM(lm)= -r(nR)*r(nR)* dTheta1A(lm)*this%VxBtLM(lmPA)
-                  dbdt(lm)   = -dTheta1A(lm)*this%VxBpLM(lmPA)
-                  djdt(lm)   = zero
-                  cycle
-               end if
-               l   =lm2l(lm)
-               m   =lm2m(lm)
-               lmP =lm2lmP(lm)
-               lmPS=lmP2lmPS(lmP)
-               lmPA=lmP2lmPA(lmP)
-    
+            do lm=1,lm_loc
+               l   =dist_map%lm2l(lm)
+               m   =dist_map%lm2m(lm)
+               lmP =dist_map%lm2lmP(lm)
+               lmPS=dist_map%lmP2lmPS(lmP)
+               lmPA=dist_map%lmP2lmPA(lmP)
+               
+               if ((l == 0) .and. (m == 0)) then
+                  dVxBhLM_dist(lm)= -r(nR)*r(nR)* dTheta1A_loc(lm)*this_dist%VxBtLM(lmPA)
+                  dbdt_dist(lm)   = -dTheta1A_loc(lm)*this_dist%VxBpLM(lmPA)
+                  djdt_dist(lm)   = zero
+                  cycle ! <---------------------------
+
                !------- This is the radial part of the dynamo terms \curl(VxB)
-               !PERFON('td_mnl1')
-               if ( l > m ) then
-                  dbdt(lm)=  dTheta1S(lm)*this%VxBpLM(lmPS) &
-                  &         -dTheta1A(lm)*this%VxBpLM(lmPA) &
-                  &         -dPhi(lm)    *this%VxBtLM(lmP)
+               else if ( l > m ) then
+
+                  dbdt_dist(lm)=  dTheta1S_loc(lm)*this_dist%VxBpLM(lmPS) &
+                  &         -dTheta1A_loc(lm)*this_dist%VxBpLM(lmPA) &
+                  &         -dPhi_loc(lm)    *this_dist%VxBtLM(lmP)
+
                else if ( l == m ) then
-                  dbdt(lm)= -dTheta1A(lm)*this%VxBpLM(lmPA) &
-                  &         -dPhi(lm)    *this%VxBtLM(lmP)
+                  dbdt_dist(lm)= -dTheta1A_loc(lm)*this_dist%VxBpLM(lmPA) &
+                  &         -dPhi_loc(lm)    *this_dist%VxBtLM(lmP)
                end if
-               !PERFOFF
     
                !------- Radial component of
                !           \curl\curl(UxB) = \grad\div(UxB) - \laplace(VxB)
     
                !------- This is the radial part of \laplace (UxB)
-               djdt(lm)=dLh(lm)*or4(nR)*this%VxBrLM(lmP)
+               djdt_dist(lm)=dLh_loc(lm)*or4(nR)*this_dist%VxBrLM(lmP)
     
                !------- This is r^2 * horizontal divergence of (UxB)
                !        Radial derivative performed in get_dr_td
-               !PERFON('td_mnl2')
                if ( l > m ) then
-                  dVxBhLM(lm)=            r(nR)*r(nR)* ( &
-                  &    dTheta1S(lm)*this%VxBtLM(lmPS) -  &
-                  &    dTheta1A(lm)*this%VxBtLM(lmPA) +  &
-                  &    dPhi(lm)*this%VxBpLM(lmP)  )
+                  dVxBhLM_dist(lm)=            r(nR)*r(nR)* ( &
+                  &    dTheta1S_loc(lm)*this_dist%VxBtLM(lmPS) -  &
+                  &    dTheta1A_loc(lm)*this_dist%VxBtLM(lmPA) +  &
+                  &    dPhi_loc(lm)*this_dist%VxBpLM(lmP)  )
                else if ( l == m ) then
-                  dVxBhLM(lm)=              r(nR)*r(nR)* ( &
-                  &    - dTheta1A(lm)*this%VxBtLM(lmPA) +  &
-                  &    dPhi(lm)*this%VxBpLM(lmP)  )
+                  dVxBhLM_dist(lm)=              r(nR)*r(nR)* ( &
+                  &    - dTheta1A_loc(lm)*this_dist%VxBtLM(lmPA) +  &
+                  &    dPhi_loc(lm)*this_dist%VxBpLM(lmP)  )
                end if
-               !PERFOFF
             end do
-            !$OMP END PARALLEL DO
-            !PERFOFF
-         else
-            if ( l_mag ) then
-               do lm=1,lm_max
-                  dbdt(lm)   =zero
-                  djdt(lm)   =zero
-                  dVxBhLM(lm)=zero
-               end do
-            end if
+         else if ( l_mag ) then
+            do lm=1,lm_loc
+               dbdt_dist(lm)   =zero
+               djdt_dist(lm)   =zero
+               dVxBhLM_dist(lm)=zero
+            end do
          end if
+!---------------------------------------------------------------------------------------------------
+!                    GATHER
+!---------------------------------------------------------------------------------------------------
+         call gather_Flm(dsdt_dist   (1:lm_loc),dsdt   (1:lm_max)) 
+         call gather_Flm(dVSrLM_dist (1:lm_loc),dVSrLM (1:lm_max)) 
+         if ( l_heat .and. l_TP_form ) call gather_Flm(dVPrLM_dist (1:lm_loc),dVPrLM (1:lm_max)) 
+         if ( l_chemical_conv ) call gather_Flm(dVXirLM_dist(1:lm_loc), dVXirLM (1:lm_max)) 
+         if ( l_chemical_conv ) call gather_Flm(dxidt_dist  (1:lm_loc), dxidt   (1:lm_max)) 
+         if ( l_mag_nl .or. l_mag_kin .or. l_mag ) call gather_Flm(dbdt_dist   (1:lm_loc), dbdt   (1:lm_max)) 
+         if ( l_mag_nl .or. l_mag_kin .or. l_mag ) call gather_Flm(djdt_dist   (1:lm_loc), djdt   (1:lm_max)) 
+         if ( l_mag_nl .or. l_mag_kin .or. l_mag ) call gather_Flm(dVxBhLM_dist(1:lm_loc), dVxBhLM(1:lm_max)) 
+!---------------------------------------------------------------------------------------------------
+!                    GATHER
+!---------------------------------------------------------------------------------------------------   
 
+!---------------------------------------------------------------------------------------------------
+!                    DONE
+!---------------------------------------------------------------------------------------------------
       else   ! boundary !
-         !PERFON('td_bnd')
+
          if ( l_mag_nl .or. l_mag_kin ) then
     
             !----- Stress free boundary, only nl mag. term for poloidal field needed.
             !      Because the radial derivative will be taken, this will contribute to
             !      the other radial grid points.
-            dVxBhLM(1)=zero
-            dVSrLM(1) =zero
-            do lm=2,lm_max
-               l   =lm2l(lm)
-               m   =lm2m(lm)
-               lmP =lm2lmP(lm)
-               lmPS=lmP2lmPS(lmP)   ! l-1
-               lmPA=lmP2lmPA(lmP)   ! l+1
-               if ( l > m ) then
-                  dVxBhLM(lm)=r(nR)*r(nR)* (               &
-                  &      dTheta1S(lm)*this%VxBtLM(lmPS) -  &
-                  &      dTheta1A(lm)*this%VxBtLM(lmPA) +  &
-                  &          dPhi(lm)*this%VxBpLM(lmP)  )
+            do lm=1,lm_loc
+               l   = dist_map%lm2l(lm)
+               m   = dist_map%lm2m(lm)
+               lmP = dist_map%lm2lmP(lm)
+               lmPS= dist_map%lmP2lmPS(lmP)   ! l-1
+               lmPA= dist_map%lmP2lmPA(lmP)   ! l+1
+               
+               if ((l == 0) .and. (m == 0)) then
+                  dVxBhLM_dist(lm)=zero
+                  dVSrLM_dist(lm) =zero
+                  cycle ! <---------------------------
+               else if ( l > m ) then
+                  dVxBhLM_dist(lm)=r(nR)*r(nR)* (               &
+                  &      dTheta1S_loc(lm)*this_dist%VxBtLM(lmPS) -  &
+                  &      dTheta1A_loc(lm)*this_dist%VxBtLM(lmPA) +  &
+                  &          dPhi_loc(lm)*this_dist%VxBpLM(lmP)  )
                else if ( l == m ) then ! (l-1) not allowed !
-                  dVxBhLM(lm)=r(nR)*r(nR)* (               &
-                  &    - dTheta1A(lm)*this%VxBtLM(lmPA) +  &
-                  &    dPhi(lm)*this%VxBpLM(lmP)  )
+                  dVxBhLM_dist(lm)=r(nR)*r(nR)* (               &
+                  &    - dTheta1A_loc(lm)*this_dist%VxBtLM(lmPA) +  &
+                  &    dPhi_loc(lm)*this_dist%VxBpLM(lmP)  )
                end if
-               dVSrLM(lm)=zero
+               dVSrLM_dist(lm)=zero
             end do
     
          else
-            do lm=1,lm_max
-               if ( l_mag ) dVxBhLM(lm)=zero
-               dVSrLM(lm) =zero
+            do lm=1,lm_loc
+               if ( l_mag ) dVxBhLM_dist(lm)=zero
+               dVSrLM_dist(lm) =zero
             end do
          end if
          if ( l_double_curl ) then
-            do lm=1,lm_max
-               dVxVhLM(lm)=zero
+            do lm=1,lm_loc
+               dVxVhLM_dist(lm)=zero
             end do
          end if
          if ( l_chemical_conv ) then
-            do lm=1,lm_max
-               dVXirLM(lm)=zero
+            do lm=1,lm_loc
+               dVXirLM_dist(lm)=zero
             end do
          end if
          if ( l_TP_form ) then
-            do lm=1,lm_max
-               dVPrLM(lm)=zero
+            do lm=1,lm_loc
+               dVPrLM_dist(lm)=zero
             end do
          end if
-    
+         
+         if ( l_mag_nl .or. l_mag_kin .or. l_mag ) call gather_Flm(dVxBhLM_dist(1:lm_loc), dVxBhLM(1:lm_max)) 
+         call gather_Flm(dVSrLM_dist (1:lm_loc), dVSrLM(1:lm_max)) 
+         if ( l_double_curl ) call gather_Flm(dVxVhLM_dist (1:lm_loc), dVxVhLM(1:lm_max))
+         if ( l_chemical_conv ) call gather_Flm(dVXirLM_dist (1:lm_loc), dVXirLM(1:lm_max)) 
+         if ( l_TP_form ) call gather_Flm(dVPrLM_dist (1:lm_loc), dVPrLM(1:lm_max)) 
       end if  ! boundary ? lvelo ?
 
    end subroutine get_td_dist

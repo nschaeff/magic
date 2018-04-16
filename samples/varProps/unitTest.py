@@ -64,7 +64,7 @@ class VariableProperties(unittest.TestCase):
                 stderr=open(os.devnull, 'wb'))
         cmd = 'cat e_kin.cheb e_kin.fd > e_kin.test'
         sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
-                stderr=open(self.dir + '/stderr.txt', 'wb'))
+                stderr=sp.STDOUT)
 
     def tearDown(self):
         # Cleaning when leaving

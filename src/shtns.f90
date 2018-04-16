@@ -46,9 +46,8 @@ contains
 
       integer :: norm
 
-      if ( rank == 0 ) then
-         call shtns_verbose(1)
-      end if
+      call shtns_verbose(0)
+      if ( rank == 0 ) call shtns_verbose(1)
 
       call shtns_use_threads(0)
 
@@ -59,9 +58,7 @@ contains
                             1.e-10_cp, n_theta_max, n_phi_max)
       call shtns_save_cfg(0)
 
-      if ( rank == 0 ) then
-         call shtns_verbose(0)
-      end if
+      if ( rank == 0 ) call shtns_verbose(0)
 
       call shtns_set_size(l_max+1, m_max/minc, minc, norm)
       call shtns_precompute(SHT_QUICK_INIT, SHT_PHI_CONTIGUOUS, &

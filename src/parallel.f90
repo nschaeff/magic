@@ -43,16 +43,20 @@ contains
 #else
       nThreads = 1
 #endif
-
       chunksize=16
 
    end subroutine parallel
 !------------------------------------------------------------------------------
    subroutine initialize_cartesian
 #ifdef WITH_MPI
-      integer :: dims(2), coords(2), colour, i
+      integer :: dims(2), coords(2), i
       logical :: periods(2)
-      dims    = (/n_procs_theta, n_procs_r/)
+      
+      ! All arrays will be allocated as (θ,r), meaning that neighbouring 
+      ! ranks should have contiguous θ. For that end, I need to flip the 
+      ! dimensions when creating communicators using MPI because it uses 
+      ! row major instead of Fortran's column major.
+      dims    = (/n_procs_r,n_procs_theta/)
       periods = (/.true., .false./)
       
       
@@ -66,12 +70,12 @@ contains
       call MPI_Cart_Coords(comm_cart,rank,2,coords,ierr)
       call check_MPI_error(ierr)
       
-      call MPI_Comm_Split(comm_cart, coords(1), rank, comm_r, ierr)
+      call MPI_Comm_Split(comm_cart, coords(2), rank, comm_r, ierr)
       call check_MPI_error(ierr)
       call MPI_Comm_Rank(comm_r, coord_r, ierr) 
       call check_MPI_error(ierr)
       
-      call MPI_Comm_Split(comm_cart, coords(2), rank, comm_theta, ierr)
+      call MPI_Comm_Split(comm_cart, coords(1), rank, comm_theta, ierr)
       call MPI_Comm_Rank(comm_theta, coord_theta, ierr) 
       call check_MPI_error(ierr)
       
@@ -84,9 +88,9 @@ contains
       
       do i=0,n_procs-1
          call mpi_cart_coords(comm_cart, i, 2, coords, ierr)
-         rank2cart_theta(i) = coords(1)
-         rank2cart_r(i)     = coords(2)
-         cart2rank(coords(1),coords(2)) = i
+         rank2cart_theta(i) = coords(2)
+         rank2cart_r(i)     = coords(1)
+         cart2rank(coords(2),coords(1)) = i
       end do
       
 #endif WITH_MPI

@@ -56,7 +56,7 @@ class ZeroGruneisen(unittest.TestCase):
         os.chdir(self.dir)
         cmd = '%s %s/input.nml' % (self.execCmd, self.dir)
         sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
-                    stderr=open(self.dir + '/stderr.txt', 'wb'))
+                    stderr=sp.STDOUT)
 
     def tearDown(self):
         # Cleaning when leaving

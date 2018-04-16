@@ -67,10 +67,10 @@ class CouetteAxi(unittest.TestCase):
         os.chdir(self.dir)
         cmd = '%s %s/inputStart.nml' % (self.execCmd, self.dir)
         sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
-                    stderr=open(self.dir + '/stderr.txt', 'wb'))
+                    stderr=sp.STDOUT)
         cmd = '%s %s/%s' % (self.execCmd, self.dir, inpFile)
         sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
-                    stderr=open(self.dir + '/stderr.txt', 'wb'))
+                    stderr=sp.STDOUT)
 
     def tearDown(self):
         # Cleaning when leaving

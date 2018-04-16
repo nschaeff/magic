@@ -527,6 +527,9 @@ contains
             !PERFOFF
     
             if ( lRmsCalc ) then
+            
+               print *, "Break it! I'm skiping this part for now!"
+               stop
     
                if ( l_conv_nl ) then
                   call hIntRms(AdvPol,nR,1,lm_max,0,Adv2hInt(:,nR),st_map, .false.)

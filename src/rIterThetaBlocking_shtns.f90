@@ -465,14 +465,14 @@ contains
       
       call this%gather_all(this%nR)   
       
-!       call this%nl_lm_dist%get_td_dist(this%nR, this%nBc, this%lRmsCalc, &
-!            &                 this%lPressCalc, dVSrLM, dVPrLM, dVXirLM,   &
-!            &                 dVxVhLM, dVxBhLM, dwdt, dzdt, dpdt, dsdt,   &
-!            &                 dxidt, dbdt, djdt, this%leg_helper, this%nl_lm)
-      call this%nl_lm%get_td(this%nR, this%nBc, this%lRmsCalc,           &
+      call this%nl_lm_dist%get_td_dist(this%nR, this%nBc, this%lRmsCalc, &
            &                 this%lPressCalc, dVSrLM, dVPrLM, dVXirLM,   &
            &                 dVxVhLM, dVxBhLM, dwdt, dzdt, dpdt, dsdt,   &
-           &                 dxidt, dbdt, djdt, this%leg_helper)
+           &                 dxidt, dbdt, djdt, this%leg_helper, this%nl_lm)
+!       call this%nl_lm%get_td(this%nR, this%nBc, this%lRmsCalc,           &
+!            &                 this%lPressCalc, dVSrLM, dVPrLM, dVXirLM,   &
+!            &                 dVxVhLM, dVxBhLM, dwdt, dzdt, dpdt, dsdt,   &
+!            &                 dxidt, dbdt, djdt, this%leg_helper)
 
 
       !PERFOFF

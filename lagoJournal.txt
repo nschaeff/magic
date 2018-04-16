@@ -1,12 +1,56 @@
-2018-04-11
+2018-04-13
 -----------------------------------------------------------------------
+- I've been using the following commit as "original-magic":
+  - 1a90f4c4248bf766b0816cc652ae3ce11fe89368
+  - Date:   Tue Jun 27 10:12:47 2017 +0200
+
+✔ leg_helper.f90
+  - (initialize) I basically change dthe name of the variables to 
+  reflect their functionality.
+  - (legPrepG) this is strictly parallel now. It won't work for sequential 
+  cases
+  ✘ (legPrep_IC) [TODO]
+  
+✘ [TODO] replace MPI_DOUBLE_COMPLEX by MPI_DEF_COMPLEX in 
+  truncation.f90 (in special for the gather functions)
+
 ✔ added rank2cart_r, rank2cart_theta and cart2rank variables to help
   identifying the distribution of the cartesian grid.
   
-✘ [TODO] I need to review the cart_comm. Maybe it would be best to 
-  flip the r/θ coordinates because right now, the gather_Flm routines
-  (and related) are communicating with faraway neighbours (e.g.
-  0,4,8,16 instead of 0,1,2,3)
+✔ dimensions of cart_comm flipped to favour theta-locality
+
+✔ Current status of magic_wizard tests:
+  (n_procs_r=8, n_procs_theta=4)
+  - dynamo_benchmark
+  - varProps
+  - finite_differences
+  - boussBenchSat
+  - doubleDiffusion
+  ✘ couetteAxi: here m=0. It confuses my implementation. I need to rethink the distribution in 
+                this case, or force n_procs_theta=1.
+  - precession
+  - testRestart
+  - testTruncations
+  - testMapping
+  - testRadialOutputs
+  - hydro_bench_anel
+  ✘ fluxPerturbation: there is a [BUG] here. It happens at line output.f90:809 and it is only fired 
+                      if cmake is called with -DCMAKE_BUILD_TYPE=Debug. In this line, it generates 
+                      a NaN (sqrt of a negative real number) which is neglected at 
+                      -DCMAKE_BUILD_TYPE=Release. I've reported this before, but even in the master 
+                      branch (779796945c82) this bug is still present.
+  - isothermal_nrho3
+  - dynamo_benchmark_condICrotIC
+  ✘ varCond:   it calls movie_gather_frames_to_rank0 which is not yet parallelized
+  ✘ testOutputs:           diagnostics not yet parallelized
+  ✘ testRMSOutputs:        diagnostics not yet parallelized
+  ✘ testCoeffOutputs:      diagnostics not yet parallelized
+  ✘ testGraphMovieOutputs: diagnostics not yet parallelized
+  ✘ testTOGeosOutputs:     diagnostics not yet parallelized
+  
+  Command:
+  ./magic_wizard.py --use-mpi --use-mkl --use-shtns --mpicmd=srun --extracmd="n_procs_r=4 n_procs_theta=8" --nranks=32 --link --name="dynamo_benchmark, varProps, finite_differences, boussBenchSat, doubleDiffusion, couetteAxi, precession, testRestart, testTruncations, testMapping, hydro_bench_anel, fluxPerturbation, isothermal_nrho3, dynamo_benchmark_condICrotIC, varCond"
+
 
 2018-04-03
 ------------------------------------------------------------------------

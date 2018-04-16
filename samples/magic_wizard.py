@@ -441,7 +441,9 @@ if __name__ == '__main__':
     ## Run cmake
     if args.link:
       print('1/2. Symbolic Linking   ')
-      print('----------------------\n')
+      print('----------------------')
+      print('Source: ' + os.path.abspath(startdir + '/../build/magic.exe'))
+      print('Destination: ' + os.path.abspath(execDir+'/magic.exe\n'))
       try:
          os.mkdir(execDir)
       except:

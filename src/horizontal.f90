@@ -69,6 +69,7 @@ module horizontal_data
    real(cp), public, allocatable :: dTheta2S_loc(:),dTheta2A_loc(:)
    real(cp), public, allocatable :: dTheta3S_loc(:),dTheta3A_loc(:)
    real(cp), public, allocatable :: dTheta4S_loc(:),dTheta4A_loc(:)
+   real(cp), public, allocatable :: hdif_B_loc(:),hdif_V_loc(:),hdif_S_loc(:),hdif_Xi_loc(:)
    
    !-- DEPRECATED arrays depending on l and m:
    real(cp), private, allocatable :: D_m(:) ! To be removed; D_m_loc replaces it
@@ -135,12 +136,17 @@ contains
       !-- Distributed arrays depending on l and m:
       allocate( dPhi_loc(lm_loc) )
       allocate( dPhi0_loc(lm_loc) )
+!       allocate( dPhi02_loc(lm_loc) )
+      allocate( dLH_loc(lm_loc) )
       allocate( dTheta1S_loc(lm_loc), dTheta1A_loc(lm_loc) )
       allocate( dTheta2S_loc(lm_loc), dTheta2A_loc(lm_loc) )
       allocate( dTheta3S_loc(lm_loc), dTheta3A_loc(lm_loc) )
       allocate( dTheta4S_loc(lm_loc), dTheta4A_loc(lm_loc) )     
-      allocate( dLH_loc(lm_loc) )
+!       allocate( D_l_loc(lm_loc),D_lP1_loc(lm_loc) )
+!       allocate( D_mc2m_loc(n_m_max) )
       allocate( D_m_loc(lm_loc) )
+      allocate( hdif_B_loc(lm_loc),hdif_V_loc(lm_loc),hdif_S_loc(lm_loc) )
+      allocate( hdif_Xi_loc(lm_loc) )
 
       !-- Limiting l for a given m, used in legtf
       allocate( lStart(n_m_max),lStop(n_m_max) )
@@ -165,6 +171,8 @@ contains
       deallocate( dPhi_loc, dPhi0_loc, dLH_loc, D_m_loc)
       deallocate( dTheta1S_loc, dTheta2S_loc, dTheta3S_loc, dTheta4S_loc )
       deallocate( dTheta1A_loc, dTheta2A_loc, dTheta3A_loc, dTheta4A_loc )
+      deallocate( hdif_B_loc, hdif_V_loc, hdif_S_loc )
+      deallocate( hdif_Xi_loc )
 
       if ( .not. l_axi ) call finalize_fft()
 
@@ -421,6 +429,10 @@ contains
       call slice_Flm(dTheta2S, dTheta2S_loc)
       call slice_Flm(dTheta3S, dTheta3S_loc)
       call slice_Flm(dTheta4S, dTheta4S_loc)
+      call slice_Flm(hdif_B,  hdif_B_loc)
+      call slice_Flm(hdif_V,  hdif_V_loc)
+      call slice_Flm(hdif_S,  hdif_S_loc)
+      call slice_Flm(hdif_Xi, hdif_Xi_loc)
       
    end subroutine horizontal
 !------------------------------------------------------------------------------

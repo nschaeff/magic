@@ -27,7 +27,7 @@ module distributed_theta
              get_distributed_lm_mapping
    
  
-   type(mappings), public, target :: dist_map
+   type(mappings), public :: dist_map
 
 contains
 

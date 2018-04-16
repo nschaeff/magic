@@ -10,7 +10,7 @@ module radialLoop
        &            l_cond_ic, l_mag_kin, l_cond_ma, l_mag_nl,               &
        &            l_single_matrix, l_double_curl, l_chemical_conv
    use constants, only: zero
-   use parallel_mod, only: coord_r, n_procs_r, n_procs_theta, rank, coord_theta
+   use parallel_mod, only: coord_r, n_procs_r, n_procs_theta, rank, coord_theta, cart2rank
    use radial_data,only: nRstart,nRstop,n_r_cmb, nRstartMag, nRstopMag, &
        &                 n_r_icb
 #ifdef WITH_LIKWID
@@ -172,7 +172,6 @@ contains
       logical :: lGraphHeader    ! Write header into graph file
       logical :: isRadialBoundaryPoint
 
-
       PERFON('rloop')
       !LIKWID_ON('rloop')
       lGraphHeader=l_graph
@@ -280,7 +279,6 @@ contains
               & lMagNlBc,l_graph,lViscBcCalc,lFluxProfCalc,lPerpParCalc,     &
               & lPressCalc, l_probe_out)
 
-!          if (nBc/=0) write(*,'(A,4I)') "===nBc====> ", coord_r, coord_theta, nRstart, nRstop
          call this_rIteration%do_iteration(nR,nBc,time,dt,dtLast,              &
               & dsdt(:,nR),dwdt(:,nR),dzdt(:,nR),dpdt(:,nR),dxidt(:,nR),       &
               & dbdt(:,nR_Mag),djdt(:,nR_Mag),dVxVhLM(:,nR),dVxBhLM(:,nR_Mag), &

@@ -244,7 +244,6 @@ contains
       call distribute_round_robin(lmP_dist, l_max+1, m_max, minc)
       call distribute_round_robin(lm_dist,  l_max  , m_max, minc)
       
-      
       n_m_loc = n_m_ext - 1
       if (lmP_dist(coord_theta,n_m_ext,1) > -1) n_m_loc = n_m_ext
       
