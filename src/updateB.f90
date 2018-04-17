@@ -371,7 +371,7 @@ contains
                   end if
 
                   rhs1(n_r_max,lmB,threadid)=0.0_cp
-                  if ( kbotb == 2 ) rhs1(n_r_max-1,lmB,threadid)=0.0_cp
+                  !if ( kbotb == 2 ) rhs1(n_r_max-1,lmB,threadid)=0.0_cp
 
                   rhs2(n_r_max,lmB,threadid)=0.0_cp
                   if ( m1 == 0 ) then   ! Magnetoconvection boundary conditions
@@ -910,9 +910,9 @@ contains
             &                       rscheme_oc%rMat(1,nR_out) + &
             &       conductance_ma*rscheme_oc%drMat(1,nR_out) )
          else if ( ktopb == 2 ) then
-            call abortRun('! Boundary condition ktopb=2 not defined!')
+            bMat(1,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(1,nR_out)
+            jMat(1,nR_out)=rscheme_oc%rnorm* rscheme_oc%drMat(1,nR_out)
          else if ( ktopb == 4 ) then
-
             !----- pseudo vacuum condition, field has only
             !      a radial component, horizontal components
             !      vanish when aj and db are zero:
@@ -929,8 +929,8 @@ contains
             jMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(n_r_max,nR_out)
          else if ( kbotb == 2 ) then
             !----------- perfect conducting IC
-            bMat(n_r_max-1,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(n_r_max,nR_out)
-            jMat(n_r_max,nR_out)  =rscheme_oc%rnorm* rscheme_oc%drMat(n_r_max,nR_out)
+            bMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(n_r_max,nR_out)
+            jMat(n_r_max,nR_out)=rscheme_oc%rnorm* rscheme_oc%drMat(n_r_max,nR_out)
          else if ( kbotb == 3 ) then
             !---------- finite conducting IC, four boundary conditions:
             !           continuity of b,j, (d b)/(d r) and (d j)/(d r)/sigma.
@@ -991,7 +991,7 @@ contains
             bMat(n_r_max,nR_out)  =0.0_cp
             jMat(n_r_max,nR_out)  =0.0_cp
          else if ( kbotb == 2 ) then
-            bMat(n_r_max-1,nR_out)=0.0_cp
+            bMat(n_r_max,nR_out)=0.0_cp
             jMat(n_r_max,nR_out)  =0.0_cp
          else if ( kbotb == 3 ) then
             bMat(n_r_max,nR_out)  =0.0_cp
