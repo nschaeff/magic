@@ -3,12 +3,13 @@ module radialLoop
 
    use precision_mod
    use mem_alloc, only: memWrite, bytes_allocated
-   use truncation, only: lm_max, lm_maxMag, l_max, l_maxMag, lmP_max
+   use truncation
    use physical_parameters, only: ktopv, kbotv
    use blocking, only: nThetaBs, sizeThetaB
    use logic, only: l_dtB, l_mag, l_mag_LF, lVerbose, l_rot_ma, l_rot_ic,    &
        &            l_cond_ic, l_mag_kin, l_cond_ma, l_mag_nl,               &
-       &            l_single_matrix, l_double_curl, l_chemical_conv
+       &            l_single_matrix, l_double_curl, l_chemical_conv,         &
+       &            l_b_nl_icb, l_b_nl_cmb, l_TP_form
    use constants, only: zero
    use parallel_mod, only: coord_r, n_procs_r, n_procs_theta, rank, coord_theta, cart2rank
    use radial_data,only: nRstart,nRstop,n_r_cmb, nRstartMag, nRstopMag, &
@@ -171,6 +172,22 @@ contains
       logical :: lDeriv,lOutBc,lMagNlBc
       logical :: lGraphHeader    ! Write header into graph file
       logical :: isRadialBoundaryPoint
+      
+      !--- Duplications - yay -.-"
+      complex(cp) :: dwdt_dist(lm_loc),dzdt_dist(lm_loc)
+      complex(cp) :: dpdt_dist(lm_loc),dsdt_dist(lm_loc)
+      complex(cp) :: dxidt_dist(lm_loc)
+      complex(cp) :: dbdt_dist(lm_locMag),djdt_dist(lm_locMag)
+      complex(cp) :: dVxBhLM_dist(lm_locMag)
+      complex(cp) :: dVxVhLM_dist(lm_loc)
+      complex(cp) :: dVSrLM_dist(lm_loc)
+      complex(cp) :: dVXirLM_dist(lm_loc)
+      complex(cp) :: dVPrLM_dist(lm_loc)
+      
+      complex(cp) :: br_vt_lm_cmb_dist(lmP_loc) ! product br*vt at CMB
+      complex(cp) :: br_vp_lm_cmb_dist(lmP_loc) ! product br*vp at CMB
+      complex(cp) :: br_vt_lm_icb_dist(lmP_loc) ! product br*vt at ICB
+      complex(cp) :: br_vp_lm_icb_dist(lmP_loc) ! product br*vp at ICB
 
       PERFON('rloop')
       !LIKWID_ON('rloop')
@@ -279,11 +296,13 @@ contains
               & lMagNlBc,l_graph,lViscBcCalc,lFluxProfCalc,lPerpParCalc,     &
               & lPressCalc, l_probe_out)
 
+         call this_rIteration%slice_all(nR)
+         
          call this_rIteration%do_iteration(nR,nBc,time,dt,dtLast,              &
-              & dsdt(:,nR),dwdt(:,nR),dzdt(:,nR),dpdt(:,nR),dxidt(:,nR),       &
-              & dbdt(:,nR_Mag),djdt(:,nR_Mag),dVxVhLM(:,nR),dVxBhLM(:,nR_Mag), &
-              & dVSrLM(:,nR),dVPrLM(:,nR),dVXirLM(:,nR),br_vt_lm_cmb,          &
-              & br_vp_lm_cmb,br_vt_lm_icb,br_vp_lm_icb,lorentz_torque_ic,      &
+              & dsdt_dist,dwdt_dist,dzdt_dist,dpdt_dist,dxidt_dist,       &
+              & dbdt_dist,djdt_dist,dVxVhLM_dist,dVxBhLM_dist, &
+              & dVSrLM_dist,dVPrLM_dist,dVXirLM_dist,br_vt_lm_cmb_dist,          &
+              & br_vp_lm_cmb_dist,br_vt_lm_icb_dist,br_vp_lm_icb_dist,lorentz_torque_ic,      &
               & lorentz_torque_ma,HelLMr(:,nR),Hel2LMr(:,nR),HelnaLMr(:,nR),   &
               & Helna2LMr(:,nR),viscLMr(:,nR),uhLMr(:,nR),duhLMr(:,nR),        &
               & gradsLMr(:,nR),fconvLMr(:,nR),fkinLMr(:,nR),fviscLMr(:,nR),    &
@@ -291,7 +310,32 @@ contains
               & EparLMr(:,nR),EperpaxiLMr(:,nR),EparaxiLMr(:,nR))
 
          dtrkc(nR)=this_rIteration%dtrkc      
-         dthkc(nR)=this_rIteration%dthkc      
+         dthkc(nR)=this_rIteration%dthkc
+         
+         !@>TODO: lots of things are set to zero (e.g. if some l_* flags are deactive)
+         !        those are, of course, unnecessary to gather. Others will bug everything
+         !        out if gathered e.g. dVxVhLM.
+         call this_rIteration%gather_all(nR)   
+         call gather_Flm(dsdt_dist   (1:lm_loc), dsdt  (1:lm_max,nR)) 
+         call gather_Flm(dwdt_dist   (1:lm_loc), dwdt  (1:lm_max,nR)) 
+         call gather_Flm(dzdt_dist   (1:lm_loc), dzdt  (1:lm_max,nR)) 
+         call gather_Flm(dpdt_dist   (1:lm_loc), dpdt  (1:lm_max,nR)) 
+         call gather_Flm(dVSrLM_dist (1:lm_loc), dVSrLM(1:lm_max,nR)) 
+         !-----------
+         if (lm_maxMag==lm_max) call gather_Flm(dbdt_dist   (1:lm_loc), dbdt   (1:lm_max,nR)) 
+         if (lm_maxMag==lm_max) call gather_Flm(djdt_dist   (1:lm_loc), djdt   (1:lm_max,nR)) 
+         if (lm_maxMag==lm_max) call gather_Flm(dVxBhLM_dist(1:lm_loc), dVxBhLM(1:lm_max,nR)) 
+         if ( l_chemical_conv ) call gather_Flm(dVXirLM_dist(1:lm_loc), dVXirLM(1:lm_max,nR)) 
+         if ( l_chemical_conv ) call gather_Flm(dxidt_dist  (1:lm_loc), dxidt  (1:lm_max,nR)) 
+         if ( l_TP_form       ) call gather_Flm(dVPrLM_dist (1:lm_loc), dVPrLM (1:lm_max,nR)) 
+         if ( l_double_curl   ) call gather_Flm(dVxVhLM_dist(1:lm_loc), dVxVhLM(1:lm_max,nR))
+         if ( nR == n_r_cmb .and. l_b_nl_cmb ) then
+            call gather_FlmP(br_vt_lm_cmb_dist,br_vt_lm_cmb) ! Is this needed? 180326-Lago
+            call gather_FlmP(br_vp_lm_cmb_dist,br_vp_lm_cmb) ! Is this needed? 180326-Lago
+         else if ( nR == n_r_icb .and. l_b_nl_icb ) then
+            call gather_FlmP(br_vt_lm_icb_dist,br_vt_lm_icb) ! Is this needed? 180326-Lago
+            call gather_FlmP(br_vp_lm_icb_dist,br_vp_lm_icb) ! Is this needed? 180326-Lago
+         end if
 
       end do    ! Loop over radial levels 
 

@@ -15,7 +15,8 @@ module grid_space_arrays_mod
    use general_arrays_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: nrp, n_phi_max, n_theta_beg, n_theta_end
+   use truncation, only: nrp, n_phi_max, n_theta_beg, n_theta_end, slice_f, &
+       &           gather_f
    use radial_functions, only: or2, orho1, beta, otemp1, visc, r, &
        &                       lambda, or4, or1, alpha0, temp0
    use physical_parameters, only: LFfac, n_r_LCR, CorFac, prec_angle,  &
@@ -68,83 +69,103 @@ module grid_space_arrays_mod
 #ifdef WITH_SHTNS
       procedure :: get_nl_shtns
 #endif
+      procedure :: slice_all  => slice_all_grid_space
+      procedure :: gather_all  => gather_all_grid_space
 
    end type grid_space_arrays_t
 
 contains
 
-   subroutine initialize(this)
-
+!----------------------------------------------------------------------------
+   subroutine initialize(this, nPhi, lTheta, uTheta)
+      !
+      !@>author Rafael Lago, MPCDF, December 2017
+      !
       class(grid_space_arrays_t) :: this
-
-      allocate( this%Advr(nrp,nfs) )
-      allocate( this%Advt(nrp,nfs) )
-      allocate( this%Advp(nrp,nfs) )
-      allocate( this%LFr(nrp,nfs) )
-      allocate( this%LFt(nrp,nfs) )
-      allocate( this%LFp(nrp,nfs) )
-      allocate( this%VxBr(nrp,nfs) )
-      allocate( this%VxBt(nrp,nfs) )
-      allocate( this%VxBp(nrp,nfs) )
-      allocate( this%VSr(nrp,nfs) )
-      allocate( this%VSt(nrp,nfs) )
-      allocate( this%VSp(nrp,nfs) )
-      allocate( this%ViscHeat(nrp,nfs) )
-      allocate( this%OhmLoss(nrp,nfs) )
-      bytes_allocated=bytes_allocated + 14*nrp*nfs*SIZEOF_DEF_REAL
+      integer, intent(in) :: nPhi, lTheta, uTheta
+      integer :: nTheta
+      nTheta = uTheta-lTheta+1
+      
+      allocate( this%Advr(nPhi,lTheta:uTheta) )
+      allocate( this%Advt(nPhi,lTheta:uTheta) )
+      allocate( this%Advp(nPhi,lTheta:uTheta) )
+      allocate( this%LFr(nPhi,lTheta:uTheta) )
+      allocate( this%LFt(nPhi,lTheta:uTheta) )
+      allocate( this%LFp(nPhi,lTheta:uTheta) )
+      allocate( this%VxBr(nPhi,lTheta:uTheta) )
+      allocate( this%VxBt(nPhi,lTheta:uTheta) )
+      allocate( this%VxBp(nPhi,lTheta:uTheta) )
+      allocate( this%VSr(nPhi,lTheta:uTheta) )
+      allocate( this%VSt(nPhi,lTheta:uTheta) )
+      allocate( this%VSp(nPhi,lTheta:uTheta) )
+      allocate( this%ViscHeat(nPhi,lTheta:uTheta) )
+      allocate( this%OhmLoss(nPhi,lTheta:uTheta) )
+      bytes_allocated=bytes_allocated + 14*nPhi*nTheta*SIZEOF_DEF_REAL
 
       if ( l_TP_form ) then
-         allocate( this%VPr(nrp,nfs) )
-         bytes_allocated=bytes_allocated + nrp*nfs*SIZEOF_DEF_REAL
+         allocate( this%VPr(nPhi,lTheta:uTheta) )
+         bytes_allocated=bytes_allocated + nPhi*nTheta*SIZEOF_DEF_REAL
       end if
-
+      
       if ( l_precession ) then
-         allocate( this%PCr(nrp,nfs) )
-         allocate( this%PCt(nrp,nfs) )
-         allocate( this%PCp(nrp,nfs) )
-         bytes_allocated=bytes_allocated + 3*nrp*nfs*SIZEOF_DEF_REAL
+         allocate( this%PCr(nPhi,lTheta:uTheta) )
+         allocate( this%PCt(nPhi,lTheta:uTheta) )
+         allocate( this%PCp(nPhi,lTheta:uTheta) )
+         bytes_allocated=bytes_allocated + 3*nPhi*nTheta*SIZEOF_DEF_REAL
       end if
 
       if ( l_chemical_conv ) then
-         allocate( this%VXir(nrp,nfs) )
-         allocate( this%VXit(nrp,nfs) )
-         allocate( this%VXip(nrp,nfs) )
-         bytes_allocated=bytes_allocated + 3*nrp*nfs*SIZEOF_DEF_REAL
+         allocate( this%VXir(nPhi,lTheta:uTheta) )
+         allocate( this%VXit(nPhi,lTheta:uTheta) )
+         allocate( this%VXip(nPhi,lTheta:uTheta) )
+         bytes_allocated=bytes_allocated + 3*nPhi*nTheta*SIZEOF_DEF_REAL
       end if
 
       !----- Fields calculated from these help arrays by legtf:
-      allocate( this%vrc(nrp,nfs),this%vtc(nrp,nfs),this%vpc(nrp,nfs) )
-      allocate( this%dvrdrc(nrp,nfs),this%dvtdrc(nrp,nfs) )
-      allocate( this%dvpdrc(nrp,nfs),this%cvrc(nrp,nfs) )
-      allocate( this%dvrdtc(nrp,nfs),this%dvrdpc(nrp,nfs) )
-      allocate( this%dvtdpc(nrp,nfs),this%dvpdpc(nrp,nfs) )
-      allocate( this%brc(nrp,nfs),this%btc(nrp,nfs),this%bpc(nrp,nfs) )
+      allocate( this%vrc(nPhi,lTheta:uTheta) ) 
+      allocate( this%vtc(nPhi,lTheta:uTheta) )
+      allocate( this%vpc(nPhi,lTheta:uTheta) )
+      allocate( this%dvrdrc(nPhi,lTheta:uTheta) )
+      allocate( this%dvtdrc(nPhi,lTheta:uTheta) )
+      allocate( this%dvpdrc(nPhi,lTheta:uTheta) )
+      allocate( this%cvrc(nPhi,lTheta:uTheta) )
+      allocate( this%dvrdtc(nPhi,lTheta:uTheta) )
+      allocate( this%dvrdpc(nPhi,lTheta:uTheta) )
+      allocate( this%dvtdpc(nPhi,lTheta:uTheta) )
+      allocate( this%dvpdpc(nPhi,lTheta:uTheta) )
+      allocate( this%brc(nPhi,lTheta:uTheta) )
+      allocate( this%btc(nPhi,lTheta:uTheta) )
+      allocate( this%bpc(nPhi,lTheta:uTheta) )
       this%btc=1.0e50_cp
       this%bpc=1.0e50_cp
-      allocate( this%cbrc(nrp,nfs),this%cbtc(nrp,nfs),this%cbpc(nrp,nfs) )
-      allocate( this%sc(nrp,nfs),this%drSc(nrp,nfs) )
-      allocate( this%pc(nrp,nfs) )
-      allocate( this%dsdtc(nrp,nfs),this%dsdpc(nrp,nfs) )
-      bytes_allocated=bytes_allocated + 22*nrp*nfs*SIZEOF_DEF_REAL
+      allocate( this%cbrc(nPhi,lTheta:uTheta) )
+      allocate( this%cbtc(nPhi,lTheta:uTheta) )
+      allocate( this%cbpc(nPhi,lTheta:uTheta) )
+      allocate( this%sc(nPhi,lTheta:uTheta) )
+      allocate( this%drSc(nPhi,lTheta:uTheta) )
+      allocate( this%pc(nPhi,lTheta:uTheta) )
+      allocate( this%dsdtc(nPhi,lTheta:uTheta) )
+      allocate( this%dsdpc(nPhi,lTheta:uTheta) )
+      bytes_allocated=bytes_allocated + 22*nPhi*nTheta*SIZEOF_DEF_REAL
 
       if ( l_chemical_conv ) then
-         allocate( this%xic(nrp,nfs) )
-         bytes_allocated=bytes_allocated + nrp*nfs*SIZEOF_DEF_REAL
+         allocate( this%xic(nPhi,lTheta:uTheta) )
+         bytes_allocated=bytes_allocated + nPhi*nTheta*SIZEOF_DEF_REAL
       else
          allocate( this%xic(1,1) )
       end if
 
       !-- RMS Calculations
       if ( l_RMS ) then
-         allocate ( this%Advt2(nrp,nfs) )
-         allocate ( this%Advp2(nrp,nfs) )
-         allocate ( this%LFt2(nrp,nfs) )
-         allocate ( this%LFp2(nrp,nfs) )
-         allocate ( this%CFt2(nrp,nfs) )
-         allocate ( this%CFp2(nrp,nfs) )
-         allocate ( this%dpdtc(nrp,nfs) )
-         allocate ( this%dpdpc(nrp,nfs) )
-         bytes_allocated=bytes_allocated + 8*nrp*nfs*SIZEOF_DEF_REAL
+         allocate ( this%Advt2(nPhi,lTheta:uTheta) )
+         allocate ( this%Advp2(nPhi,lTheta:uTheta) )
+         allocate ( this%LFt2(nPhi,lTheta:uTheta) )
+         allocate ( this%LFp2(nPhi,lTheta:uTheta) )
+         allocate ( this%CFt2(nPhi,lTheta:uTheta) )
+         allocate ( this%CFp2(nPhi,lTheta:uTheta) )
+         allocate ( this%dpdtc(nPhi,lTheta:uTheta) )
+         allocate ( this%dpdpc(nPhi,lTheta:uTheta) )
+         bytes_allocated=bytes_allocated + 8*nPhi*nTheta*SIZEOF_DEF_REAL
       end if
       !write(*,"(A,I15,A)") "grid_space_arrays: allocated ",bytes_allocated,"B."
 
@@ -289,7 +310,7 @@ contains
                &                                this%vrc(nPhi,nTheta) * &
                &                     (       this%dvrdrc(nPhi,nTheta) - &
                &    ( two*or1(nR)+beta(nR) )*this%vrc(nPhi,nTheta) ) +  &
-               &                               osn2(nThetaNHS) * (       &
+               &                               osn2(nThetaNHS) * (      &
                &                                this%vtc(nPhi,nTheta) * &
                &                     (       this%dvrdtc(nPhi,nTheta) - &
                &                  r(nR)*      this%vtc(nPhi,nTheta) ) + &
@@ -334,12 +355,12 @@ contains
                   this%VSr(nPhi,nTheta)=                                   &
                   &    this%vrc(nPhi,nTheta)*this%sc(nPhi,nTheta)
                   this%VSt(nPhi,nTheta)=                                   &
-                  &    or2sn2*(this%vtc(nPhi,nTheta)*this%sc(nPhi,nTheta) &
-                  &    - alpha0(nR)*temp0(nR)*orho1(nR)*ViscHeatFac*        &
+                  &    or2sn2*(this%vtc(nPhi,nTheta)*this%sc(nPhi,nTheta)  &
+                  &    - alpha0(nR)*temp0(nR)*orho1(nR)*ViscHeatFac*       &
                   &    ThExpNb*this%vtc(nPhi,nTheta)*this%pc(nPhi,nTheta))
                   this%VSp(nPhi,nTheta)=                                   &
-                  &    or2sn2*(this%vpc(nPhi,nTheta)*this%sc(nPhi,nTheta) &
-                  &    - alpha0(nR)*temp0(nR)*orho1(nR)*ViscHeatFac*        &
+                  &    or2sn2*(this%vpc(nPhi,nTheta)*this%sc(nPhi,nTheta)  &
+                  &    - alpha0(nR)*temp0(nR)*orho1(nR)*ViscHeatFac*       &
                   &    ThExpNb*this%vpc(nPhi,nTheta)*this%pc(nPhi,nTheta))
                   this%VPr(nPhi,nTheta)=                                   &
                   &    this%vrc(nPhi,nTheta)*this%pc(nPhi,nTheta)
@@ -944,5 +965,167 @@ contains
       end if
 
    end subroutine get_nl
+!----------------------------------------------------------------------------
+   subroutine gather_all_grid_space(this, gsa_glb)
+      !
+      !@>author Rafael Lago, MPCDF, December 2017
+      !
+      class(grid_space_arrays_t) :: this, gsa_glb
+      
+      call gather_f(this%Advr, gsa_glb%Advr)
+      call gather_f(this%Advt, gsa_glb%Advt)
+      call gather_f(this%Advp, gsa_glb%Advp)
+      call gather_f(this%LFr, gsa_glb%LFr)
+      call gather_f(this%LFt, gsa_glb%LFt)
+      call gather_f(this%LFp, gsa_glb%LFp)
+      call gather_f(this%VxBr, gsa_glb%VxBr)
+      call gather_f(this%VxBt, gsa_glb%VxBt)
+      call gather_f(this%VxBp, gsa_glb%VxBp)
+      call gather_f(this%VSr, gsa_glb%VSr)
+      call gather_f(this%VSt, gsa_glb%VSt)
+      call gather_f(this%VSp, gsa_glb%VSp)
+      call gather_f(this%ViscHeat, gsa_glb%ViscHeat)
+      call gather_f(this%OhmLoss, gsa_glb%OhmLoss)
+
+      if ( l_TP_form ) then
+         call gather_f(this%VPr, gsa_glb%VPr)
+      end if
+      
+      if ( l_precession ) then
+         call gather_f(this%PCr, gsa_glb%PCr)
+         call gather_f(this%PCt, gsa_glb%PCt)
+         call gather_f(this%PCp, gsa_glb%PCp)
+      end if
+
+      if ( l_chemical_conv ) then
+         call gather_f(this%VXir, gsa_glb%VXir)
+         call gather_f(this%VXit, gsa_glb%VXit)
+         call gather_f(this%VXip, gsa_glb%VXip)
+      end if
+
+      !----- Fields calculated from these help arrays by legtf:
+      call gather_f(this%vrc, gsa_glb%vrc)
+      call gather_f(this%vtc, gsa_glb%vtc)
+      call gather_f(this%vpc, gsa_glb%vpc)
+      call gather_f(this%dvrdrc, gsa_glb%dvrdrc)
+      call gather_f(this%dvtdrc, gsa_glb%dvtdrc)
+      call gather_f(this%dvpdrc, gsa_glb%dvpdrc)
+      call gather_f(this%cvrc, gsa_glb%cvrc)
+      call gather_f(this%dvrdtc, gsa_glb%dvrdtc)
+      call gather_f(this%dvrdpc, gsa_glb%dvrdpc)
+      call gather_f(this%dvtdpc, gsa_glb%dvtdpc)
+      call gather_f(this%dvpdpc, gsa_glb%dvpdpc)
+      call gather_f(this%brc, gsa_glb%brc)
+      call gather_f(this%btc, gsa_glb%btc)
+      call gather_f(this%bpc, gsa_glb%bpc)
+      call gather_f(this%cbrc, gsa_glb%cbrc)
+      call gather_f(this%cbtc, gsa_glb%cbtc)
+      call gather_f(this%cbpc, gsa_glb%cbpc)
+      call gather_f(this%sc, gsa_glb%sc)
+      call gather_f(this%drSc, gsa_glb%drSc)
+      call gather_f(this%pc, gsa_glb%pc)
+      call gather_f(this%dsdtc, gsa_glb%dsdtc)
+      call gather_f(this%dsdpc, gsa_glb%dsdpc)
+
+      if ( l_chemical_conv ) then
+         call gather_f(this%xic, gsa_glb%xic)
+      else
+         gsa_glb%xic(1,1) = this%xic(1,1)
+      end if
+
+      !-- RMS Calculations
+      if ( l_RMS ) then
+         call gather_f(this%Advt2, gsa_glb%Advt2)
+         call gather_f(this%Advp2, gsa_glb%Advp2)
+         call gather_f(this%LFt2, gsa_glb%LFt2)
+         call gather_f(this%LFp2, gsa_glb%LFp2)
+         call gather_f(this%CFt2, gsa_glb%CFt2)
+         call gather_f(this%CFp2, gsa_glb%CFp2)
+         call gather_f(this%dpdtc, gsa_glb%dpdtc)
+         call gather_f(this%dpdpc, gsa_glb%dpdpc)
+      end if
+      
+   end subroutine gather_all_grid_space
+!----------------------------------------------------------------------------
+   subroutine slice_all_grid_space(this, gsa_glb)
+      !
+      !@>author Rafael Lago, MPCDF, December 2017
+      !
+      class(grid_space_arrays_t) :: this, gsa_glb
+      
+      call slice_f(gsa_glb%Advr, this%Advr)
+      call slice_f(gsa_glb%Advt, this%Advt)
+      call slice_f(gsa_glb%Advp, this%Advp)
+      call slice_f(gsa_glb%LFr, this%LFr)
+      call slice_f(gsa_glb%LFt, this%LFt)
+      call slice_f(gsa_glb%LFp, this%LFp)
+      call slice_f(gsa_glb%VxBr, this%VxBr)
+      call slice_f(gsa_glb%VxBt, this%VxBt)
+      call slice_f(gsa_glb%VxBp, this%VxBp)
+      call slice_f(gsa_glb%VSr, this%VSr)
+      call slice_f(gsa_glb%VSt, this%VSt)
+      call slice_f(gsa_glb%VSp, this%VSp)
+      call slice_f(gsa_glb%ViscHeat, this%ViscHeat)
+      call slice_f(gsa_glb%OhmLoss, this%OhmLoss)
+
+      if ( l_TP_form ) then
+         call slice_f(gsa_glb%VPr, this%VPr)
+      end if
+      
+      if ( l_precession ) then
+         call slice_f(gsa_glb%PCr, this%PCr)
+         call slice_f(gsa_glb%PCt, this%PCt)
+         call slice_f(gsa_glb%PCp, this%PCp)
+      end if
+
+      if ( l_chemical_conv ) then
+         call slice_f(gsa_glb%VXir, this%VXir)
+         call slice_f(gsa_glb%VXit, this%VXit)
+         call slice_f(gsa_glb%VXip, this%VXip)
+      end if
+
+      !----- Fields calculated from these help arrays by legtf:
+      call slice_f(gsa_glb%vrc, this%vrc )
+      call slice_f(gsa_glb%vtc, this%vtc)
+      call slice_f(gsa_glb%vpc, this%vpc)
+      call slice_f(gsa_glb%dvrdrc, this%dvrdrc)
+      call slice_f(gsa_glb%dvtdrc, this%dvtdrc)
+      call slice_f(gsa_glb%dvpdrc, this%dvpdrc)
+      call slice_f(gsa_glb%cvrc, this%cvrc)
+      call slice_f(gsa_glb%dvrdtc, this%dvrdtc)
+      call slice_f(gsa_glb%dvrdpc, this%dvrdpc)
+      call slice_f(gsa_glb%dvtdpc, this%dvtdpc)
+      call slice_f(gsa_glb%dvpdpc, this%dvpdpc)
+      call slice_f(gsa_glb%brc, this%brc)
+      call slice_f(gsa_glb%btc, this%btc)
+      call slice_f(gsa_glb%bpc, this%bpc)
+      call slice_f(gsa_glb%cbrc, this%cbrc)
+      call slice_f(gsa_glb%cbtc, this%cbtc)
+      call slice_f(gsa_glb%cbpc, this%cbpc)
+      call slice_f(gsa_glb%sc, this%sc)
+      call slice_f(gsa_glb%drSc, this%drSc)
+      call slice_f(gsa_glb%pc, this%pc)
+      call slice_f(gsa_glb%dsdtc, this%dsdtc)
+      call slice_f(gsa_glb%dsdpc, this%dsdpc)
+
+      if ( l_chemical_conv ) then
+         call slice_f(gsa_glb%xic, this%xic)
+      else
+         this%xic(1,1) = gsa_glb%xic(1,1)
+      end if
+
+      !-- RMS Calculations
+      if ( l_RMS ) then
+         call slice_f(gsa_glb%Advt2, this%Advt2)
+         call slice_f(gsa_glb%Advp2, this%Advp2)
+         call slice_f(gsa_glb%LFt2, this%LFt2)
+         call slice_f(gsa_glb%LFp2, this%LFp2)
+         call slice_f(gsa_glb%CFt2, this%CFt2)
+         call slice_f(gsa_glb%CFp2, this%CFp2)
+         call slice_f(gsa_glb%dpdtc, this%dpdtc)
+         call slice_f(gsa_glb%dpdpc, this%dpdpc)
+      end if
+      
+   end subroutine slice_all_grid_space
 !----------------------------------------------------------------------------
 end module grid_space_arrays_mod

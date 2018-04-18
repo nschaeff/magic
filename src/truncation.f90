@@ -104,7 +104,7 @@ module truncation
    ! 
    ! - Lago
    integer :: n_theta_beg, n_theta_end, n_theta_loc
-   integer :: n_m_ext, n_m_loc, lmP_loc, lm_loc
+   integer :: n_m_ext, n_m_loc, lmP_loc, lm_loc, lm_locMag
    integer, allocatable :: n_theta_dist(:,:), lmP_dist(:,:,:), lm_dist(:,:,:)
    
    !@>TODO: 
@@ -249,6 +249,8 @@ contains
       
       lmP_loc = sum(lmP_dist(coord_theta,:,2))
       lm_loc  = sum(lm_dist( coord_theta,:,2))
+      lm_locMag = lm_loc
+      if (lm_maxMag==1) lm_locMag = 1
       
       if (rank == 0) then
          print "('θ partition in rank ', I3, ': ', I5, I5, I5, ' points')", &

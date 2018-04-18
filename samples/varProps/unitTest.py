@@ -56,14 +56,14 @@ class VariableProperties(unittest.TestCase):
         os.chdir(self.dir)
         # First run the Chebyshev case
         cmd = '%s %s/inputCheb.nml' % (self.execCmd, self.dir)
-        sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'),
-                stderr=open(os.devnull, 'wb'))
+        sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
+                stderr=sp.STDOUT)
         # Second run the Finite Differences case
         cmd = '%s %s/inputFD.nml' % (self.execCmd, self.dir)
-        sp.call(cmd, shell=True, stdout=open(os.devnull, 'wb'),
-                stderr=open(os.devnull, 'wb'))
+        sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'a'),
+                stderr=sp.STDOUT)
         cmd = 'cat e_kin.cheb e_kin.fd > e_kin.test'
-        sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'wb'),
+        sp.call(cmd, shell=True, stdout=open(self.dir + '/stdout.txt', 'a'),
                 stderr=sp.STDOUT)
 
     def tearDown(self):

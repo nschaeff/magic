@@ -87,10 +87,10 @@ contains
 #else
       threadid = 0
 #endif
-      call this%gsa(threadid)%initialize()
+      call this%gsa(threadid)%initialize(nrp,1,nfs)
       if ( l_TO ) call this%TO_arrays(threadid)%initialize()
       call this%dtB_arrays(threadid)%initialize()
-      call this%nl_lm(threadid)%initialize()
+      call this%nl_lm(threadid)%initialize(lmP_max)
       !$OMP END PARALLEL
    end subroutine initialize_rIterThetaBlocking_OpenMP
 !------------------------------------------------------------------------------

@@ -17,8 +17,6 @@ module distributed_theta
    use radial_data, only: n_r_cmb
    use mpi  
    
-   use blocking, only: lm2, lmP2 ! These might be not necessary
-
    implicit none
  
    private
@@ -177,32 +175,6 @@ contains
          end if
       end do
       
-!       if (rank==0) then
-!          print *, "----------GLOBAL------------ "
-!          print *, "--lm2-----"
-!          print *, lm2
-!          print *, "--lmP2-----"
-!          print *, lmP2
-!       end if
-!       
-!       do i=0,n_procs
-!          if (rank==i) then
-!             print *, "-------------------------- ", i
-!             print *, "--m_idx---"
-!             print *, lm_dist(coord_theta, :, 1)
-!             print *, "--lm_b----"
-!             print *, lm_dist(coord_theta, :, 3)
-!             print *, "--lm_e----"
-!             print *, lm_dist(coord_theta, :, 4)
-!             print *, "--lm2-----"
-!             print *, map%lm2
-!             print *, "--lmP2-----"
-!             print *, map%lmP2
-!          end if
-!          call mpi_barrier(mpi_comm_world,lmP)
-!       end do
-! 
-!       stop 
    end subroutine get_distributed_lm_mapping
 !-------------------------------------------------------------------------------
 end module distributed_theta

@@ -65,8 +65,8 @@ contains
       class(rIterThetaBlocking_seq_t) :: this
 
       call this%allocate_common_arrays()
-      call this%gsa%initialize()
-      call this%nl_lm%initialize()
+      call this%gsa%initialize(nrp,1,nfs)
+      call this%nl_lm%initialize(lmP_max)
       if ( l_TO ) call this%TO_arrays%initialize()
       call this%dtB_arrays%initialize()
 

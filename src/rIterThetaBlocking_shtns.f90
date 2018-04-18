@@ -12,7 +12,7 @@ module rIterThetaBlocking_shtns_mod
        &            l_b_nl_icb, l_rot_ic, l_cond_ic, l_rot_ma,       &
        &            l_cond_ma, l_dtB, l_store_frame, l_movie_oc,     &
        &            l_TO, l_chemical_conv, l_TP_form, l_probe,       &
-       &            l_precession
+       &            l_precession, l_double_curl
    use radial_data, only: n_r_cmb, n_r_icb
    use radial_functions, only: or2, orho1
    use constants, only: zero
@@ -44,7 +44,7 @@ module rIterThetaBlocking_shtns_mod
    use physical_parameters, only: ktops, kbots, n_r_LCR
    use probe_mod
    use parallel_mod
-   use arrays_dist
+   use blocking, only: nfs
 
    implicit none
 
@@ -52,16 +52,12 @@ module rIterThetaBlocking_shtns_mod
 
    type, public, extends(rIterThetaBlocking_t) :: rIterThetaBlocking_shtns_t
       integer :: nThreads
-      type(grid_space_arrays_t) :: gsa
+      type(grid_space_arrays_t) :: gsa, gsa_dist
       type(TO_arrays_t) :: TO_arrays
       type(dtB_arrays_t) :: dtB_arrays
-      type(nonlinear_lm_t) :: nl_lm
+      type(nonlinear_lm_t) :: nl_lm, nl_lm_dist
       real(cp) :: lorentz_torque_ic,lorentz_torque_ma
       
-      ! Distributed Update - Lago
-      type(grid_space_arrays_dist_t) :: gsa_dist
-      type(nonlinear_lm_dist_t)      :: nl_lm_dist
-   
    contains
       procedure :: initialize => initialize_rIterThetaBlocking_shtns
       procedure :: finalize => finalize_rIterThetaBlocking_shtns
@@ -94,14 +90,15 @@ contains
       if (n_procs_theta < 2) stop
       
       call this%allocate_common_arrays()
-      call this%gsa%initialize()
+      call this%gsa%initialize(nrp,1,nfs)
+      call this%gsa_dist%initialize(n_phi_max, n_theta_beg, n_theta_end)
       if ( l_TO ) call this%TO_arrays%initialize()
       call this%dtB_arrays%initialize()
-      call this%nl_lm%initialize()
+      
+      call this%nl_lm%initialize(lmP_max)
+      call this%nl_lm_dist%initialize(lmP_loc)
       
       ! Distributed Update - Lago
-      call this%gsa_dist%initialize()
-      call this%nl_lm_dist%initialize()
 
    end subroutine initialize_rIterThetaBlocking_shtns
 !------------------------------------------------------------------------------
@@ -153,15 +150,11 @@ contains
       real(cp),    intent(out) :: fpoynLMr(:), fresLMr(:)
       real(cp),    intent(out) :: EperpLMr(:), EparLMr(:), EperpaxiLMr(:), EparaxiLMr(:)
 
-      integer :: l,lm, ierr
+      integer :: lm
       logical :: lGraphHeader=.false.
       logical :: DEBUG_OUTPUT=.false.
       real(cp) :: c, lorentz_torques_ic
-      complex(cp) :: br_vt_lm_cmb_loc(lmP_loc) ! product br*vt at CMB
-      complex(cp) :: br_vp_lm_cmb_loc(lmP_loc) ! product br*vp at CMB
-      complex(cp) :: br_vt_lm_icb_loc(lmP_loc) ! product br*vt at ICB
-      complex(cp) :: br_vp_lm_icb_loc(lmP_loc) ! product br*vp at ICB
-
+      
       this%nR=nR
       this%nBc=nBc
       this%isRadialBoundaryPoint=(nR == n_r_cmb).or.(nR == n_r_icb)
@@ -179,13 +172,10 @@ contains
            &                        this%lPressCalc,this%l_frame,this%lTOnext,  &
            &                        this%lTOnext2,this%lTOcalc)
 
-      call this%slice_all(this%nR)
-      
       if (DEBUG_OUTPUT) then
          write(*,"(I3,A,I1,2(A,L1))") this%nR,": nBc = ", &
               & this%nBc,", lDeriv = ",this%lDeriv,", l_mag = ",l_mag
       end if
-
 
       this%lorentz_torque_ma = 0.0_cp
       this%lorentz_torque_ic = 0.0_cp
@@ -196,10 +186,10 @@ contains
       br_vp_lm_cmb=zero
       br_vt_lm_icb=zero
       br_vp_lm_icb=zero
-      br_vt_lm_cmb_loc=zero
-      br_vp_lm_cmb_loc=zero
-      br_vt_lm_icb_loc=zero
-      br_vp_lm_icb_loc=zero
+! !       br_vt_lm_cmb_loc=zero
+! !       br_vp_lm_cmb_loc=zero
+! !       br_vt_lm_icb_loc=zero
+! !       br_vp_lm_icb_loc=zero
       
       HelLMr     =0.0_cp
       Hel2LMr    =0.0_cp
@@ -252,16 +242,16 @@ contains
          call get_br_v_bcs(this%gsa_dist%brc,this%gsa_dist%vtc,          &
               &            this%gsa_dist%vpc,this%leg_helper%omegaMA,    &
               &            or2(this%nR),orho1(this%nR),                  &
-              &            br_vt_lm_cmb_loc,br_vp_lm_cmb_loc)
-         call gather_FlmP(br_vt_lm_cmb_loc,br_vt_lm_cmb) ! Is this needed? 180326-Lago
-         call gather_FlmP(br_vp_lm_cmb_loc,br_vp_lm_cmb) ! Is this needed? 180326-Lago
+              &            br_vt_lm_cmb,br_vp_lm_cmb)
+!          call gather_FlmP(br_vt_lm_cmb_loc,br_vt_lm_cmb) ! Is this needed? 180326-Lago
+!          call gather_FlmP(br_vp_lm_cmb_loc,br_vp_lm_cmb) ! Is this needed? 180326-Lago
       else if ( this%nR == n_r_icb .and. l_b_nl_icb ) then
          call get_br_v_bcs(this%gsa_dist%brc,this%gsa_dist%vtc,          &
               &            this%gsa_dist%vpc,this%leg_helper%omegaIC,    &
               &            or2(this%nR),orho1(this%nR),                  &
-              &            br_vt_lm_icb_loc,br_vp_lm_icb_loc)
-         call gather_FlmP(br_vt_lm_icb_loc,br_vt_lm_icb) ! Is this needed? 180326-Lago
-         call gather_FlmP(br_vp_lm_icb_loc,br_vp_lm_icb) ! Is this needed? 180326-Lago
+              &            br_vt_lm_icb,br_vp_lm_icb)
+!          call gather_FlmP(br_vt_lm_icb_loc,br_vt_lm_icb) ! Is this needed? 180326-Lago
+!          call gather_FlmP(br_vp_lm_icb_loc,br_vp_lm_icb) ! Is this needed? 180326-Lago
       end if
       
       !PERFOFF
@@ -297,6 +287,7 @@ contains
       !          point for graphical output:
       !< parallelization postponed >
       if ( this%l_graph ) then
+         print *, "PANIC l_graph"
 #ifdef WITH_MPI
             PERFON('graphout')
             call graphOut_mpi(time,this%nR,this%gsa%vrc,           &
@@ -318,12 +309,14 @@ contains
       
 
       if ( this%l_probe_out ) then
+         print *, "PANIC l_probe_out"
          call probe_out(time,this%nR,this%gsa%vpc, 1,this%sizeThetaB)
       end if
       !< / parallelization postponed >
       
       !--------- Helicity output:
       if ( this%lHelCalc ) then
+         print *, "PANIC lHelCalc"
          PERFON('hel_out')
          call get_helicity(this%gsa%vrc,this%gsa%vtc,          &
               &        this%gsa%vpc,this%gsa%cvrc,             &
@@ -337,6 +330,7 @@ contains
 
       !--------- Viscous heating:
       if ( this%lPowerCalc ) then
+         print *, "PANIC lPowerCalc"
          PERFON('hel_out')
          call get_visc_heat(this%gsa%vrc,this%gsa%vtc,this%gsa%vpc,     &
               &        this%gsa%cvrc,this%gsa%dvrdrc,this%gsa%dvrdtc,   &
@@ -348,7 +342,7 @@ contains
   
       !--------- horizontal velocity :
       if ( this%lViscBcCalc ) then
-
+         print *, "PANIC lViscBcCalc"
          call get_nlBLayers(this%gsa%vtc,    &
               &             this%gsa%vpc,    &
               &             this%gsa%dvtdrc, &
@@ -361,6 +355,7 @@ contains
 
 
       if ( this%lFluxProfCalc ) then
+         print *, "PANIC lFluxProfCalc"
           call get_fluxes(this%gsa%vrc,this%gsa%vtc,             &
                  &        this%gsa%vpc,this%gsa%dvrdrc,          &
                  &        this%gsa%dvtdrc,                       &
@@ -375,6 +370,7 @@ contains
       end if
 
       if ( this%lPerpParCalc ) then
+         print *, "PANIC lPerpParCalc"
           call get_perpPar(this%gsa%vrc,this%gsa%vtc,       &
                  &         this%gsa%vpc,EperpLMr,EparLMr,   &
                  &         EperpaxiLMr,EparaxiLMr,nR,1 )
@@ -383,6 +379,7 @@ contains
 
       !--------- Movie output:
       if ( this%l_frame .and. l_movie_oc .and. l_store_frame ) then
+         print *, "PANIC l_frame"
          PERFON('mov_out')
          call store_movie_frame(this%nR,this%gsa%vrc,                &
               &                 this%gsa%vtc,this%gsa%vpc,           &
@@ -405,6 +402,7 @@ contains
       !--------- Calculation of magnetic field production and advection terms
       !          for graphic output:
       if ( l_dtB ) then
+         print *, "PANIC dtBLM"
          PERFON('dtBLM')
          call get_dtBLM(this%nR,this%gsa%vrc,this%gsa%vtc,                    &
               &         this%gsa%vpc,this%gsa%brc,                            &
@@ -424,6 +422,7 @@ contains
       !--------- Torsional oscillation terms:
       PERFON('TO_terms')
       if ( ( this%lTONext .or. this%lTONext2 ) .and. l_mag ) then
+         print *, "PANIC lTONext"
          call getTOnext(this%leg_helper%zAS,this%gsa%brc,   &
               &         this%gsa%btc,this%gsa%bpc,&
               &         this%lTONext,this%lTONext2,dt,dtLast,this%nR, &
@@ -432,6 +431,7 @@ contains
       end if
 
       if ( this%lTOCalc ) then
+         print *, "PANIC lTOCalc"
          call getTO(this%gsa%vrc,this%gsa%vtc,    &
               &     this%gsa%vpc,this%gsa%cvrc,   &
               &     this%gsa%dvpdrc,this%gsa%brc, &
@@ -450,6 +450,7 @@ contains
       lorentz_torque_ma = this%lorentz_torque_ma
 
       if (DEBUG_OUTPUT) then
+         print *, "PANIC DEBUG_OUTPUT"
          call this%nl_lm%output()
       end if
 
@@ -462,33 +463,27 @@ contains
       !write(*,"(A,I4,2ES20.13)") "before_td: ", &
       !     &  this%nR,sum(real(conjg(VxBtLM)*VxBtLM)),sum(real(conjg(VxBpLM)*VxBpLM))
       !PERFON('get_td')
-      
-      call this%gather_all(this%nR)   
-      
-      call this%nl_lm_dist%get_td_dist(this%nR, this%nBc, this%lRmsCalc, &
+      call this%nl_lm_dist%get_td(this%nR, this%nBc, this%lRmsCalc, &
            &                 this%lPressCalc, dVSrLM, dVPrLM, dVXirLM,   &
            &                 dVxVhLM, dVxBhLM, dwdt, dzdt, dpdt, dsdt,   &
-           &                 dxidt, dbdt, djdt, this%leg_helper, this%nl_lm)
-!       call this%nl_lm%get_td(this%nR, this%nBc, this%lRmsCalc,           &
-!            &                 this%lPressCalc, dVSrLM, dVPrLM, dVXirLM,   &
-!            &                 dVxVhLM, dVxBhLM, dwdt, dzdt, dpdt, dsdt,   &
-!            &                 dxidt, dbdt, djdt, this%leg_helper)
-
-
+           &                 dxidt, dbdt, djdt, this%leg_helper)
+           
       !PERFOFF
       !write(*,"(A,I4,ES20.13)") "after_td:  ", &
       !     & this%nR,sum(real(conjg(dVxBhLM(:,this%nR_Mag))*dVxBhLM(:,this%nR_Mag)))
       !-- Finish calculation of TO variables:
       if ( this%lTOcalc ) then
+         print *, "PANIC lTOcalc"
          call getTOfinish(this%nR, dtLast, this%leg_helper%zAS,             &
               &           this%leg_helper%dzAS, this%leg_helper%ddzAS,      &
               &           this%TO_arrays%dzRstrLM, this%TO_arrays%dzAstrLM, &
               &           this%TO_arrays%dzCorLM, this%TO_arrays%dzLFLM)
       end if
-
+      
       !--- Form partial horizontal derivaties of magnetic production and
       !    advection terms:
       if ( l_dtB ) then
+         print *, "PANIC l_dtB"
          PERFON('dtBLM')
          call get_dH_dtBLM(this%nR,this%dtB_arrays%BtVrLM,this%dtB_arrays%BpVrLM,&
               &            this%dtB_arrays%BrVtLM,this%dtB_arrays%BrVpLM,        &
@@ -498,6 +493,7 @@ contains
               &            this%dtB_arrays%BtVpSn2LM,this%dtB_arrays%BpVtSn2LM)
          PERFOFF
       end if
+      
     end subroutine do_iteration_ThetaBlocking_shtns
 !-------------------------------------------------------------------------------
    subroutine transform_to_grid_space_shtns(this, gsa)
@@ -739,8 +735,6 @@ contains
       class(rIterThetaBlocking_shtns_t)  :: this
       integer, intent(in) :: nR
       
-      integer :: i,j, lm
-      
       call this%gsa_dist%slice_all(this%gsa)
       call this%nl_lm_dist%slice_all(this%nl_lm)
       
@@ -836,8 +830,7 @@ contains
       class(rIterThetaBlocking_shtns_t) :: this
 
       integer :: nR
-      logical, save :: printed = .false.
-      
+
       nR = this%nR
 
       PERFON('lm2sp_d')

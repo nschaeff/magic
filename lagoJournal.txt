@@ -1,3 +1,11 @@
+2018-04-18
+-----------------------------------------------------------------------
+- I'm removing boussBenchSat test from the pool too. It has lPowerCalc
+  flag activated, which calls get_visc_heat, which calls legTFAS2. 
+  The parallelization of anything calling legTFAS2 has been postponed.
+  As of now, boussBenchSat test passes whenever BUILD_TYPE=Release
+  but fails for Debug (because of floating point invalid error).
+
 2018-04-13
 -----------------------------------------------------------------------
 - I've been using the following commit as "original-magic":
@@ -24,7 +32,9 @@
   - dynamo_benchmark
   - varProps
   - finite_differences
-  - boussBenchSat
+  - boussBenchSat: this enables lPowerCalc flag, which calls some of the diagnostics. This test 
+                passes with BUILD_TYPE=Release, but not BUILD_TYPE=Debug (it fires floating point
+                invalid error)
   - doubleDiffusion
   ✘ couetteAxi: here m=0. It confuses my implementation. I need to rethink the distribution in 
                 this case, or force n_procs_theta=1.
@@ -35,10 +45,10 @@
   - testRadialOutputs
   - hydro_bench_anel
   ✘ fluxPerturbation: there is a [BUG] here. It happens at line output.f90:809 and it is only fired 
-                      if cmake is called with -DCMAKE_BUILD_TYPE=Debug. In this line, it generates 
-                      a NaN (sqrt of a negative real number) which is neglected at 
-                      -DCMAKE_BUILD_TYPE=Release. I've reported this before, but even in the master 
-                      branch (779796945c82) this bug is still present.
+                if cmake is called with -DCMAKE_BUILD_TYPE=Debug. In this line, it generates a NaN
+                (sqrt of a negative real number) which is neglected at BUILD_TYPE=Release. I've 
+                reported this before, but even in the master branch (779796945c82) this bug is 
+                still present.
   - isothermal_nrho3
   - dynamo_benchmark_condICrotIC
   ✘ varCond:   it calls movie_gather_frames_to_rank0 which is not yet parallelized
@@ -109,7 +119,7 @@
    ⚪    get_dtBLM                    
    ⚪    getTOnext                    
    ⚪    getTO                        
-   ⚪    this%nl_lm%get_td            
+   ⚫    this%nl_lm%get_td            
    ⚪    getTOfinish                  
    ⚪    get_dH_dtBLM                 
 
