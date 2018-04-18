@@ -910,6 +910,8 @@ contains
             &                       rscheme_oc%rMat(1,nR_out) + &
             &       conductance_ma*rscheme_oc%drMat(1,nR_out) )
          else if ( ktopb == 2 ) then
+            !----- perfect conductor
+            !      see Glatzmaier, JCP 55, 461-484 (1984)
             bMat(1,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(1,nR_out)
             jMat(1,nR_out)=rscheme_oc%rnorm* rscheme_oc%drMat(1,nR_out)
          else if ( ktopb == 4 ) then
@@ -987,20 +989,11 @@ contains
                jMat(nR,nR_out)=0.0_cp
             end do
          end if
-         if ( kbotb == 1 ) then
-            bMat(n_r_max,nR_out)  =0.0_cp
-            jMat(n_r_max,nR_out)  =0.0_cp
-         else if ( kbotb == 2 ) then
-            bMat(n_r_max,nR_out)=0.0_cp
-            jMat(n_r_max,nR_out)  =0.0_cp
-         else if ( kbotb == 3 ) then
-            bMat(n_r_max,nR_out)  =0.0_cp
+         bMat(n_r_max,nR_out)=0.0_cp
+         jMat(n_r_max,nR_out)=0.0_cp
+         if ( kbotb == 3 ) then
             bMat(n_r_max+1,nR_out)=0.0_cp
-            jMat(n_r_max,nR_out)  =0.0_cp
             jMat(n_r_max+1,nR_out)=0.0_cp
-         else if ( kbotb == 4 ) then
-            bMat(n_r_max,nR_out)  =0.0_cp
-            jMat(n_r_max,nR_out)  =0.0_cp
          end if
       end do
     
