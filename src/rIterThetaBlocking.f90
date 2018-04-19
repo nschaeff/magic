@@ -10,7 +10,7 @@ module rIterThetaBlocking_mod
    use mem_alloc, only: bytes_allocated
    use truncation, only: lm_max,lmP_max,nrp,l_max,lmP_max_dtB,   &
        &                 n_phi_maxStr,n_theta_maxStr,n_r_maxStr, &
-       &                 lm_maxMag,l_axi
+       &                 lm_maxMag,l_axi, lm_loc, lm_locMag
    use blocking, only: nfs
    use logic, only: l_mag,l_conv,l_mag_kin,l_heat,l_HT,l_anel,l_mag_LF,    &
        &            l_conv_nl, l_mag_nl, l_b_nl_cmb, l_b_nl_icb, l_rot_ic, &
@@ -69,7 +69,7 @@ contains
       !----- Help arrays for Legendre transform calculated in legPrepG:
       !      Parallelizatio note: these are the R-distributed versions
       !      of the field scalars.
-      call this%leg_helper%initialize(lm_max,lm_maxMag,l_max)
+      call this%leg_helper%initialize(lm_loc,lm_locMag,l_max)
 
       allocate( this%BsLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop) )
       allocate( this%BpLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop) )
@@ -241,13 +241,11 @@ contains
             if ( this%nR == n_r_cmb ) then
                call v_rigid_boundary(this%nR,this%leg_helper%omegaMA,this%lDeriv, &
                     &                gsa%vrc,gsa%vtc,gsa%vpc,gsa%cvrc,gsa%dvrdtc, &
-                    &                gsa%dvrdpc,gsa%dvtdpc,gsa%dvpdpc,            &
-                    &                nThetaStart)
+                    &                gsa%dvrdpc,gsa%dvtdpc,gsa%dvpdpc)
             else if ( this%nR == n_r_icb ) then
                call v_rigid_boundary(this%nR,this%leg_helper%omegaIC,this%lDeriv, &
                     &                gsa%vrc,gsa%vtc,gsa%vpc,gsa%cvrc,gsa%dvrdtc, &
-                    &                gsa%dvrdpc,gsa%dvtdpc,gsa%dvpdpc,            &
-                    &                nThetaStart)
+                    &                gsa%dvrdpc,gsa%dvtdpc,gsa%dvpdpc)
             end if
             if ( this%lDeriv .and. ( .not. l_axi ) ) then
                call fft_thetab(gsa%dvrdrc,1)

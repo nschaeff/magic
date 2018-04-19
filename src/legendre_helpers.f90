@@ -2,20 +2,21 @@ module leg_helper_mod
 
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: lm_max, l_max, n_m_max, l_axi
+   use truncation, only: lm_max, l_max, n_m_max, l_axi, lm_loc
    use radial_data, only: n_r_icb, n_r_cmb
    use radial_functions, only: or2
    use torsional_oscillations, only: ddzASL
    use special, only: lGrenoble, b0, db0, ddb0
    use blocking, only: lm2l, lm2m, lm2
-   use horizontal_data, only: dLh
+   use horizontal_data, only: dLh_loc
    use logic, only: l_conv, l_mag_kin, l_heat, l_mag, l_movie_oc,    &
        &            l_mag_LF, l_fluxProfs, l_chemical_conv
-   use fields, only: s_Rloc,ds_Rloc, z_Rloc,dz_Rloc, p_Rloc,dp_Rloc, &
-       &             b_Rloc,db_Rloc,ddb_Rloc, aj_Rloc,dj_Rloc,       &
-       &             w_Rloc,dw_Rloc,ddw_Rloc, omega_ic,omega_ma,     &
-       &             xi_Rloc
+   use fields, only: s_dist,ds_dist, z_dist,dz_dist, p_dist,dp_dist, &
+       &             b_dist,db_dist,ddb_dist, aj_dist,dj_dist,       &
+       &             w_dist,dw_dist,ddw_dist, omega_ic,omega_ma,     &
+       &             xi_dist
    use constants, only: zero, one, two
+   use distributed_theta, only: dist_map
 
    implicit none
 
@@ -46,41 +47,41 @@ module leg_helper_mod
 
 contains
 
-   subroutine initialize(this,lm_max,lm_maxMag,l_max)
+   subroutine initialize(this,lm_length,lm_lengthMag,l_max)
 
       class(leg_helper_t) :: this
-      integer,intent(in) :: lm_max,lm_maxMag,l_max
+      integer,intent(in) :: lm_length,lm_lengthMag,l_max
 
-      allocate( this%dLhw(lm_max) )
-      allocate( this%dLhdw(lm_max) )
-      allocate( this%dLhz(lm_max) )
-      allocate( this%dLhb(lm_max) )
-      allocate( this%dLhj(lm_max) )
-      allocate( this%vhG(lm_max) )
-      allocate( this%vhC(lm_max) )
-      allocate( this%dvhdrG(lm_max) )
-      allocate( this%dvhdrC(lm_max) )
-      bytes_allocated = bytes_allocated+7*lm_max*SIZEOF_DEF_COMPLEX
-      allocate( this%bhG(lm_maxMag) )
-      allocate( this%bhC(lm_maxMag) )
-      allocate( this%cbhG(lm_maxMag) )
-      allocate( this%cbhC(lm_maxMag) )
-      bytes_allocated = bytes_allocated+4*lm_maxMag*SIZEOF_DEF_COMPLEX
+      allocate( this%dLhw(lm_length) )
+      allocate( this%dLhdw(lm_length) )
+      allocate( this%dLhz(lm_length) )
+      allocate( this%dLhb(lm_length) )
+      allocate( this%dLhj(lm_length) )
+      allocate( this%vhG(lm_length) )
+      allocate( this%vhC(lm_length) )
+      allocate( this%dvhdrG(lm_length) )
+      allocate( this%dvhdrC(lm_length) )
+      bytes_allocated = bytes_allocated+7*lm_length*SIZEOF_DEF_COMPLEX
+      allocate( this%bhG(lm_lengthMag) )
+      allocate( this%bhC(lm_lengthMag) )
+      allocate( this%cbhG(lm_lengthMag) )
+      allocate( this%cbhC(lm_lengthMag) )
+      bytes_allocated = bytes_allocated+4*lm_lengthMag*SIZEOF_DEF_COMPLEX
       !----- R-distributed versions of scalar fields (see c_fields.f):
-      allocate( this%sR(lm_max),this%dsR(lm_max) )
-      allocate( this%preR(lm_max),this%dpR(lm_max) )
-      bytes_allocated = bytes_allocated+4*lm_max*SIZEOF_DEF_COMPLEX
+      allocate( this%sR(lm_length),this%dsR(lm_length) )
+      allocate( this%preR(lm_length),this%dpR(lm_length) )
+      bytes_allocated = bytes_allocated+4*lm_length*SIZEOF_DEF_COMPLEX
 
       if ( l_chemical_conv ) then
-         allocate( this%xiR(lm_max) )
-         bytes_allocated = bytes_allocated+lm_max*SIZEOF_DEF_COMPLEX
+         allocate( this%xiR(lm_length) )
+         bytes_allocated = bytes_allocated+lm_length*SIZEOF_DEF_COMPLEX
       end if
 
       allocate( this%zAS(l_max+1),this%dzAS(l_max+1),this%ddzAS(l_max+1) ) ! used in TO
       bytes_allocated = bytes_allocated+3*(l_max+1)*SIZEOF_DEF_REAL
 
-      allocate( this%bCMB(lm_maxMag) )
-      bytes_allocated = bytes_allocated+lm_maxMag*SIZEOF_DEF_COMPLEX
+      allocate( this%bCMB(lm_lengthMag) )
+      bytes_allocated = bytes_allocated+lm_lengthMag*SIZEOF_DEF_COMPLEX
 
    end subroutine initialize
 !------------------------------------------------------------------------------
@@ -131,61 +132,73 @@ contains
       !   R-distributed output variables
 
       !-- Local variables:
-      integer :: lm,l,m
+      integer :: lm,l,m, lm_zero, lm_grenoble
       complex(cp) :: dbd
+      
+      lm_zero = dist_map%lm2(0,0)
+      lm_grenoble = 0
+      if (lGrenoble) lm_grenoble = dist_map%lm2(1,0)
 
       if ( nR == n_r_icb ) this%omegaIC=omega_ic
       if ( nR == n_r_cmb ) this%omegaMA=omega_ma
       if ( l_conv .or. l_mag_kin ) then
 
          if ( l_heat ) then
-            do lm=1,lm_max
-               this%sR(lm) =s_Rloc(lm,nR)   
-               this%dsR(lm)=ds_Rloc(lm,nR)  ! used for plotting and Rms
+            do lm=1,lm_loc
+               this%sR(lm) =s_dist(lm,nR)   
+               this%dsR(lm)=ds_dist(lm,nR)  ! used for plotting and Rms
             end do
          end if
          if ( l_chemical_conv ) then
-            do lm=1,lm_max
-               this%xiR(lm)=xi_Rloc(lm,nR) 
+            do lm=1,lm_loc
+               this%xiR(lm)=xi_dist(lm,nR) 
             end do
          end if
          if ( lTOnext .or. lTOnext2 .or. lTOCalc ) then
-            do lm=1,lm_max
-               l=lm2l(lm)
-               m=lm2m(lm)
+            ! Shouldn't this loop be just from l=0 to l=l_max in m=0? - Lago
+            !>@TODO This will only happen in one rank in comm_theta ! i.e. the one which 
+            !>      contains coord_theta=0. I need to check if this needs to be broadcast
+            !>      or if just coord_theta=0 needs this information.
+            do lm=1,lm_loc
+               l=dist_map%lm2l(lm)
+               m=dist_map%lm2m(lm)
                if ( l <= l_max .and. m == 0 ) then
-                  this%zAS(l+1)  =real(z_Rloc(lm,nR))   ! used in TO
-                  this%dzAS(l+1) =real(dz_Rloc(lm,nR))  ! used in TO (anelastic)
+                  this%zAS(l+1)  =real(z_dist(lm,nR))   ! used in TO
+                  this%dzAS(l+1) =real(dz_dist(lm,nR))  ! used in TO (anelastic)
                   this%ddzAS(l+1)=ddzASL(l+1,nR)        ! used in TO
                end if
             end do
          end if
          if ( lPressCalc ) then
-            do lm=1,lm_max
-               this%preR(lm)= p_Rloc(lm,nR) ! used for Rms in get_td (anelastic)
-               this%dpR(lm) =dp_Rloc(lm,nR) ! used for Rms in get_td
+            do lm=1,lm_loc
+               this%preR(lm)= p_dist(lm,nR) ! used for Rms in get_td (anelastic)
+               this%dpR(lm) =dp_dist(lm,nR) ! used for Rms in get_td
             end do
          end if
          if ( l_mag .and. l_frame .and. l_movie_oc .and. nR == n_r_cmb ) then
-            this%bCMB(1)=zero ! used in s_store_movie_frame.f
-            do lm=2,lm_max
-               this%bCMB(lm)=b_Rloc(lm,nR)  ! used for movie output of surface field
+            do lm=1,lm_loc
+               this%bCMB(lm)=b_dist(lm,nR)  ! used for movie output of surface field
             end do
+            if (lm_zero > 0) then
+               this%bCMB(lm_zero)=zero
+            end if
          end if
 
          if ( nBc /= 2 ) then ! nBc=2 is flag for fixed boundary
-            this%dLhw(1)=zero
-            this%vhG(1) =zero
-            this%vhC(1) =zero
-            do lm=2,lm_max
-               this%dLhw(lm)=dLh(lm)*w_Rloc(lm,nR)
-               this%vhG(lm) =dw_Rloc(lm,nR) - &
-                    cmplx(-aimag(z_Rloc(lm,nR)),real(z_Rloc(lm,nR)),kind=cp)
-               this%vhC(lm) =dw_Rloc(lm,nR) + &
-                    cmplx(-aimag(z_Rloc(lm,nR)),real(z_Rloc(lm,nR)),kind=cp)
+            do lm=1,lm_loc 
+               this%dLhw(lm)=dLh_loc(lm)*w_dist(lm,nR)
+               this%vhG(lm) =dw_dist(lm,nR) - &
+                    cmplx(-aimag(z_dist(lm,nR)),real(z_dist(lm,nR)),kind=cp)
+               this%vhC(lm) =dw_dist(lm,nR) + &
+                    cmplx(-aimag(z_dist(lm,nR)),real(z_dist(lm,nR)),kind=cp)
             end do
+            if (lm_zero > 0) then
+               this%dLhw(lm_zero)=zero
+               this%vhG(lm_zero) =zero
+               this%vhC(lm_zero) =zero
+            end if
          else if ( lRmsCalc ) then
-            do lm=1,lm_max
+            do lm=1,lm_loc
                this%dLhw(lm)=zero
                this%vhG(lm) =zero
                this%vhC(lm) =zero
@@ -193,56 +206,59 @@ contains
          end if
 
          if ( lDeriv ) then
-            this%dLhdw(1) =zero
-            this%dLhz(1)  =zero
-            this%dvhdrG(1)=zero
-            this%dvhdrC(1)=zero
-            do lm=2,lm_max
-               this%dLhz(lm)  =dLh(lm)*z_Rloc(lm,nR)
-               this%dLhdw(lm) =dLh(lm)*dw_Rloc(lm,nR)
-               this%dvhdrG(lm)=ddw_Rloc(lm,nR) - &
-                    cmplx(-aimag(dz_Rloc(lm,nR)),real(dz_Rloc(lm,nR)),kind=cp)
-               this%dvhdrC(lm)=ddw_Rloc(lm,nR) + &
-                    cmplx(-aimag(dz_Rloc(lm,nR)),real(dz_Rloc(lm,nR)),kind=cp)
+            do lm=1,lm_loc
+               this%dLhz(lm)  =dLh_loc(lm)*z_dist(lm,nR)
+               this%dLhdw(lm) =dLh_loc(lm)*dw_dist(lm,nR)
+               this%dvhdrG(lm)=ddw_dist(lm,nR) - &
+                    cmplx(-aimag(dz_dist(lm,nR)),real(dz_dist(lm,nR)),kind=cp)
+               this%dvhdrC(lm)=ddw_dist(lm,nR) + &
+                    cmplx(-aimag(dz_dist(lm,nR)),real(dz_dist(lm,nR)),kind=cp)
             end do
+            if (lm_zero > 0) then
+               this%dLhdw(lm_zero) =zero
+               this%dLhz(lm_zero)  =zero
+               this%dvhdrG(lm_zero)=zero
+               this%dvhdrC(lm_zero)=zero
+            end if
          end if
 
       end if
 
       if ( l_mag .or. l_mag_LF ) then
-
-         !PRINT*,"aj: ",SUM(ABS(aj(:,nR))),SUM(ABS(dLh))
+         !PRINT*,"aj: ",SUM(ABS(aj(:,nR))),SUM(ABS(dLh_loc))
          !PRINT*,"dj: ",SUM(ABS(dj(:,nR)))
-         this%dLhb(1)=zero
-         this%bhG(1) =zero
-         this%bhC(1) =zero
-         do lm=2,lm_max
-            this%dLhb(lm)=dLh(lm)*b_Rloc(lm,nR)
-            this%bhG(lm) =db_Rloc(lm,nR) - &
-                 cmplx(-aimag(aj_Rloc(lm,nR)),real(aj_Rloc(lm,nR)),kind=cp)
-            this%bhC(lm) =db_Rloc(lm,nR) + &
-                 cmplx(-aimag(aj_Rloc(lm,nR)),real(aj_Rloc(lm,nR)),kind=cp)
+         do lm=1,lm_loc
+            this%dLhb(lm)=dLh_loc(lm)*b_dist(lm,nR)
+            this%bhG(lm) =db_dist(lm,nR) - &
+                 cmplx(-aimag(aj_dist(lm,nR)),real(aj_dist(lm,nR)),kind=cp)
+            this%bhC(lm) =db_dist(lm,nR) + &
+                 cmplx(-aimag(aj_dist(lm,nR)),real(aj_dist(lm,nR)),kind=cp)
          end do
-         if ( lGrenoble ) then ! Add dipole imposed by inner core
-            lm=lm2(1,0)
-            this%dLhb(lm)=this%dLhb(lm)+dLh(lm)*b0(nR)
-            this%bhG(lm) =this%bhG(lm)+db0(nR)
-            this%bhC(lm) =this%bhC(lm)+db0(nR)
+         if (lm_zero > 0) then
+            this%dLhb(lm_zero)=zero
+            this%bhG(lm_zero) =zero
+            this%bhC(lm_zero) =zero
+         end if
+         if ( lm_grenoble > 0 ) then ! Add dipole imposed by inner core
+            this%dLhb(lm_grenoble)=this%dLhb(lm_grenoble)+dLh_loc(lm_grenoble)*b0(nR)
+            this%bhG(lm_grenoble) =this%bhG(lm_grenoble)+db0(nR)
+            this%bhC(lm_grenoble) =this%bhC(lm_grenoble)+db0(nR)
          end if
          if ( lDeriv ) then
-            this%dLhj(1)=zero
-            this%cbhG(1)=zero
-            this%cbhC(1)=zero
-            do lm=2,lm_max
-               this%dLhj(lm)=dLh(lm)*aj_Rloc(lm,nR)
-               dbd     =or2(nR)*this%dLhb(lm)-ddb_Rloc(lm,nR)
-               this%cbhG(lm)=dj_Rloc(lm,nR)-cmplx(-aimag(dbd),real(dbd),kind=cp)
-               this%cbhC(lm)=dj_Rloc(lm,nR)+cmplx(-aimag(dbd),real(dbd),kind=cp)
+            do lm=1,lm_loc
+               this%dLhj(lm)=dLh_loc(lm)*aj_dist(lm,nR)
+               dbd     =or2(nR)*this%dLhb(lm)-ddb_dist(lm,nR)
+               this%cbhG(lm)=dj_dist(lm,nR)-cmplx(-aimag(dbd),real(dbd),kind=cp)
+               this%cbhC(lm)=dj_dist(lm,nR)+cmplx(-aimag(dbd),real(dbd),kind=cp)
             end do
-            if ( lGrenoble ) then ! Add dipole imposed by inner core
-               lm=lm2(1,0)
-               this%cbhG(lm)=this%cbhG(lm)+cmplx(0.0_cp,ddb0(nR),kind=cp)
-               this%cbhC(lm)=this%cbhC(lm)-cmplx(0.0_cp,ddb0(nR),kind=cp)
+            if (lm_zero > 0) then
+               this%dLhj(lm_zero)=zero
+               this%cbhG(lm_zero)=zero
+               this%cbhC(lm_zero)=zero
+            end if
+            if ( lm_grenoble > 0 ) then ! Add dipole imposed by inner core
+               this%cbhG(lm_grenoble)=this%cbhG(lm_grenoble)+cmplx(0.0_cp,ddb0(nR),kind=cp)
+               this%cbhC(lm_grenoble)=this%cbhC(lm_grenoble)-cmplx(0.0_cp,ddb0(nR),kind=cp)
             end if
          end if
 

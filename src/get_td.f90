@@ -303,7 +303,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
 
                if ( lRmsCalc ) then
 
-                  Buo(lm) =BuoFac*rgrav(nR)*rho0(nR)*leg_helper%sR(lm_glb)
+                  Buo(lm) =BuoFac*rgrav(nR)*rho0(nR)*leg_helper%sR(lm)
                   if ( l_mag_LF .and. nR>n_r_LCR ) then
                      LFPol(lm) =      or2(nR)*this%LFrLM(lm)
                      LFTor(lm) =-dTheta1A_loc(lm)*this%LFpLM(lmPA)
@@ -335,7 +335,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                         &                   dPhi0_loc(lm)*(                      &
                         &         -ddw_dist(lm,nR)+beta(nR)*dw_dist(lm,nR)     + &
                         &             ( beta(nR)*or1(nR)+or2(nR))*               &
-                        &                         leg_helper%dLhw(lm_glb) )    + &
+                        &                         leg_helper%dLhw(lm) )    + &
                         &             dTheta3A_loc(lm)*( dz_dist(lmA,nR)-        &
                         &                            beta(nR)*z_dist(lmA,nR) ) + &
                         &             dTheta3S_loc(lm)*( dz_dist(lmS,nR)-        &
@@ -348,13 +348,13 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                         &                   dPhi0_loc(lm)*(                      &
                         &         -ddw_dist(lm,nR)+beta(nR)*dw_dist(lm,nR)     + &
                         &             ( beta(nR)*or1(nR)+or2(nR))*               &
-                        &                         leg_helper%dLhw(lm_glb) ) )
+                        &                         leg_helper%dLhw(lm) ) )
                      else if ( l == m ) then
                         CorPol_loc =two*CorFac*or2(nR)*orho1(nR)*(               &
                         &                   dPhi0_loc(lm)*(                      &
                         &         -ddw_dist(lm,nR)+beta(nR)*dw_dist(lm,nR)     + &
                         &             ( beta(nR)*or1(nR)+or2(nR))*               &
-                        &                         leg_helper%dLhw(lm_glb) )    + &
+                        &                         leg_helper%dLhw(lm) )    + &
                         &             dTheta3A_loc(lm)*( dz_dist(lmA,nR)-        &
                         &                            beta(nR)*z_dist(lmA,nR) ) + &
                         &          or1(nR)* (                                    &
@@ -420,11 +420,11 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
 
                   if ( l_TP_form .or. l_anelastic_liquid ) then
                      Buo(lm) =BuoFac*alpha0(nR)*rgrav(nR)*(              &
-                     &        rho0(nR)*leg_helper%sR(lm_glb)-ViscHeatFac*&
+                     &        rho0(nR)*leg_helper%sR(lm)-ViscHeatFac*&
                      &        (ThExpNb*alpha0(nR)*temp0(nR)+ogrun(nR))*  &
-                     &        leg_helper%preR(lm_glb) )
+                     &        leg_helper%preR(lm) )
                   else
-                     Buo(lm) =BuoFac*rho0(nR)*rgrav(nR)*leg_helper%sR(lm_glb)
+                     Buo(lm) =BuoFac*rho0(nR)*rgrav(nR)*leg_helper%sR(lm)
                   end if
 
                   if ( l_double_curl ) then 
@@ -600,14 +600,14 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
       !                   m = dist_map%lm2m(lm)
       !                   lm_glb = lm2(l,m)
       !                   
-      !                   Geo(lm)=CorPol(lm)-leg_helper%dpR(lm_glb)+beta(nR)*leg_helper%preR(lm_glb)
+      !                   Geo(lm)=CorPol(lm)-leg_helper%dpR(lm)+beta(nR)*leg_helper%preR(lm)
       !                   CLF(lm)=CorPol(lm)+LFPol(lm)
-      !                   PLF(lm)=LFPol(lm)-leg_helper%dpR(lm_glb)+beta(nR)*leg_helper%preR(lm_glb)
+      !                   PLF(lm)=LFPol(lm)-leg_helper%dpR(lm)+beta(nR)*leg_helper%preR(lm)
       !                   Mag(lm)=Geo(lm)+LFPol(lm)
       !                   Arc(lm)=Geo(lm)+Buo(lm)
       !                   ArcMag(lm)=Mag(lm)+Buo(lm)
       !                   CIA(lm)=ArcMag(lm)+AdvPol(lm)
-      !                   !CIA(lm)=CorPol(lm_glb)+Buo(lm_glb)+AdvPol(lm_glb)
+      !                   !CIA(lm)=CorPol(lm)+Buo(lm)+AdvPol(lm)
       !                end do
       !
       !                call hIntRms(Geo(1:lm_loc),nR,1,lm_loc,0,Geo2hInt(0:l_max,nR),dist_map,.false.)
@@ -706,7 +706,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                      if ( l < l_max .and. l > m ) then
                         CorPol_loc=                    two*CorFac*or2(nR) *      &
                         &                    ( -dPhi0_loc(lm) * ( dw_dist(lm,nR) &
-                        &                       +or1(nR)*leg_helper%dLhw(lm_glb) &
+                        &                       +or1(nR)*leg_helper%dLhw(lm) &
                         &                                                  )     &
                         &                       +dTheta3A_loc(lm)*z_dist(lmA,nR) &
                         &                       +dTheta3S_loc(lm)*z_dist(lmS,nR) &
@@ -714,12 +714,12 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
        
                      else if ( l == l_max ) then
                         CorPol_loc=  two*CorFac*or2(nR) * ( -dPhi0_loc(lm) *  &
-                                    ( dw_dist(lm,nR) + or1(nR)*leg_helper%dLhw(lm_glb) ) )
+                                    ( dw_dist(lm,nR) + or1(nR)*leg_helper%dLhw(lm) ) )
        
                      else if ( l == m ) then
                         CorPol_loc=                    two*CorFac*or2(nR) *      &
                         &                    ( -dPhi0_loc(lm) * ( dw_dist(lm,nR) &
-                        &                       +or1(nR)*leg_helper%dLhw(lm_glb) &
+                        &                       +or1(nR)*leg_helper%dLhw(lm) &
                         &                                                   )    &
                         &                      +dTheta3A_loc(lm)*z_dist(lmA,nR)  &
                         &                    )

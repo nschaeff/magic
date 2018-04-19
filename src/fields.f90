@@ -68,7 +68,7 @@ module fields
 
    complex(cp), public, allocatable :: work_LMloc(:,:) ! Needed in update routines
    
-   !-- Distributed counterpart of some of the fields above
+   !-- Distributed counterpart of some of the fields above - Lago
    complex(cp), public, allocatable :: s_dist  (:,:)
    complex(cp), public, allocatable :: ds_dist (:,:)
    complex(cp), public, allocatable :: z_dist  (:,:)

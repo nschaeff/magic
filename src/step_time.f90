@@ -12,7 +12,8 @@ module step_time_mod
    use constants, only: zero, one, half
    use mem_alloc, only: bytes_allocated, memWrite
    use truncation, only: n_r_max, l_max, l_maxMag, n_r_maxMag, &
-       &                 lm_max, lmP_max, lm_maxMag
+       &                 lm_max, lmP_max, lm_maxMag, lm_loc,   &
+       &                 lm_locMag
    use num_param, only: n_time_steps, runTimeLimit, tEnd, dtMax, &
        &                dtMin, tScale, alpha, runTime
    use radial_data, only: nRstart, nRstop, nRstartMag, nRstopMag, &
@@ -95,6 +96,23 @@ module step_time_mod
    complex(cp), pointer :: dbdt_LMloc(:,:), djdt_LMloc(:,:), dVxBhLM_LMloc(:,:)
 
    complex(cp), allocatable :: dbdt_CMB_LMloc(:)
+   
+   !--- Duplications - yay -.-"
+   complex(cp), allocatable :: dwdt_dist(:,:),dzdt_dist(:,:)
+   complex(cp), allocatable :: dpdt_dist(:,:),dsdt_dist(:,:)
+   complex(cp), allocatable :: dxidt_dist(:,:)
+   complex(cp), allocatable :: dbdt_dist(:,:),djdt_dist(:,:)
+   complex(cp), allocatable :: dVxBhLM_dist(:,:)
+   complex(cp), allocatable :: dVxVhLM_dist(:,:)
+   complex(cp), allocatable :: dVSrLM_dist(:,:)
+   complex(cp), allocatable :: dVXirLM_dist(:,:)
+   complex(cp), allocatable :: dVPrLM_dist(:,:)
+   
+   complex(cp), allocatable :: br_vt_lm_cmb_dist(:) ! product br*vt at CMB
+   complex(cp), allocatable :: br_vp_lm_cmb_dist(:) ! product br*vp at CMB
+   complex(cp), allocatable :: br_vt_lm_icb_dist(:) ! product br*vt at ICB
+   complex(cp), allocatable :: br_vp_lm_icb_dist(:) ! product br*vp at ICB
+   
 
    integer :: sigFile
 
@@ -253,6 +271,28 @@ contains
       allocate ( dbdt_CMB_LMloc(llmMag:ulmMag) )
       bytes_allocated = bytes_allocated+(ulmMag-llmMag+1)*SIZEOF_DEF_COMPLEX
 
+      
+      ! Distributed arrays (to replace those above some time in the future)
+      !---------------------------------------------------------------------
+      allocate(dsdt_dist   (1:lm_loc,nRstart:nRstop))
+      allocate(dwdt_dist   (1:lm_loc,nRstart:nRstop))
+      allocate(dzdt_dist   (1:lm_loc,nRstart:nRstop))
+      allocate(dpdt_dist   (1:lm_loc,nRstart:nRstop))
+      allocate(dVSrLM_dist (1:lm_loc,nRstart:nRstop))
+      bytes_allocated = bytes_allocated+5*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+      !-----------
+      allocate(dbdt_dist   (1:lm_locMag,nRstartMag:nRstopMag))
+      allocate(djdt_dist   (1:lm_locMag,nRstartMag:nRstopMag))
+      allocate(dVxBhLM_dist(1:lm_locMag,nRstartMag:nRstopMag))
+      bytes_allocated = bytes_allocated+3*lm_locMag*(nRstopMag-nRstartMag+1)*SIZEOF_DEF_COMPLEX
+      if ( l_chemical_conv ) allocate(dVXirLM_dist(1:lm_loc,nRstart:nRstop))
+      if ( l_chemical_conv ) allocate(dxidt_dist  (1:lm_loc,nRstart:nRstop))
+      if ( l_chemical_conv ) bytes_allocated = bytes_allocated+2*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+      if ( l_TP_form       ) allocate(dVPrLM_dist (1:lm_loc,nRstart:nRstop))
+      if ( l_TP_form       ) bytes_allocated = bytes_allocated+lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+      if ( l_double_curl   ) allocate(dVxVhLM_dist(1:lm_loc,nRstart:nRstop))
+      if ( l_double_curl   ) bytes_allocated = bytes_allocated+lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+      
       local_bytes_used = bytes_allocated-local_bytes_used
       call memWrite('step_time.f90', local_bytes_used)
 
@@ -416,6 +456,22 @@ contains
 
       !integer :: signal_window
       integer(lip) :: time_in_ms
+      
+!       !--- Duplications - yay -.-"  [180419.Lago]
+!       complex(cp) :: dwdt_dist(lm_loc),dzdt_dist(lm_loc)
+!       complex(cp) :: dpdt_dist(lm_loc),dsdt_dist(lm_loc)
+!       complex(cp) :: dxidt_dist(lm_loc)
+!       complex(cp) :: dbdt_dist(lm_locMag),djdt_dist(lm_locMag)
+!       complex(cp) :: dVxBhLM_dist(lm_locMag)
+!       complex(cp) :: dVxVhLM_dist(lm_loc)
+!       complex(cp) :: dVSrLM_dist(lm_loc)
+!       complex(cp) :: dVXirLM_dist(lm_loc)
+!       complex(cp) :: dVPrLM_dist(lm_loc)
+!       
+!       complex(cp) :: br_vt_lm_cmb_dist(lmP_loc) ! product br*vt at CMB
+!       complex(cp) :: br_vp_lm_cmb_dist(lmP_loc) ! product br*vp at CMB
+!       complex(cp) :: br_vt_lm_icb_dist(lmP_loc) ! product br*vt at ICB
+!       complex(cp) :: br_vp_lm_icb_dist(lmP_loc) ! product br*vp at ICB
 
 
       if ( lVerbose ) write(*,'(/,'' ! STARTING STEP_TIME !'')')

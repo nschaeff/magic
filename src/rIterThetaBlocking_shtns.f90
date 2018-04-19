@@ -31,7 +31,7 @@ module rIterThetaBlocking_shtns_mod
    use out_movie, only: store_movie_frame
    use outRot, only: get_lorentz_torque
    use courant_mod, only: courant
-   use nonlinear_bcs, only: get_br_v_bcs, v_rigid_boundary, v_rigid_boundary_dist
+   use nonlinear_bcs, only: get_br_v_bcs, v_rigid_boundary
    use nl_special_calc
    use shtns
    use horizontal_data
@@ -186,10 +186,6 @@ contains
       br_vp_lm_cmb=zero
       br_vt_lm_icb=zero
       br_vp_lm_icb=zero
-! !       br_vt_lm_cmb_loc=zero
-! !       br_vp_lm_cmb_loc=zero
-! !       br_vt_lm_icb_loc=zero
-! !       br_vp_lm_icb_loc=zero
       
       HelLMr     =0.0_cp
       Hel2LMr    =0.0_cp
@@ -243,19 +239,15 @@ contains
               &            this%gsa_dist%vpc,this%leg_helper%omegaMA,    &
               &            or2(this%nR),orho1(this%nR),                  &
               &            br_vt_lm_cmb,br_vp_lm_cmb)
-!          call gather_FlmP(br_vt_lm_cmb_loc,br_vt_lm_cmb) ! Is this needed? 180326-Lago
-!          call gather_FlmP(br_vp_lm_cmb_loc,br_vp_lm_cmb) ! Is this needed? 180326-Lago
       else if ( this%nR == n_r_icb .and. l_b_nl_icb ) then
          call get_br_v_bcs(this%gsa_dist%brc,this%gsa_dist%vtc,          &
               &            this%gsa_dist%vpc,this%leg_helper%omegaIC,    &
               &            or2(this%nR),orho1(this%nR),                  &
               &            br_vt_lm_icb,br_vp_lm_icb)
-!          call gather_FlmP(br_vt_lm_icb_loc,br_vt_lm_icb) ! Is this needed? 180326-Lago
-!          call gather_FlmP(br_vp_lm_icb_loc,br_vp_lm_icb) ! Is this needed? 180326-Lago
       end if
       
       !PERFOFF
-      !--------- Calculate Lorentz torque on inner core:
+!       !--------- Calculate Lorentz torque on inner core:
       !          each call adds the contribution of the theta-block to
       !          lorentz_torque_ic
       if ( this%nR == n_r_icb .and. l_mag_LF .and. l_rot_ic .and. l_cond_ic  ) then
@@ -286,26 +278,25 @@ contains
       !--------- Since the fields are given at gridpoints here, this is a good
       !          point for graphical output:
       !< parallelization postponed >
-      if ( this%l_graph ) then
-         print *, "PANIC l_graph"
-#ifdef WITH_MPI
-            PERFON('graphout')
-            call graphOut_mpi(time,this%nR,this%gsa%vrc,           &
-                 &            this%gsa%vtc,this%gsa%vpc,           &
-                 &            this%gsa%brc,this%gsa%btc,           &
-                 &            this%gsa%bpc,this%gsa%sc,            &
-                 &            this%gsa%pc,this%gsa%xic,            &
-                 &            1 ,this%sizeThetaB, lGraphHeader)
-            PERFOFF
-#else
-            call graphOut(time,this%nR,this%gsa%vrc,           &
-                 &        this%gsa%vtc,this%gsa%vpc,           &
-                 &        this%gsa%brc,this%gsa%btc,           &
-                 &        this%gsa%bpc,this%gsa%sc,            &
-                 &        this%gsa%pc,this%gsa%xic,            &
-                 &        1 ,this%sizeThetaB,lGraphHeader)
-#endif
-      end if
+!       if ( this%l_graph ) then
+! #ifdef WITH_MPI
+!             PERFON('graphout')
+!             call graphOut_mpi(time,this%nR,this%gsa%vrc,           &
+!                  &            this%gsa%vtc,this%gsa%vpc,           &
+!                  &            this%gsa%brc,this%gsa%btc,           &
+!                  &            this%gsa%bpc,this%gsa%sc,            &
+!                  &            this%gsa%pc,this%gsa%xic,            &
+!                  &            1 ,this%sizeThetaB, lGraphHeader)
+!             PERFOFF
+! #else
+!             call graphOut(time,this%nR,this%gsa%vrc,           &
+!                  &        this%gsa%vtc,this%gsa%vpc,           &
+!                  &        this%gsa%brc,this%gsa%btc,           &
+!                  &        this%gsa%bpc,this%gsa%sc,            &
+!                  &        this%gsa%pc,this%gsa%xic,            &
+!                  &        1 ,this%sizeThetaB,lGraphHeader)
+! #endif
+!       end if
       
 
       if ( this%l_probe_out ) then
@@ -568,13 +559,11 @@ contains
             if ( this%nR == n_r_cmb ) then
                call v_rigid_boundary(this%nR,this%leg_helper%omegaMA,this%lDeriv, &
                     &                gsa%vrc,gsa%vtc,gsa%vpc,gsa%cvrc,gsa%dvrdtc, &
-                    &                gsa%dvrdpc,gsa%dvtdpc,gsa%dvpdpc,            &
-                    &                1)
+                    &                gsa%dvrdpc,gsa%dvtdpc,gsa%dvpdpc)
             else if ( this%nR == n_r_icb ) then
                call v_rigid_boundary(this%nR,this%leg_helper%omegaIC,this%lDeriv, &
                     &                gsa%vrc,gsa%vtc,gsa%vpc,gsa%cvrc,gsa%dvrdtc, &
-                    &                gsa%dvrdpc,gsa%dvtdpc,gsa%dvpdpc,            &
-                    &                1)
+                    &                gsa%dvrdpc,gsa%dvtdpc,gsa%dvpdpc)
             end if
             if ( this%lDeriv ) then
                call torpol_to_spat(dw_Rloc(:, nR), ddw_Rloc(:, nR), dz_Rloc(:, nR), &
@@ -895,11 +884,11 @@ contains
             end if
          else if ( this%nBc == 2 ) then
             if ( this%nR == n_r_cmb ) then
-               call v_rigid_boundary_dist(this%nR,this%leg_helper%omegaMA,this%lDeriv, &
+               call v_rigid_boundary(this%nR,this%leg_helper%omegaMA,this%lDeriv, &
                     &                this%gsa_dist%vrc,this%gsa_dist%vtc,this%gsa_dist%vpc,this%gsa_dist%cvrc,this%gsa_dist%dvrdtc, &
                     &                this%gsa_dist%dvrdpc,this%gsa_dist%dvtdpc,this%gsa_dist%dvpdpc)
             else if ( this%nR == n_r_icb ) then
-               call v_rigid_boundary_dist(this%nR,this%leg_helper%omegaIC,this%lDeriv, &
+               call v_rigid_boundary(this%nR,this%leg_helper%omegaIC,this%lDeriv, &
                     &                this%gsa_dist%vrc,this%gsa_dist%vtc,this%gsa_dist%vpc,this%gsa_dist%cvrc,this%gsa_dist%dvrdtc, &
                     &                this%gsa_dist%dvrdpc,this%gsa_dist%dvtdpc,this%gsa_dist%dvpdpc)
             end if

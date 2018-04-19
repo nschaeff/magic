@@ -1,23 +1,33 @@
+2018-04-19
+-------------------------------------------------------------------------------
+- graphOut_mpi has been COMMENTED in rIterationThetaBlocking_shtns.f90, both
+  in master and in my branch!
+- l_TO has been disabled in Namelists.f90 both in master and my branch!
+
 2018-04-18
------------------------------------------------------------------------
-- I'm removing boussBenchSat test from the pool too. It has lPowerCalc
-  flag activated, which calls get_visc_heat, which calls legTFAS2. 
-  The parallelization of anything calling legTFAS2 has been postponed.
-  As of now, boussBenchSat test passes whenever BUILD_TYPE=Release
-  but fails for Debug (because of floating point invalid error).
+-------------------------------------------------------------------------------
+- I'm removing boussBenchSat test from the pool too. It has lPowerCalc flag
+  activated, which calls get_visc_heat, which calls legTFAS2. The 
+  parallelization of anything calling legTFAS2 has been postponed. As of now, 
+  boussBenchSat test passes whenever BUILD_TYPE=Release but fails for Debug 
+  (because of floating point invalid error).
+
+✔ Namelists.f90
+   - line 314 sets l_TO = .false., since the TO.f90 module has not been
+     parallelized yet
 
 2018-04-13
------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 - I've been using the following commit as "original-magic":
   - 1a90f4c4248bf766b0816cc652ae3ce11fe89368
   - Date:   Tue Jun 27 10:12:47 2017 +0200
 
 ✔ leg_helper.f90
-  - (initialize) I basically change dthe name of the variables to 
-  reflect their functionality.
-  - (legPrepG) this is strictly parallel now. It won't work for sequential 
-  cases
+  - (initialize) parallelized. I basically changed the name of the variables to
+    reflect their functionality.
+  - (legPrepG) parallelized. This won't work for sequential cases
   ✘ (legPrep_IC) [TODO]
+  ✘ (legPrep) [TODO]
   
 ✘ [TODO] replace MPI_DOUBLE_COMPLEX by MPI_DEF_COMPLEX in 
   truncation.f90 (in special for the gather functions)
@@ -32,26 +42,28 @@
   - dynamo_benchmark
   - varProps
   - finite_differences
-  - boussBenchSat: this enables lPowerCalc flag, which calls some of the diagnostics. This test 
-                passes with BUILD_TYPE=Release, but not BUILD_TYPE=Debug (it fires floating point
-                invalid error)
+  ✘ boussBenchSat: this enables lPowerCalc flag, which calls some of the 
+                diagnostics. This test passes with BUILD_TYPE=Release, but not 
+                BUILD_TYPE=Debug (it fires floating point invalid error)
   - doubleDiffusion
-  ✘ couetteAxi: here m=0. It confuses my implementation. I need to rethink the distribution in 
-                this case, or force n_procs_theta=1.
+  ✘ couetteAxi: here m=0. It confuses my implementation. I need to 
+                rethink the distribution in this case, or force 
+                n_procs_theta=1.
   - precession
   - testRestart
   - testTruncations
   - testMapping
   - testRadialOutputs
   - hydro_bench_anel
-  ✘ fluxPerturbation: there is a [BUG] here. It happens at line output.f90:809 and it is only fired 
-                if cmake is called with -DCMAKE_BUILD_TYPE=Debug. In this line, it generates a NaN
-                (sqrt of a negative real number) which is neglected at BUILD_TYPE=Release. I've 
-                reported this before, but even in the master branch (779796945c82) this bug is 
-                still present.
+  ✘ fluxPerturbation: there is a [BUG] here. It happens at line output.f90:809 
+                and it is only fired if cmake is called with BUILD_TYPE=Debug. 
+                In this line, it generates a NaN (sqrt of a negative real 
+                number) which is neglected at BUILD_TYPE=Release. I've reported
+                this before, but even in the master branch (779796945c82) this
+                bug is still present.
   - isothermal_nrho3
   - dynamo_benchmark_condICrotIC
-  ✘ varCond:   it calls movie_gather_frames_to_rank0 which is not yet parallelized
+  ✘ varCond: it calls movie_gather_frames_to_rank0 which is not yet parallelized
   ✘ testOutputs:           diagnostics not yet parallelized
   ✘ testRMSOutputs:        diagnostics not yet parallelized
   ✘ testCoeffOutputs:      diagnostics not yet parallelized
@@ -63,7 +75,7 @@
 
 
 2018-04-03
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ✔ distributed_theta.f90
   - Created this module to workaround some circular dependencies. Lots
   of things which are in blocking.f90, truncation.f90 and parallel.f90
@@ -86,7 +98,7 @@
     - lmPA = the same as lmP, but for l+1 (shifted)
 
 2018-03-29
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ✔ Theta Blocking
   - in the shtns version, the Theta Blocking is mostly disabled already,
   because sizeThetaB is set to n_theta_max (n_theta_loc, after the 
@@ -100,7 +112,7 @@
 
 - The reviewed callstack for the do_iteration, starting from do_iteration is:
    ⚫    this%TO_arrays%set_zero
-   ⚪    this%leg_helper%legPrepG
+   ⚫    this%leg_helper%legPrepG
    ⚫    this%nl_lm%set_zero
    ⚫    this%transform_to_grid_space
    ⚫    this%gsa%get_nl              
@@ -110,21 +122,21 @@
    ⚫    courant                      
    ⚪    graphOut_mpi                 
    ⚪    probe_out                    
-   ⚪    get_helicity                 
-   ⚪    get_visc_heat                
-   ⚪    get_nlBLayers                
-   ⚪    get_fluxes                   
-   ⚪    get_perpPar                  
+   ⚪    get_helicity     [nl_special_calc]            
+   ⚪    get_visc_heat    [nl_special_calc]            
+   ⚪    get_nlBLayers    [nl_special_calc]            
+   ⚪    get_fluxes       [nl_special_calc]            
+   ⚪    get_perpPar      [nl_special_calc]            
    ⚪    store_movie_frame            
-   ⚪    get_dtBLM                    
-   ⚪    getTOnext                    
-   ⚪    getTO                        
+   ?    get_dtBLM                    
+   ?    getTOnext                    
+   ?    getTO                        
    ⚫    this%nl_lm%get_td            
-   ⚪    getTOfinish                  
-   ⚪    get_dH_dtBLM                 
+   ?    getTOfinish                  
+   ?    get_dH_dtBLM                 
 
 2018-03-28
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ✔ courant.f90:courant parallelized
     - OMP & thetaBlock removed
     - (nrp,nfs) => (n_phi_max,n_theta_beg:n_theta_end)
@@ -147,7 +159,10 @@
    - nrp = n_phi_max
    - rIterThetaBlocking_shtns_t%sizeThetaB = n_theta_loc
 
-✔ nonlinear_bcs.f90:get_br_v_bcs parallelized
+✔ nonlinear_bcs.f90: 
+   ✔ get_br_v_bcs parallelized
+   ✔ v_rigid_boundary parallelized
+   ✘ (get_b_nl_bcs) [TODO]
    - OMP & thetaBlock removed
    - thetaBlock removed
    - lmP_max => lmP_loc
@@ -161,7 +176,7 @@
   for instance. 
 
 2017-12-18
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ✔ Scalability tests performed (added in the beamer). Little loop used to 
   submit many jobs at once:
   for i in 1 2 4 8 16 32 64 128 256 ; do  ./draco_job.sh -n_procs_theta=$i -r0=8 -theta0=6144 -template=strong -name=strong_r2_t$i ; done;
@@ -176,7 +191,7 @@
   
 
 2017-12-12
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ✔ Temporarily adding this to CMakeLists.txt
    add_definitions(-DWITHPERF)
    add_library(ooperf SHARED IMPORTED)
@@ -190,7 +205,7 @@
   those options to cmake.
 
 2017-12-12
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ✔ git-rebase completed
    ✘ Many problems were found because I have duplicated some
      modules. For instance, rIterDistributed was a minor-modified clone of 
@@ -235,7 +250,7 @@
 ✘ [TODO] review the callstack (it changed, since now I'm using shtns)
    
 2017-12-10
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ✔ Spherical Harmonics Transform porting completed.
 
 New modules:
@@ -283,7 +298,10 @@ Modified modules:
 
 ⚫ nonlinear_bcs - added
    ⚫ v_rigid_boundary_dist
-   which is called in transform_to_grid_space
+    which is called in transform_to_grid_space
+    -> old v_rigid_boundary removed
+    -> v_rigid_boundary_dist renamed to v_rigid_boundary
+
 
 ⚫ fft_mkl
    ⚫ init_fft_phi
@@ -318,7 +336,7 @@ Modified modules:
    Those modules are richly commented.
    
 2017-07-27
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ✔ Implemented the following functions:
 
 initialize_fft_phi  (fft_mkl.f90)
@@ -343,7 +361,7 @@ cat ./output.txt | grep "^0:" | head -n 1000
 
 
 2017-07-21
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 Currently compiling SHtns with:
 ./configure --enable-mkl --enable-magic-layout --disable-openmp --prefix=$HOME/local/
 make
@@ -362,7 +380,7 @@ cd ./
 
 
 2017-07-20
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 Functions from SHtns relevant for the parallelization (according to 
 Thomas):
 
@@ -412,7 +430,7 @@ Notation Conversion:
 ✘ shtns's mres => magIC's minc
 
 2017-07-18
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 Total change of plans after last conversation with Thomas.
 
 The parallel implementation is to be taken from the _shtns version
@@ -425,7 +443,7 @@ merged with rIteration (to get rid of the transform_to_grid_space
 defined in the later module).
 
 2017-06-21
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 Module legendre_grid_to_spec will be dropped in favour of 
 legendre_parallel for MPI version. I'll copy the functions as they are
 needed and adapt them accordingly.
@@ -450,7 +468,7 @@ be better to keep current structure.
 
 
 2017-06-02
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 The callstack for the do_iteration, starting from rIterThetaParallel is:
 
 - do_iteration_ThetaParallel (rIterThetaParallel:450)
@@ -493,7 +511,7 @@ The callstack for the do_iteration, starting from rIterThetaParallel is:
 
 
 2017-05-31
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
  ✔ Adding rThetaParallel module; at the moment, it merely merges
    rThetaBlocking with rThetaBlocking_seq. I will slowly adapt it from
    now on
@@ -506,7 +524,7 @@ The callstack for the do_iteration, starting from rIterThetaParallel is:
 
 
 2017-05-18
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
  ✔ fixed a bug in output.f90 which would allocate the array with the 
    proper size only for rank=0 (instead of coord_r = 0). That caused a
    glibc error
@@ -514,7 +532,7 @@ The callstack for the do_iteration, starting from rIterThetaParallel is:
 
 
 2017-04-27
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
  ✔ Transition to GitHub completed (I'll be pushing the changes soon) but 
    head is still 212f85cde21e3e942e62.
  ✔ "parallel" namelist can be read from command line too, e.g.:
@@ -531,7 +549,7 @@ manipulate the various input.nml from samples directory.
 
 
 2017-04-24
-------------------------------------------------------------------------
+-------------------------------------------------------------------------------
  ✔ there was a lot of trouble with the output. That is because multiple
    processes tried to open the same file simultaneously (since there are
    n_proc_phi x n_proc_theta processes whose coord_r = 0). Mostly, I have

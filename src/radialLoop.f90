@@ -174,15 +174,15 @@ contains
       logical :: isRadialBoundaryPoint
       
       !--- Duplications - yay -.-"
-      complex(cp) :: dwdt_dist(lm_loc),dzdt_dist(lm_loc)
-      complex(cp) :: dpdt_dist(lm_loc),dsdt_dist(lm_loc)
-      complex(cp) :: dxidt_dist(lm_loc)
-      complex(cp) :: dbdt_dist(lm_locMag),djdt_dist(lm_locMag)
-      complex(cp) :: dVxBhLM_dist(lm_locMag)
-      complex(cp) :: dVxVhLM_dist(lm_loc)
-      complex(cp) :: dVSrLM_dist(lm_loc)
-      complex(cp) :: dVXirLM_dist(lm_loc)
-      complex(cp) :: dVPrLM_dist(lm_loc)
+      complex(cp) :: dwdt_dist(lm_loc,nRstart:nRstop),dzdt_dist(lm_loc,nRstart:nRstop)
+      complex(cp) :: dpdt_dist(lm_loc,nRstart:nRstop),dsdt_dist(lm_loc,nRstart:nRstop)
+      complex(cp) :: dxidt_dist(lm_loc,nRstart:nRstop)
+      complex(cp) :: dbdt_dist(lm_locMag,nRstartMag:nRstopMag),djdt_dist(lm_locMag,nRstartMag:nRstopMag)
+      complex(cp) :: dVxBhLM_dist(lm_locMag,nRstartMag:nRstopMag)
+      complex(cp) :: dVxVhLM_dist(lm_loc,nRstart:nRstop)
+      complex(cp) :: dVSrLM_dist(lm_loc,nRstart:nRstop)
+      complex(cp) :: dVXirLM_dist(lm_loc,nRstart:nRstop)
+      complex(cp) :: dVPrLM_dist(lm_loc,nRstart:nRstop)
       
       complex(cp) :: br_vt_lm_cmb_dist(lmP_loc) ! product br*vt at CMB
       complex(cp) :: br_vp_lm_cmb_dist(lmP_loc) ! product br*vp at CMB
@@ -199,7 +199,25 @@ contains
          call graphOut_header(time)
 #endif
       end if
+      
+      dwdt_dist = zero
+      dzdt_dist = zero
+      dpdt_dist = zero
+      dsdt_dist = zero
+      dxidt_dist = zero
+      dbdt_dist = zero
+      djdt_dist = zero
+      dVxBhLM_dist = zero
+      dVxVhLM_dist = zero
+      dVSrLM_dist = zero
+      dVXirLM_dist = zero
+      dVPrLM_dist = zero
 
+      br_vt_lm_cmb=zero
+      br_vp_lm_cmb=zero
+      br_vt_lm_icb=zero
+      br_vp_lm_icb=zero
+      
       if ( l_cour ) then
          if ( coord_r == 0 ) then
             dtrkc(n_r_cmb)=1.e10_cp
@@ -299,9 +317,9 @@ contains
          call this_rIteration%slice_all(nR)
          
          call this_rIteration%do_iteration(nR,nBc,time,dt,dtLast,              &
-              & dsdt_dist,dwdt_dist,dzdt_dist,dpdt_dist,dxidt_dist,       &
-              & dbdt_dist,djdt_dist,dVxVhLM_dist,dVxBhLM_dist, &
-              & dVSrLM_dist,dVPrLM_dist,dVXirLM_dist,br_vt_lm_cmb_dist,          &
+              & dsdt_dist(:,nR),dwdt_dist(:,nR),dzdt_dist(:,nR),dpdt_dist(:,nR),dxidt_dist(:,nR),            &
+              & dbdt_dist(:,nR_Mag),djdt_dist(:,nR_Mag),dVxVhLM_dist(:,nR),dVxBhLM_dist(:,nR_Mag),                 &
+              & dVSrLM_dist(:,nR),dVPrLM_dist(:,nR),dVXirLM_dist(:,nR),br_vt_lm_cmb_dist,        &
               & br_vp_lm_cmb_dist,br_vt_lm_icb_dist,br_vp_lm_icb_dist,lorentz_torque_ic,      &
               & lorentz_torque_ma,HelLMr(:,nR),Hel2LMr(:,nR),HelnaLMr(:,nR),   &
               & Helna2LMr(:,nR),viscLMr(:,nR),uhLMr(:,nR),duhLMr(:,nR),        &
@@ -315,29 +333,33 @@ contains
          !@>TODO: lots of things are set to zero (e.g. if some l_* flags are deactive)
          !        those are, of course, unnecessary to gather. Others will bug everything
          !        out if gathered e.g. dVxVhLM.
-         call this_rIteration%gather_all(nR)   
-         call gather_Flm(dsdt_dist   (1:lm_loc), dsdt  (1:lm_max,nR)) 
-         call gather_Flm(dwdt_dist   (1:lm_loc), dwdt  (1:lm_max,nR)) 
-         call gather_Flm(dzdt_dist   (1:lm_loc), dzdt  (1:lm_max,nR)) 
-         call gather_Flm(dpdt_dist   (1:lm_loc), dpdt  (1:lm_max,nR)) 
-         call gather_Flm(dVSrLM_dist (1:lm_loc), dVSrLM(1:lm_max,nR)) 
-         !-----------
-         if (lm_maxMag==lm_max) call gather_Flm(dbdt_dist   (1:lm_loc), dbdt   (1:lm_max,nR)) 
-         if (lm_maxMag==lm_max) call gather_Flm(djdt_dist   (1:lm_loc), djdt   (1:lm_max,nR)) 
-         if (lm_maxMag==lm_max) call gather_Flm(dVxBhLM_dist(1:lm_loc), dVxBhLM(1:lm_max,nR)) 
-         if ( l_chemical_conv ) call gather_Flm(dVXirLM_dist(1:lm_loc), dVXirLM(1:lm_max,nR)) 
-         if ( l_chemical_conv ) call gather_Flm(dxidt_dist  (1:lm_loc), dxidt  (1:lm_max,nR)) 
-         if ( l_TP_form       ) call gather_Flm(dVPrLM_dist (1:lm_loc), dVPrLM (1:lm_max,nR)) 
-         if ( l_double_curl   ) call gather_Flm(dVxVhLM_dist(1:lm_loc), dVxVhLM(1:lm_max,nR))
-         if ( nR == n_r_cmb .and. l_b_nl_cmb ) then
-            call gather_FlmP(br_vt_lm_cmb_dist,br_vt_lm_cmb) ! Is this needed? 180326-Lago
-            call gather_FlmP(br_vp_lm_cmb_dist,br_vp_lm_cmb) ! Is this needed? 180326-Lago
-         else if ( nR == n_r_icb .and. l_b_nl_icb ) then
-            call gather_FlmP(br_vt_lm_icb_dist,br_vt_lm_icb) ! Is this needed? 180326-Lago
-            call gather_FlmP(br_vp_lm_icb_dist,br_vp_lm_icb) ! Is this needed? 180326-Lago
-         end if
 
       end do    ! Loop over radial levels 
+      
+      do nR=nRstart,nRstop
+         call this_rIteration%gather_all(nR)   
+         call gather_Flm(dsdt_dist   (1:lm_loc,nR), dsdt  (1:lm_max,nR)) 
+         call gather_Flm(dwdt_dist   (1:lm_loc,nR), dwdt  (1:lm_max,nR)) 
+         call gather_Flm(dzdt_dist   (1:lm_loc,nR), dzdt  (1:lm_max,nR)) 
+         call gather_Flm(dpdt_dist   (1:lm_loc,nR), dpdt  (1:lm_max,nR)) 
+         call gather_Flm(dVSrLM_dist (1:lm_loc,nR), dVSrLM(1:lm_max,nR)) 
+         !-----------
+         if (lm_maxMag==lm_max) call gather_Flm(dbdt_dist   (1:lm_loc,nR), dbdt   (1:lm_max,nR)) 
+         if (lm_maxMag==lm_max) call gather_Flm(djdt_dist   (1:lm_loc,nR), djdt   (1:lm_max,nR)) 
+         if (lm_maxMag==lm_max) call gather_Flm(dVxBhLM_dist(1:lm_loc,nR), dVxBhLM(1:lm_max,nR)) 
+         if ( l_chemical_conv ) call gather_Flm(dVXirLM_dist(1:lm_loc,nR), dVXirLM(1:lm_max,nR)) 
+         if ( l_chemical_conv ) call gather_Flm(dxidt_dist  (1:lm_loc,nR), dxidt  (1:lm_max,nR)) 
+         if ( l_TP_form       ) call gather_Flm(dVPrLM_dist (1:lm_loc,nR), dVPrLM (1:lm_max,nR)) 
+         if ( l_double_curl   ) call gather_Flm(dVxVhLM_dist(1:lm_loc,nR), dVxVhLM(1:lm_max,nR))
+      end do
+ 
+      if ( ((n_r_cmb >= nRstart) .or. (n_r_cmb <= nRstop)) .and. l_b_nl_cmb ) then
+         call gather_FlmP(br_vt_lm_cmb_dist,br_vt_lm_cmb) ! Is this needed? 180326-Lago
+         call gather_FlmP(br_vp_lm_cmb_dist,br_vp_lm_cmb) ! Is this needed? 180326-Lago
+      else if ( ((n_r_icb >= nRstart) .or. (n_r_icb <= nRstop)) .and. l_b_nl_icb ) then
+         call gather_FlmP(br_vt_lm_icb_dist,br_vt_lm_icb) ! Is this needed? 180326-Lago
+         call gather_FlmP(br_vp_lm_icb_dist,br_vp_lm_icb) ! Is this needed? 180326-Lago
+      end if
 
       !----- Correct sign of mantel Lorentz torque (see above):
       lorentz_torque_ma=-lorentz_torque_ma

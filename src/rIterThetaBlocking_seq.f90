@@ -157,10 +157,6 @@ contains
 
       lorentz_torque_ma = 0.0_cp
       lorentz_torque_ic = 0.0_cp
-      br_vt_lm_cmb=zero
-      br_vp_lm_cmb=zero
-      br_vt_lm_icb=zero
-      br_vp_lm_icb=zero
       HelLMr=0.0_cp
       Hel2LMr=0.0_cp
       HelnaLMr=0.0_cp
@@ -227,10 +223,14 @@ contains
          !     These products are used in get_b_nl_bcs.
          PERFON('nl_cmb')
          if ( this%nR == n_r_cmb .and. l_b_nl_cmb ) then
+            br_vt_lm_cmb=zero
+            br_vp_lm_cmb=zero
             call get_br_v_bcs(this%gsa%brc,this%gsa%vtc,this%gsa%vpc, &
                  &            this%leg_helper%omegaMA,or2(this%nR),   &
                  &            orho1(this%nR),br_vt_lm_cmb,br_vp_lm_cmb)
          else if ( this%nR == n_r_icb .and. l_b_nl_icb ) then
+            br_vt_lm_icb=zero
+            br_vp_lm_icb=zero
             call get_br_v_bcs(this%gsa%brc,this%gsa%vtc,this%gsa%vpc, &
                  &            this%leg_helper%omegaIC,or2(this%nR),   &
                  &            orho1(this%nR),br_vt_lm_icb,br_vp_lm_icb)

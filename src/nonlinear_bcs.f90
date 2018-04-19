@@ -22,7 +22,7 @@ module nonlinear_bcs
 
    private
 
-   public :: get_br_v_bcs, get_b_nl_bcs, v_rigid_boundary, v_rigid_boundary_dist
+   public :: get_br_v_bcs, get_b_nl_bcs, v_rigid_boundary
 
 contains
 
@@ -182,75 +182,9 @@ contains
       end if
                
    end subroutine get_b_nl_bcs
+  
 !-------------------------------------------------------------------------
    subroutine v_rigid_boundary(nR,omega,lDeriv,vrr,vtr,vpr,      &
-            &                  cvrr,dvrdtr,dvrdpr,dvtdpr,dvpdpr, &
-            &                  nThetaStart)
-      !
-      !  Purpose of this subroutine is to set the velocities and their    
-      !  derivatives at a fixed boundary.                                 
-      !  While vt is zero, since we only allow for rotation about the     
-      !  z-axix, vp= r sin(theta) v_phi = r**2 sin(theta)**2 omega        
-      !  cvr= r**2 * radial component of (\curl v) =                      
-      !  r**2  2 cos(theta) omega                                    
-      !
-
-      !-- Input of variables:
-      integer,  intent(in) :: nR            ! no of radial grid point
-      logical,  intent(in) :: lDeriv        ! derivatives required ?
-      integer,  intent(in) :: nThetaStart   ! no of theta to start with
-              
-      !-- Input of boundary rotation rate
-      real(cp), intent(in) :: omega
-
-      !-- output:
-      real(cp), intent(out) :: vrr(nrp,nfs)
-      real(cp), intent(out) :: vpr(nrp,nfs)
-      real(cp), intent(out) :: vtr(nrp,nfs)
-      real(cp), intent(out) :: cvrr(nrp,nfs)
-      real(cp), intent(out) :: dvrdtr(nrp,nfs)
-      real(cp), intent(out) :: dvrdpr(nrp,nfs)
-      real(cp), intent(out) :: dvtdpr(nrp,nfs)
-      real(cp), intent(out) :: dvpdpr(nrp,nfs)
-
-      !-- Local variables:
-      real(cp) :: r2
-      integer :: nThetaCalc,nTheta,nThetaNHS
-      integer :: nPhi
-
-      if ( nR == n_r_cmb ) then
-         r2=r_cmb*r_cmb
-      else if ( nR == n_r_icb ) then
-         r2=r_icb*r_icb
-      else
-         write(*,*)
-         write(*,*) '! v_rigid boundary called for a grid'
-         write(*,*) '! points which is not a boundary !  '
-         return
-      end if
-
-      nThetaCalc=nThetaStart-1
-      do nTheta=1,sizeThetaB
-         nThetaCalc=nThetaCalc+1
-         nThetaNHS =(nThetaCalc+1)/2 ! northern hemisphere=odd n_theta
-         do nPhi=1,n_phi_max
-            vrr(nPhi,nTheta)=0.0_cp
-            vtr(nPhi,nTheta)=0.0_cp
-            vpr(nPhi,nTheta)=r2*rho0(nR)*sn2(nThetaNHS)*omega
-            if ( lDeriv ) then
-               cvrr(nPhi,nTheta)  =r2*rho0(nR)*two*cosTheta(nThetaCalc)*omega
-               dvrdtr(nPhi,nTheta)=0.0_cp
-               dvrdpr(nPhi,nTheta)=0.0_cp
-               dvtdpr(nPhi,nTheta)=0.0_cp
-               dvpdpr(nPhi,nTheta)=0.0_cp
-            end if
-         end do
-      end do
-
-   end subroutine v_rigid_boundary
-   
-!-------------------------------------------------------------------------
-   subroutine v_rigid_boundary_dist(nR,omega,lDeriv,vrr,vtr,vpr,      &
             &                  cvrr,dvrdtr,dvrdpr,dvtdpr,dvpdpr)
 !@>details Distributed version of the v_rigid_boundary; the difference is 
 !> basically the size of the data and the indexes. I've removed nThetaStart
@@ -311,6 +245,6 @@ contains
          end do
       end do
 
-   end subroutine v_rigid_boundary_dist
+   end subroutine v_rigid_boundary
 !-------------------------------------------------------------------------
 end module nonlinear_bcs

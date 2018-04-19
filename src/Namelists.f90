@@ -309,7 +309,9 @@ contains
       end if
 
       n_stores=max(n_stores,n_rsts)
-
+      
+      if ( rank == 0 ) write(*,*) '! Disabling l_TO, for testing purposes! Enable it again once the parallelization of the diagnostics is completed!'
+      l_TO = .false. !>@TODO: remove this
       l_TOmovie=l_TOmovie.and.l_TO
 
       !-- Determine what has to be calculated depending on mode:
