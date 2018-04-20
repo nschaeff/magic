@@ -314,8 +314,6 @@ contains
               & lMagNlBc,l_graph,lViscBcCalc,lFluxProfCalc,lPerpParCalc,     &
               & lPressCalc, l_probe_out)
 
-         call this_rIteration%slice_all(nR)
-         
          call this_rIteration%do_iteration(nR,nBc,time,dt,dtLast,              &
               & dsdt_dist(:,nR),dwdt_dist(:,nR),dzdt_dist(:,nR),dpdt_dist(:,nR),dxidt_dist(:,nR),            &
               & dbdt_dist(:,nR_Mag),djdt_dist(:,nR_Mag),dVxVhLM_dist(:,nR),dVxBhLM_dist(:,nR_Mag),                 &
@@ -337,7 +335,6 @@ contains
       end do    ! Loop over radial levels 
       
       do nR=nRstart,nRstop
-         call this_rIteration%gather_all(nR)   
          call gather_Flm(dsdt_dist   (1:lm_loc,nR), dsdt  (1:lm_max,nR)) 
          call gather_Flm(dwdt_dist   (1:lm_loc,nR), dwdt  (1:lm_max,nR)) 
          call gather_Flm(dzdt_dist   (1:lm_loc,nR), dzdt  (1:lm_max,nR)) 

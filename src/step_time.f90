@@ -13,7 +13,8 @@ module step_time_mod
    use mem_alloc, only: bytes_allocated, memWrite
    use truncation, only: n_r_max, l_max, l_maxMag, n_r_maxMag, &
        &                 lm_max, lmP_max, lm_maxMag, lm_loc,   &
-       &                 lm_locMag
+       &                 lm_locMag, gather_Flm, slice_Flm,     &
+       &                 gather_FlmP
    use num_param, only: n_time_steps, runTimeLimit, tEnd, dtMax, &
        &                dtMin, tScale, alpha, runTime
    use radial_data, only: nRstart, nRstop, nRstartMag, nRstopMag, &
@@ -312,6 +313,7 @@ contains
 
    end subroutine finalize_step_time
 !-------------------------------------------------------------------------------
+
    subroutine step_time(time,dt,dtNew,n_time_step)
       !
       !  This subroutine performs the actual time-stepping.
@@ -975,7 +977,8 @@ contains
          !call MPI_Barrier(comm_r,ierr)
          !PERFOFF
          ! ===================================================================
-
+         call slice_all
+         
          call wallTime(runTimeRstart)
 
          call radialLoopG(l_graph,l_cour,l_frame,time,dt,dtLast,               &
@@ -1003,6 +1006,8 @@ contains
                call addTime(runTimeR,runTimePassed)
             end if
          end if
+         
+         call gather_all
 
          !---------------------------------------
          !--- Gather all r-distributed arrays ---
@@ -1549,5 +1554,97 @@ contains
 
    end subroutine check_time_hits
 !------------------------------------------------------------------------------
+   subroutine slice_all
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+      integer :: nR
+      
+      !--------------------------------------------------------
+      !-- From fields.f90
+      !--------------------------------------------------------
+      do nR=nRstart,nRstop
+         call slice_Flm(s_Rloc(:,nR)  ,  s_dist(:,nR)  )
+         call slice_Flm(ds_Rloc(:,nR) ,  ds_dist(:,nR) )
+         call slice_Flm(z_Rloc(:,nR)  ,  z_dist(:,nR)  )
+         call slice_Flm(dz_Rloc(:,nR) ,  dz_dist(:,nR) )
+         call slice_Flm(p_Rloc(:,nR)  ,  p_dist(:,nR)  )
+         call slice_Flm(dp_Rloc(:,nR) ,  dp_dist(:,nR) )
+         call slice_Flm(w_Rloc(:,nR)  ,  w_dist(:,nR)  )
+         call slice_Flm(dw_Rloc(:,nR) ,  dw_dist(:,nR) )
+         call slice_Flm(ddw_Rloc(:,nR),  ddw_dist(:,nR))
+         
+         if ( l_chemical_conv ) then
+            call slice_Flm(xi_Rloc(:,nR) ,  xi_dist(:,nR) )
+         else
+            xi_dist(1,1) = xi_Rloc(1,1)
+         end if
+         
+         if (lm_maxMag == lm_max) then
+            call slice_Flm(b_Rloc(:,nR)  ,  b_dist(:,nR)  )
+            call slice_Flm(db_Rloc(:,nR) ,  db_dist(:,nR) )
+            call slice_Flm(ddb_Rloc(:,nR),  ddb_dist(:,nR))
+            call slice_Flm(aj_Rloc(:,nR) ,  aj_dist(:,nR) )
+            call slice_Flm(dj_Rloc(:,nR) ,  dj_dist(:,nR) )
+         else if (lm_maxMag == 1) then
+            b_dist(:,nR)  = b_Rloc(:,nR)  
+            db_dist(:,nR) = db_Rloc(:,nR) 
+            ddb_dist(:,nR)= ddb_Rloc(:,nR)
+            aj_dist(:,nR) = aj_Rloc(:,nR) 
+            dj_dist(:,nR) = dj_Rloc(:,nR) 
+         else
+            print *, "Woopsie, value of lm_maxMag is funny: ", lm_maxMag
+            print *, "Aborting!"
+            STOP
+         end if
+      end do
+      
+   end subroutine slice_all
+!-------------------------------------------------------------------------------
+   subroutine gather_all
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+      integer :: nR
+      !--------------------------------------------------------
+      !-- From fields.f90
+      !--------------------------------------------------------
+      do nR=nRstart,nRstop
+         call gather_Flm(s_dist(:,nR)  , s_Rloc(:,nR)  )
+         call gather_Flm(ds_dist(:,nR) , ds_Rloc(:,nR) )
+         call gather_Flm(z_dist(:,nR)  , z_Rloc(:,nR)  )
+         call gather_Flm(dz_dist(:,nR) , dz_Rloc(:,nR) )
+         call gather_Flm(p_dist(:,nR)  , p_Rloc(:,nR)  )
+         call gather_Flm(dp_dist(:,nR) , dp_Rloc(:,nR) )
+         call gather_Flm(w_dist(:,nR)  , w_Rloc(:,nR)  )
+         call gather_Flm(dw_dist(:,nR) , dw_Rloc(:,nR) )
+         call gather_Flm(ddw_dist(:,nR), ddw_Rloc(:,nR))
+         
+         if ( l_chemical_conv ) then
+            call gather_Flm(xi_dist(:,nR) , xi_Rloc(:,nR) )
+         else
+            xi_Rloc(1,1) = xi_dist(1,1)
+         end if
+         
+         if (lm_maxMag == lm_max) then
+            call gather_Flm(b_dist(:,nR)  , b_Rloc(:,nR)  )
+            call gather_Flm(db_dist(:,nR) , db_Rloc(:,nR) )
+            call gather_Flm(ddb_dist(:,nR), ddb_Rloc(:,nR))
+            call gather_Flm(aj_dist(:,nR) , aj_Rloc(:,nR) )
+            call gather_Flm(dj_dist(:,nR) , dj_Rloc(:,nR) )
+         else if (lm_maxMag == 1) then
+            b_Rloc(:,nR)   = b_Rloc(:,nR)  
+            db_Rloc(:,nR)  = db_Rloc(:,nR) 
+            ddb_Rloc(:,nR) = ddb_Rloc(:,nR)
+            aj_Rloc(:,nR)  = aj_Rloc(:,nR) 
+            dj_Rloc(:,nR)  = dj_Rloc(:,nR) 
+         else
+            print *, "Woopsie, value of lm_maxMag is funny: ", lm_maxMag
+            print *, "Aborting!"
+            STOP
+         end if
+      end do
+      
+   end subroutine gather_all
+!-------------------------------------------------------------------------------
+
 end module step_time_mod
 

@@ -1,8 +1,22 @@
 2018-04-19
 -------------------------------------------------------------------------------
-- graphOut_mpi has been COMMENTED in rIterationThetaBlocking_shtns.f90, both
-  in master and in my branch!
-- l_TO has been disabled in Namelists.f90 both in master and my branch!
+- rIterThetaBlocking_shtns.f90
+   - [deleted] transform_to_lm_space_shtns
+   - [deleted] transform_to_grid_space_shtns
+   - [renamed] transform_to_grid_space_dist -> transform_to_grid_space_shtns 
+   - [renamed] transform_to_lm_space_dist -> transform_to_lm_space_shtns 
+   - [renamed] nl_lm -> nl_lm_glb (should not be used)
+   - [renamed] nl_lm_dist -> nl_lm
+   - [renamed] gsa -> gsa_glb (should not be used)
+   - [renamed] gsa_dist -> gsa
+   - [commented] graphOut_mpi (in both branches)
+   - [moved] slice_all to step_time.f90
+   - [moved] gather_all to step_time.f90
+   - l_TO has been disabled in Namelists.f90 both in master and my branch!
+
+- step_time.f90
+   - [moved] slice_all from rIterThetaBlocking_shtns.f90
+   - [moved] gather_all from rIterThetaBlocking_shtns.f90
 
 2018-04-18
 -------------------------------------------------------------------------------
@@ -23,11 +37,11 @@
   - Date:   Tue Jun 27 10:12:47 2017 +0200
 
 ✔ leg_helper.f90
-  - (initialize) parallelized. I basically changed the name of the variables to
+  - [parallelized] initialize: I basically changed the name of the variables to
     reflect their functionality.
-  - (legPrepG) parallelized. This won't work for sequential cases
-  ✘ (legPrep_IC) [TODO]
-  ✘ (legPrep) [TODO]
+  - [parallelized] legPrepG: This won't work for sequential cases
+  ✘ [TODO] legPrep_IC
+  ✘ [TODO] legPrep
   
 ✘ [TODO] replace MPI_DOUBLE_COMPLEX by MPI_DEF_COMPLEX in 
   truncation.f90 (in special for the gather functions)

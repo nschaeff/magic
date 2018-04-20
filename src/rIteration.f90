@@ -23,8 +23,6 @@ module rIteration_mod
       procedure :: set_steering_variables
       procedure(do_iteration_if), deferred :: do_iteration
       procedure(getType_if), deferred :: getType
-      procedure :: slice_all
-      procedure :: gather_all
    end type rIteration_t
  
    interface 
@@ -113,16 +111,6 @@ contains
       this%l_probe_out = l_probe_out
 
    end subroutine set_steering_variables
-!------------------------------------------------------------------------------
-   subroutine slice_all(this,nR)
-      class(rIteration_t) :: this
-      integer, intent(in) :: nR
-   end subroutine slice_all
-!------------------------------------------------------------------------------
-   subroutine gather_all(this,nR)
-      class(rIteration_t) :: this
-      integer, intent(in) :: nR
-   end subroutine gather_all
 !------------------------------------------------------------------------------
 end module rIteration_mod
 !------------------------------------------------------------------------------
