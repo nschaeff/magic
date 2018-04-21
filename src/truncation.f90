@@ -4,7 +4,8 @@ module truncation
    !
 
    use precision_mod, only: cp
-   use logic, only: l_finite_diff, lVerbose
+   use logic, only: l_finite_diff, lVerbose, l_chemical_conv, l_double_curl, &
+       &            l_TP_form
    use useful, only: abortRun
    use parallel_mod
    use mpi
@@ -104,7 +105,11 @@ module truncation
    ! 
    ! - Lago
    integer :: n_theta_beg, n_theta_end, n_theta_loc
-   integer :: n_m_ext, n_m_loc, lmP_loc, lm_loc, lm_locMag
+   integer :: n_m_ext, n_m_loc, lmP_loc, lm_loc
+   integer :: lm_locMag
+   integer :: lm_locChe
+   integer :: lm_locTP
+   integer :: lm_locDC
    integer, allocatable :: n_theta_dist(:,:), lmP_dist(:,:,:), lm_dist(:,:,:)
    
    !@>TODO: 
@@ -250,7 +255,13 @@ contains
       lmP_loc = sum(lmP_dist(coord_theta,:,2))
       lm_loc  = sum(lm_dist( coord_theta,:,2))
       lm_locMag = lm_loc
-      if (lm_maxMag==1) lm_locMag = 1
+      lm_locChe = lm_loc
+      lm_locTP  = lm_loc
+      lm_locDC  = lm_loc
+      if ( lm_maxMag==1 ) lm_locMag = 1
+      if ( .not. l_chemical_conv ) lm_locChe = 1
+      if ( .not. l_TP_form       ) lm_locTP  = 1
+      if ( .not. l_double_curl   ) lm_locDC  = 1
       
       if (rank == 0) then
          print "('θ partition in rank ', I3, ': ', I5, I5, I5, ' points')", &

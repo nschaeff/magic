@@ -8,7 +8,8 @@ module nonlinear_lm_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use truncation, only: lm_max, l_max, lm_maxMag, lmP_max, lm_loc,         &
-       &             lm_locMag, lmP_loc, slice_FlmP, gather_FlmP
+       &             lm_locMag, lmP_loc, slice_FlmP, gather_FlmP, lm_locDC, &
+       &             lm_locChe, lm_locTP
    use logic, only : l_anel, l_conv_nl, l_corr, l_heat, l_anelastic_liquid, &
        &             l_mag_nl, l_mag_kin, l_mag_LF, l_conv, l_mag, l_RMS,   &
        &             l_chemical_conv, l_TP_form, l_single_matrix, l_double_curl
@@ -228,13 +229,13 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
       !-- Output of variables:
       complex(cp), intent(out) :: dwdt(lm_loc),dzdt(lm_loc)
       complex(cp), intent(out) :: dpdt(lm_loc),dsdt(lm_loc)
-      complex(cp), intent(out) :: dxidt(lm_loc)
+      complex(cp), intent(out) :: dxidt(lm_locChe)
       complex(cp), intent(out) :: dbdt(lm_locMag),djdt(lm_locMag)
       complex(cp), intent(out) :: dVxBhLM(lm_locMag)
-      complex(cp), intent(out) :: dVxVhLM(lm_loc)
+      complex(cp), intent(out) :: dVxVhLM(lm_locDC)
       complex(cp), intent(out) :: dVSrLM(lm_loc)
-      complex(cp), intent(out) :: dVXirLM(lm_loc)
-      complex(cp), intent(out) :: dVPrLM(lm_loc)
+      complex(cp), intent(out) :: dVXirLM(lm_locChe)
+      complex(cp), intent(out) :: dVPrLM(lm_locTP)
     
       !-- Local variables:
       integer :: l,m,lm,lmS,lmA,lmP,lmPS,lmPA
@@ -250,17 +251,6 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
       integer, parameter :: DOUBLE_COMPLEX_PER_CACHELINE=4
       
       integer :: lm_maybe_skip_first
-      integer :: lm_glb 
-      
-      dwdt    = zero
-      dzdt    = zero
-      AdvPol  = zero
-      AdvTor  = zero
-      CorPol  = zero
-      dVxVhLM = zero
-      Buo     = zero
-      LFPol   = zero
-      LFTor   = zero
       
       lm_maybe_skip_first = 1
       if (dist_map%lm2(0,0) > 0) lm_maybe_skip_first = 2
@@ -274,7 +264,6 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                lmA = dist_map%lm2lmA(lm)
                lmP = dist_map%lm2lmP(lm)
                lmPA= dist_map%lmP2lmPA(lmP)
-               lm_glb = lm2(0,0) ! needed for leg_helper only!
                
                if ( l_conv_nl ) then
                   AdvPol_loc=      or2(nR)*this%AdvrLM(lm)
@@ -325,7 +314,6 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                lmP =dist_map%lm2lmP(lm)
                lmPS=dist_map%lmP2lmPS(lmP)
                lmPA=dist_map%lmP2lmPA(lmP)
-               lm_glb = lm2(l,m) ! needed for leg_helper only!
                
                if ( l_double_curl ) then ! Pressure is not needed
 
@@ -698,7 +686,6 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                   lmP =dist_map%lm2lmP(lm)
                   lmPS=dist_map%lmP2lmPS(lmP)
                   lmPA=dist_map%lmP2lmPA(lmP)
-                  lm_glb = lm2(l,m) ! needed for leg_helper only!
        
                   !------ Recycle CorPol and AdvPol:
                   if ( l_corr ) then

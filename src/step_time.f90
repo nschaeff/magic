@@ -14,7 +14,7 @@ module step_time_mod
    use truncation, only: n_r_max, l_max, l_maxMag, n_r_maxMag, &
        &                 lm_max, lmP_max, lm_maxMag, lm_loc,   &
        &                 lm_locMag, gather_Flm, slice_Flm,     &
-       &                 gather_FlmP
+       &                 gather_FlmP, lmP_loc
    use num_param, only: n_time_steps, runTimeLimit, tEnd, dtMax, &
        &                dtMin, tScale, alpha, runTime
    use radial_data, only: nRstart, nRstop, nRstartMag, nRstopMag, &
@@ -109,12 +109,6 @@ module step_time_mod
    complex(cp), allocatable :: dVXirLM_dist(:,:)
    complex(cp), allocatable :: dVPrLM_dist(:,:)
    
-   complex(cp), allocatable :: br_vt_lm_cmb_dist(:) ! product br*vt at CMB
-   complex(cp), allocatable :: br_vp_lm_cmb_dist(:) ! product br*vp at CMB
-   complex(cp), allocatable :: br_vt_lm_icb_dist(:) ! product br*vt at ICB
-   complex(cp), allocatable :: br_vp_lm_icb_dist(:) ! product br*vp at ICB
-   
-
    integer :: sigFile
 
    public :: initialize_step_time, finalize_step_time, step_time
@@ -137,6 +131,9 @@ contains
          dVxVhLM_Rloc(1:lm_max,nRstart:nRstop) => dflowdt_Rloc_container(:,:,4)
          bytes_allocated = bytes_allocated+ &
                            4*lm_max*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         ! Dist
+         allocate(dVxVhLM_dist(1:lm_loc,nRstart:nRstop))
+         bytes_allocated = bytes_allocated+ lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
       else
          allocate( dflowdt_Rloc_container(lm_max,nRstart:nRstop,1:3) )
          dwdt_Rloc(1:lm_max,nRstart:nRstop) => dflowdt_Rloc_container(:,:,1)
@@ -145,6 +142,9 @@ contains
          allocate( dVxVhLM_Rloc(1:1,1:1) )
          bytes_allocated = bytes_allocated+ &
                            3*lm_max*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         ! Dist
+         allocate( dVxVhLM_dist(1:1,1:1) )
+         bytes_allocated = bytes_allocated+SIZEOF_DEF_COMPLEX
       end if
 
       if ( l_TP_form ) then
@@ -154,6 +154,9 @@ contains
          dVPrLM_Rloc(1:lm_max,nRstart:nRstop) => dsdt_Rloc_container(:,:,3)
          bytes_allocated = bytes_allocated+ &
                            3*lm_max*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         ! Dist
+         allocate(dVPrLM_dist (1:lm_loc,nRstart:nRstop))
+         bytes_allocated = bytes_allocated+lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
       else
          allocate( dsdt_Rloc_container(lm_max,nRstart:nRstop,1:2) )
          dsdt_Rloc(1:lm_max,nRstart:nRstop)   => dsdt_Rloc_container(:,:,1)
@@ -161,6 +164,9 @@ contains
          allocate( dVPrLM_Rloc(1:1,1:1) )
          bytes_allocated = bytes_allocated+ &
                            2*lm_max*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         ! Dist
+         allocate(dVPrLM_dist (1:1,1:1))
+         bytes_allocated = bytes_allocated+SIZEOF_DEF_COMPLEX
       end if
 
       if ( l_chemical_conv ) then
@@ -169,10 +175,18 @@ contains
          dVXirLM_Rloc(1:lm_max,nRstart:nRstop) => dxidt_Rloc_container(:,:,2)
          bytes_allocated = bytes_allocated+ &
                            2*lm_max*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         ! Dist
+         allocate(dVXirLM_dist(1:lm_loc,nRstart:nRstop))
+         allocate(dxidt_dist  (1:lm_loc,nRstart:nRstop))
+         bytes_allocated = bytes_allocated+2*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
       else
          allocate( dxidt_Rloc_container(1,1,1:2) )
          dxidt_Rloc(1:1,1:1)   => xi_Rloc_container(:,:,1)
          dVXirLM_Rloc(1:1,1:1) => xi_Rloc_container(:,:,2)
+         ! Dist
+         allocate(dVXirLM_dist(1:1,1:1))
+         allocate(dxidt_dist  (1:1,1:1))
+         bytes_allocated = bytes_allocated+2*SIZEOF_DEF_COMPLEX
       end if
 
       ! the magnetic part
@@ -273,7 +287,7 @@ contains
       bytes_allocated = bytes_allocated+(ulmMag-llmMag+1)*SIZEOF_DEF_COMPLEX
 
       
-      ! Distributed arrays (to replace those above some time in the future)
+      ! Distributed arrays
       !---------------------------------------------------------------------
       allocate(dsdt_dist   (1:lm_loc,nRstart:nRstop))
       allocate(dwdt_dist   (1:lm_loc,nRstart:nRstop))
@@ -286,14 +300,20 @@ contains
       allocate(djdt_dist   (1:lm_locMag,nRstartMag:nRstopMag))
       allocate(dVxBhLM_dist(1:lm_locMag,nRstartMag:nRstopMag))
       bytes_allocated = bytes_allocated+3*lm_locMag*(nRstopMag-nRstartMag+1)*SIZEOF_DEF_COMPLEX
-      if ( l_chemical_conv ) allocate(dVXirLM_dist(1:lm_loc,nRstart:nRstop))
-      if ( l_chemical_conv ) allocate(dxidt_dist  (1:lm_loc,nRstart:nRstop))
-      if ( l_chemical_conv ) bytes_allocated = bytes_allocated+2*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
-      if ( l_TP_form       ) allocate(dVPrLM_dist (1:lm_loc,nRstart:nRstop))
-      if ( l_TP_form       ) bytes_allocated = bytes_allocated+lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
-      if ( l_double_curl   ) allocate(dVxVhLM_dist(1:lm_loc,nRstart:nRstop))
-      if ( l_double_curl   ) bytes_allocated = bytes_allocated+lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
       
+      dwdt_dist         = zero
+      dzdt_dist         = zero
+      dpdt_dist         = zero
+      dsdt_dist         = zero
+      dxidt_dist        = zero
+      dbdt_dist         = zero
+      djdt_dist         = zero
+      dVxBhLM_dist      = zero
+      dVxVhLM_dist      = zero
+      dVSrLM_dist       = zero
+      dVXirLM_dist      = zero
+      dVPrLM_dist       = zero
+
       local_bytes_used = bytes_allocated-local_bytes_used
       call memWrite('step_time.f90', local_bytes_used)
 
@@ -307,6 +327,19 @@ contains
       deallocate( dsdt_LMloc_container, dbdt_LMloc_container )
       deallocate( dbdt_CMB_LMloc )
       deallocate( dxidt_Rloc_container, dxidt_LMloc_container )
+      
+      deallocate(dwdt_dist        )
+      deallocate(dzdt_dist        )
+      deallocate(dpdt_dist        )
+      deallocate(dsdt_dist        )
+      deallocate(dxidt_dist       )
+      deallocate(dbdt_dist        )
+      deallocate(djdt_dist        )
+      deallocate(dVxBhLM_dist     )
+      deallocate(dVxVhLM_dist     )
+      deallocate(dVSrLM_dist      )
+      deallocate(dVXirLM_dist     )
+      deallocate(dVPrLM_dist      )
 
       if ( .not. l_TP_form ) deallocate( dVPrLM_RLoc, dVPrLM_LMLoc )
       if ( .not. l_double_curl ) deallocate( dVxVhLM_Rloc, dVxVhLM_LMloc )
@@ -459,21 +492,13 @@ contains
       !integer :: signal_window
       integer(lip) :: time_in_ms
       
+      integer :: nR
+      
 !       !--- Duplications - yay -.-"  [180419.Lago]
-!       complex(cp) :: dwdt_dist(lm_loc),dzdt_dist(lm_loc)
-!       complex(cp) :: dpdt_dist(lm_loc),dsdt_dist(lm_loc)
-!       complex(cp) :: dxidt_dist(lm_loc)
-!       complex(cp) :: dbdt_dist(lm_locMag),djdt_dist(lm_locMag)
-!       complex(cp) :: dVxBhLM_dist(lm_locMag)
-!       complex(cp) :: dVxVhLM_dist(lm_loc)
-!       complex(cp) :: dVSrLM_dist(lm_loc)
-!       complex(cp) :: dVXirLM_dist(lm_loc)
-!       complex(cp) :: dVPrLM_dist(lm_loc)
-!       
-!       complex(cp) :: br_vt_lm_cmb_dist(lmP_loc) ! product br*vt at CMB
-!       complex(cp) :: br_vp_lm_cmb_dist(lmP_loc) ! product br*vp at CMB
-!       complex(cp) :: br_vt_lm_icb_dist(lmP_loc) ! product br*vt at ICB
-!       complex(cp) :: br_vp_lm_icb_dist(lmP_loc) ! product br*vp at ICB
+      complex(cp) :: br_vt_lm_cmb_dist(lmP_loc) ! product br*vt at CMB
+      complex(cp) :: br_vp_lm_cmb_dist(lmP_loc) ! product br*vp at CMB
+      complex(cp) :: br_vt_lm_icb_dist(lmP_loc) ! product br*vt at ICB
+      complex(cp) :: br_vp_lm_icb_dist(lmP_loc) ! product br*vp at ICB
 
 
       if ( lVerbose ) write(*,'(/,'' ! STARTING STEP_TIME !'')')
@@ -985,17 +1010,25 @@ contains
               &           lTOCalc,lTONext,lTONext2,lHelCalc,                   &
               &           lPowerCalc,lRmsCalc,lPressCalc,                      &
               &           lViscBcCalc,lFluxProfCalc,lperpParCalc,l_probe_out,  &
-              &           dsdt_Rloc,dwdt_Rloc,dzdt_Rloc,dpdt_Rloc,dxidt_Rloc,  &
-              &           dbdt_Rloc,djdt_Rloc,dVxVhLM_Rloc,dVxBhLM_Rloc,       &
-              &           dVSrLM_Rloc,dVPrLM_Rloc,dVXirLM_Rloc,                &
-              &           lorentz_torque_ic,lorentz_torque_ma,br_vt_lm_cmb,    &
-              &           br_vp_lm_cmb,br_vt_lm_icb,br_vp_lm_icb,HelLMr_Rloc,  &
+              &           dsdt_dist,dwdt_dist,dzdt_dist,dpdt_dist,dxidt_dist,  &
+              &           dbdt_dist,djdt_dist,dVxVhLM_dist,dVxBhLM_dist,       &
+              &           dVSrLM_dist,dVPrLM_dist,dVXirLM_dist,                &
+              &           lorentz_torque_ic,lorentz_torque_ma,br_vt_lm_cmb_dist,    &
+              &           br_vp_lm_cmb_dist,br_vt_lm_icb_dist,br_vp_lm_icb_dist,HelLMr_Rloc,  &
               &           Hel2LMr_Rloc,HelnaLMr_Rloc,Helna2LMr_Rloc,           &
               &           viscLMr_Rloc,uhLMr_Rloc,duhLMr_Rloc,gradsLMr_Rloc,   &
               &           fconvLMr_Rloc,fkinLMr_Rloc,fviscLMr_Rloc,            &
               &           fpoynLMr_Rloc,fresLMr_Rloc,EperpLMr_Rloc,            &
               &           EparLMr_Rloc,EperpaxiLMr_Rloc,EparaxiLMr_Rloc,       &
               &           dtrkc_Rloc,dthkc_Rloc)
+      
+         if ( ((n_r_cmb >= nRstart) .or. (n_r_cmb <= nRstop)) .and. l_b_nl_cmb ) then
+            call gather_FlmP(br_vt_lm_cmb_dist,br_vt_lm_cmb) ! Is this needed? 180326-Lago
+            call gather_FlmP(br_vp_lm_cmb_dist,br_vp_lm_cmb) ! Is this needed? 180326-Lago
+         else if ( ((n_r_icb >= nRstart) .or. (n_r_icb <= nRstop)) .and. l_b_nl_icb ) then
+            call gather_FlmP(br_vt_lm_icb_dist,br_vt_lm_icb) ! Is this needed? 180326-Lago
+            call gather_FlmP(br_vp_lm_icb_dist,br_vp_lm_icb) ! Is this needed? 180326-Lago
+         end if
 
          if ( lVerbose ) write(*,*) '! r-loop finished!'
          if ( .not.l_log ) then
@@ -1563,40 +1596,56 @@ contains
       !-- From fields.f90
       !--------------------------------------------------------
       do nR=nRstart,nRstop
-         call slice_Flm(s_Rloc(:,nR)  ,  s_dist(:,nR)  )
-         call slice_Flm(ds_Rloc(:,nR) ,  ds_dist(:,nR) )
-         call slice_Flm(z_Rloc(:,nR)  ,  z_dist(:,nR)  )
-         call slice_Flm(dz_Rloc(:,nR) ,  dz_dist(:,nR) )
-         call slice_Flm(p_Rloc(:,nR)  ,  p_dist(:,nR)  )
-         call slice_Flm(dp_Rloc(:,nR) ,  dp_dist(:,nR) )
-         call slice_Flm(w_Rloc(:,nR)  ,  w_dist(:,nR)  )
-         call slice_Flm(dw_Rloc(:,nR) ,  dw_dist(:,nR) )
-         call slice_Flm(ddw_Rloc(:,nR),  ddw_dist(:,nR))
+         call slice_Flm(  s_Rloc(1:lm_max,nR),   s_dist(1:lm_loc,nR))
+         call slice_Flm( ds_Rloc(1:lm_max,nR),  ds_dist(1:lm_loc,nR))
+         call slice_Flm(  z_Rloc(1:lm_max,nR),   z_dist(1:lm_loc,nR))
+         call slice_Flm( dz_Rloc(1:lm_max,nR),  dz_dist(1:lm_loc,nR))
+         call slice_Flm(  p_Rloc(1:lm_max,nR),   p_dist(1:lm_loc,nR))
+         call slice_Flm( dp_Rloc(1:lm_max,nR),  dp_dist(1:lm_loc,nR))
+         call slice_Flm(  w_Rloc(1:lm_max,nR),   w_dist(1:lm_loc,nR))
+         call slice_Flm( dw_Rloc(1:lm_max,nR),  dw_dist(1:lm_loc,nR))
+         call slice_Flm(ddw_Rloc(1:lm_max,nR), ddw_dist(1:lm_loc,nR))
          
-         if ( l_chemical_conv ) then
-            call slice_Flm(xi_Rloc(:,nR) ,  xi_dist(:,nR) )
-         else
-            xi_dist(1,1) = xi_Rloc(1,1)
-         end if
+         call slice_Flm(  dsdt_Rloc(1:lm_max,nR),   dsdt_dist(1:lm_loc,nR)) 
+         call slice_Flm(  dwdt_Rloc(1:lm_max,nR),   dwdt_dist(1:lm_loc,nR))
+         call slice_Flm(  dzdt_Rloc(1:lm_max,nR),   dzdt_dist(1:lm_loc,nR))
+         call slice_Flm(  dpdt_Rloc(1:lm_max,nR),   dpdt_dist(1:lm_loc,nR))
+         call slice_Flm(dVSrLM_Rloc(1:lm_max,nR), dVSrLM_dist(1:lm_loc,nR))
+         
+         if ( l_chemical_conv ) call slice_Flm(     xi_Rloc(1:lm_max,nR),      xi_dist(1:lm_loc,nR))
+         if ( l_chemical_conv ) call slice_Flm(dVXirLM_Rloc(1:lm_max,nR), dVXirLM_dist(1:lm_loc,nR)) 
+         if ( l_chemical_conv ) call slice_Flm(  dxidt_Rloc(1:lm_max,nR),   dxidt_dist(1:lm_loc,nR)) 
          
          if (lm_maxMag == lm_max) then
-            call slice_Flm(b_Rloc(:,nR)  ,  b_dist(:,nR)  )
-            call slice_Flm(db_Rloc(:,nR) ,  db_dist(:,nR) )
-            call slice_Flm(ddb_Rloc(:,nR),  ddb_dist(:,nR))
-            call slice_Flm(aj_Rloc(:,nR) ,  aj_dist(:,nR) )
-            call slice_Flm(dj_Rloc(:,nR) ,  dj_dist(:,nR) )
-         else if (lm_maxMag == 1) then
-            b_dist(:,nR)  = b_Rloc(:,nR)  
-            db_dist(:,nR) = db_Rloc(:,nR) 
-            ddb_dist(:,nR)= ddb_Rloc(:,nR)
-            aj_dist(:,nR) = aj_Rloc(:,nR) 
-            dj_dist(:,nR) = dj_Rloc(:,nR) 
-         else
-            print *, "Woopsie, value of lm_maxMag is funny: ", lm_maxMag
-            print *, "Aborting!"
-            STOP
+            call slice_Flm(  b_Rloc(1:lm_max,nR),   b_dist(1:lm_loc,nR))
+            call slice_Flm( db_Rloc(1:lm_max,nR),  db_dist(1:lm_loc,nR))
+            call slice_Flm(ddb_Rloc(1:lm_max,nR), ddb_dist(1:lm_loc,nR))
+            call slice_Flm( aj_Rloc(1:lm_max,nR),  aj_dist(1:lm_loc,nR))
+            call slice_Flm( dj_Rloc(1:lm_max,nR),  dj_dist(1:lm_loc,nR))
+            
+            call slice_Flm(    dbdt_Rloc(1:lm_max,nR),   dbdt_dist(1:lm_loc,nR))
+            call slice_Flm(    djdt_Rloc(1:lm_max,nR),   djdt_dist(1:lm_loc,nR))
+            call slice_Flm( dVxBhLM_Rloc(1:lm_max,nR),dVxBhLM_dist(1:lm_loc,nR))
          end if
+         
+         if ( l_TP_form     ) call slice_Flm( dVPrLM_Rloc(1:lm_max,nR),  dVPrLM_dist(1:lm_loc,nR))
+         if ( l_double_curl ) call slice_Flm(dVxVhLM_Rloc(1:lm_max,nR), dVxVhLM_dist(1:lm_loc,nR))
       end do
+      
+      if ( .not. l_chemical_conv )      xi_dist =      xi_Rloc
+      if ( .not. l_chemical_conv ) dVXirLM_dist = dVXirLM_Rloc
+      if ( .not. l_chemical_conv )   dxidt_dist =   dxidt_Rloc
+      if ( .not. l_TP_form       )  dVPrLM_dist =  dVPrLM_Rloc
+      if ( .not. l_double_curl   ) dVxVhLM_dist = dVxVhLM_Rloc
+      if (lm_maxMag == 1)    dbdt_dist =    dbdt_Rloc
+      if (lm_maxMag == 1)    djdt_dist =    djdt_Rloc
+      if (lm_maxMag == 1) dVxBhLM_dist = dVxBhLM_Rloc
+      if (lm_maxMag == 1)       b_dist =       b_Rloc
+      if (lm_maxMag == 1)      db_dist =      db_Rloc
+      if (lm_maxMag == 1)     ddb_dist =     ddb_Rloc
+      if (lm_maxMag == 1)      aj_dist =      aj_Rloc
+      if (lm_maxMag == 1)      dj_dist =      dj_Rloc
+      
       
    end subroutine slice_all
 !-------------------------------------------------------------------------------
@@ -1608,40 +1657,55 @@ contains
       !-- From fields.f90
       !--------------------------------------------------------
       do nR=nRstart,nRstop
-         call gather_Flm(s_dist(:,nR)  , s_Rloc(:,nR)  )
-         call gather_Flm(ds_dist(:,nR) , ds_Rloc(:,nR) )
-         call gather_Flm(z_dist(:,nR)  , z_Rloc(:,nR)  )
-         call gather_Flm(dz_dist(:,nR) , dz_Rloc(:,nR) )
-         call gather_Flm(p_dist(:,nR)  , p_Rloc(:,nR)  )
-         call gather_Flm(dp_dist(:,nR) , dp_Rloc(:,nR) )
-         call gather_Flm(w_dist(:,nR)  , w_Rloc(:,nR)  )
-         call gather_Flm(dw_dist(:,nR) , dw_Rloc(:,nR) )
-         call gather_Flm(ddw_dist(:,nR), ddw_Rloc(:,nR))
+         call gather_Flm(  s_dist(1:lm_loc,nR),   s_Rloc(1:lm_max,nR))
+         call gather_Flm( ds_dist(1:lm_loc,nR),  ds_Rloc(1:lm_max,nR))
+         call gather_Flm(  z_dist(1:lm_loc,nR),   z_Rloc(1:lm_max,nR))
+         call gather_Flm( dz_dist(1:lm_loc,nR),  dz_Rloc(1:lm_max,nR))
+         call gather_Flm(  p_dist(1:lm_loc,nR),   p_Rloc(1:lm_max,nR))
+         call gather_Flm( dp_dist(1:lm_loc,nR),  dp_Rloc(1:lm_max,nR))
+         call gather_Flm(  w_dist(1:lm_loc,nR),   w_Rloc(1:lm_max,nR))
+         call gather_Flm( dw_dist(1:lm_loc,nR),  dw_Rloc(1:lm_max,nR))
+         call gather_Flm(ddw_dist(1:lm_loc,nR), ddw_Rloc(1:lm_max,nR))
          
-         if ( l_chemical_conv ) then
-            call gather_Flm(xi_dist(:,nR) , xi_Rloc(:,nR) )
-         else
-            xi_Rloc(1,1) = xi_dist(1,1)
-         end if
+         call gather_Flm(dsdt_dist  (1:lm_loc,nR), dsdt_Rloc  (1:lm_max,nR)) 
+         call gather_Flm(dwdt_dist  (1:lm_loc,nR), dwdt_Rloc  (1:lm_max,nR))
+         call gather_Flm(dzdt_dist  (1:lm_loc,nR), dzdt_Rloc  (1:lm_max,nR))
+         call gather_Flm(dpdt_dist  (1:lm_loc,nR), dpdt_Rloc  (1:lm_max,nR))
+         call gather_Flm(dVSrLM_dist(1:lm_loc,nR), dVSrLM_Rloc(1:lm_max,nR))
          
+         if ( l_chemical_conv ) call gather_Flm(     xi_dist(1:lm_loc,nR),      xi_Rloc(1:lm_max,nR))
+         if ( l_chemical_conv ) call gather_Flm(dVXirLM_dist(1:lm_loc,nR), dVXirLM_Rloc(1:lm_max,nR)) 
+         if ( l_chemical_conv ) call gather_Flm(  dxidt_dist(1:lm_loc,nR),   dxidt_Rloc(1:lm_max,nR)) 
+
          if (lm_maxMag == lm_max) then
-            call gather_Flm(b_dist(:,nR)  , b_Rloc(:,nR)  )
-            call gather_Flm(db_dist(:,nR) , db_Rloc(:,nR) )
-            call gather_Flm(ddb_dist(:,nR), ddb_Rloc(:,nR))
-            call gather_Flm(aj_dist(:,nR) , aj_Rloc(:,nR) )
-            call gather_Flm(dj_dist(:,nR) , dj_Rloc(:,nR) )
-         else if (lm_maxMag == 1) then
-            b_Rloc(:,nR)   = b_Rloc(:,nR)  
-            db_Rloc(:,nR)  = db_Rloc(:,nR) 
-            ddb_Rloc(:,nR) = ddb_Rloc(:,nR)
-            aj_Rloc(:,nR)  = aj_Rloc(:,nR) 
-            dj_Rloc(:,nR)  = dj_Rloc(:,nR) 
-         else
-            print *, "Woopsie, value of lm_maxMag is funny: ", lm_maxMag
-            print *, "Aborting!"
-            STOP
+            call gather_Flm(      b_dist(1:lm_loc,nR),       b_Rloc(1:lm_max,nR))
+            call gather_Flm(     db_dist(1:lm_loc,nR),      db_Rloc(1:lm_max,nR))
+            call gather_Flm(    ddb_dist(1:lm_loc,nR),     ddb_Rloc(1:lm_max,nR))
+            call gather_Flm(     aj_dist(1:lm_loc,nR),      aj_Rloc(1:lm_max,nR))
+            call gather_Flm(     dj_dist(1:lm_loc,nR),      dj_Rloc(1:lm_max,nR))
+            
+            call gather_Flm(   dbdt_dist(1:lm_loc,nR),    dbdt_Rloc(1:lm_max,nR))
+            call gather_Flm(   djdt_dist(1:lm_loc,nR),    djdt_Rloc(1:lm_max,nR))
+            call gather_Flm(dVxBhLM_dist(1:lm_loc,nR), dVxBhLM_Rloc(1:lm_max,nR))
          end if
+         
+         if ( l_TP_form     ) call gather_Flm( dVPrLM_dist(1:lm_loc,nR),  dVPrLM_Rloc(1:lm_max,nR))
+         if ( l_double_curl ) call gather_Flm(dVxVhLM_dist(1:lm_loc,nR), dVxVhLM_Rloc(1:lm_max,nR))
       end do
+      
+      if ( .not. l_chemical_conv )      xi_Rloc =      xi_dist
+      if ( .not. l_chemical_conv ) dVXirLM_Rloc = dVXirLM_dist
+      if ( .not. l_chemical_conv )   dxidt_Rloc =   dxidt_dist
+      if ( .not. l_TP_form       )  dVPrLM_Rloc =  dVPrLM_dist
+      if ( .not. l_double_curl   ) dVxVhLM_Rloc = dVxVhLM_dist
+      if (lm_maxMag == 1)    dbdt_Rloc =    dbdt_dist
+      if (lm_maxMag == 1)    djdt_Rloc =    djdt_dist
+      if (lm_maxMag == 1) dVxBhLM_Rloc = dVxBhLM_dist
+      if (lm_maxMag == 1)       b_Rloc =       b_dist
+      if (lm_maxMag == 1)      db_Rloc =      db_dist
+      if (lm_maxMag == 1)     ddb_Rloc =     ddb_dist
+      if (lm_maxMag == 1)      aj_Rloc =      aj_dist
+      if (lm_maxMag == 1)      dj_Rloc =      dj_dist
       
    end subroutine gather_all
 !-------------------------------------------------------------------------------

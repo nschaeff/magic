@@ -5,7 +5,6 @@ module rIterThetaBlocking_shtns_mod
 #endif
    use precision_mod
    use rIterThetaBlocking_mod, only: rIterThetaBlocking_t
-
    use truncation
    use logic, only: l_mag, l_conv, l_mag_kin, l_heat, l_ht, l_anel,  &
        &            l_mag_LF, l_conv_nl, l_mag_nl, l_b_nl_cmb,       &

@@ -11,9 +11,8 @@ module radialLoop
        &            l_single_matrix, l_double_curl, l_chemical_conv,         &
        &            l_b_nl_icb, l_b_nl_cmb, l_TP_form
    use constants, only: zero
-   use parallel_mod, only: coord_r, n_procs_r, n_procs_theta, rank, coord_theta, cart2rank
-   use radial_data,only: nRstart,nRstop,n_r_cmb, nRstartMag, nRstopMag, &
-       &                 n_r_icb
+   use parallel_mod, only: coord_r, n_procs_r, rank
+   use radial_data
 #ifdef WITH_LIKWID
 #include "likwid_f90.h"
 #endif
@@ -121,18 +120,18 @@ contains
       !---- Output of explicit time step:
       !---- dVSrLM and dVxBhLM are output of contributions to explicit time step that
       !     need a further treatment (radial derivatives required):
-      complex(cp), intent(out) :: dwdt(lm_max,nRstart:nRstop)
-      complex(cp), intent(out) :: dzdt(lm_max,nRstart:nRstop)
-      complex(cp), intent(out) :: dpdt(lm_max,nRstart:nRstop)
-      complex(cp), intent(out) :: dsdt(lm_max,nRstart:nRstop)
-      complex(cp), intent(out) :: dxidt(lm_max,nRstart:nRstop)
-      complex(cp), intent(out) :: dVSrLM(lm_max,nRstart:nRstop)
-      complex(cp), intent(out) :: dVPrLM(lm_max,nRstart:nRstop)
-      complex(cp), intent(out) :: dVXirLM(lm_max,nRstart:nRstop)
-      complex(cp), intent(out) :: dbdt(lm_maxMag,nRstartMag:nRstopMag)
-      complex(cp), intent(out) :: djdt(lm_maxMag,nRstartMag:nRstopMag)
-      complex(cp), intent(out) :: dVxVhLM(lm_max,nRstart:nRstop)
-      complex(cp), intent(out) :: dVxBhLM(lm_maxMag,nRstartMag:nRstopMag)
+      complex(cp), intent(out) :: dwdt(lm_loc,nRstart:nRstop)
+      complex(cp), intent(out) :: dzdt(lm_loc,nRstart:nRstop)
+      complex(cp), intent(out) :: dpdt(lm_loc,nRstart:nRstop)
+      complex(cp), intent(out) :: dsdt(lm_loc,nRstart:nRstop)
+      complex(cp), intent(out) :: dxidt(lm_locChe,nRstartChe:nRstopChe)
+      complex(cp), intent(out) :: dVSrLM(lm_loc,nRstart:nRstop)
+      complex(cp), intent(out) :: dVPrLM(lm_locTP,nRstartTP:nRstopTP)
+      complex(cp), intent(out) :: dVXirLM(lm_locChe,nRstartChe:nRstopChe)
+      complex(cp), intent(out) :: dbdt(lm_locMag,nRstartMag:nRstopMag)
+      complex(cp), intent(out) :: djdt(lm_locMag,nRstartMag:nRstopMag)
+      complex(cp), intent(out) :: dVxVhLM(lm_locDC,nRstartDC:nRstopDC)
+      complex(cp), intent(out) :: dVxBhLM(lm_locMag,nRstartMag:nRstopMag)
       real(cp),    intent(out) :: lorentz_torque_ma,lorentz_torque_ic
 
       !---- Output for axisymmetric helicity:
@@ -156,38 +155,22 @@ contains
 
       !---- Output of nonlinear products for nonlinear
       !     magnetic boundary conditions (needed in s_updateB.f):
-      complex(cp), intent(out) :: br_vt_lm_cmb(lmP_max) ! product br*vt at CMB
-      complex(cp), intent(out) :: br_vp_lm_cmb(lmP_max) ! product br*vp at CMB
-      complex(cp), intent(out) :: br_vt_lm_icb(lmP_max) ! product br*vt at ICB
-      complex(cp), intent(out) :: br_vp_lm_icb(lmP_max) ! product br*vp at ICB
+      complex(cp), intent(out) :: br_vt_lm_cmb(lmP_loc) ! product br*vt at CMB
+      complex(cp), intent(out) :: br_vp_lm_cmb(lmP_loc) ! product br*vp at CMB
+      complex(cp), intent(out) :: br_vt_lm_icb(lmP_loc) ! product br*vt at ICB
+      complex(cp), intent(out) :: br_vp_lm_icb(lmP_loc) ! product br*vp at ICB
 
       !---- Output for Courant criteria:
       real(cp),intent(out) :: dtrkc(nRstart:nRstop),dthkc(nRstart:nRstop)
 
 
       !--- Local variables:
-      integer :: nR,nr_Mag,nBc,lm
-      !integer :: nTheta,nThetaB,nThetaLast
+      integer :: nBc, lm, nR
+      integer :: nR_Mag, nRDC, nRTP, nRChe
       integer :: nThetaStart!,nThetaStop
       logical :: lDeriv,lOutBc,lMagNlBc
       logical :: lGraphHeader    ! Write header into graph file
       logical :: isRadialBoundaryPoint
-      
-      !--- Duplications - yay -.-"
-      complex(cp) :: dwdt_dist(lm_loc,nRstart:nRstop),dzdt_dist(lm_loc,nRstart:nRstop)
-      complex(cp) :: dpdt_dist(lm_loc,nRstart:nRstop),dsdt_dist(lm_loc,nRstart:nRstop)
-      complex(cp) :: dxidt_dist(lm_loc,nRstart:nRstop)
-      complex(cp) :: dbdt_dist(lm_locMag,nRstartMag:nRstopMag),djdt_dist(lm_locMag,nRstartMag:nRstopMag)
-      complex(cp) :: dVxBhLM_dist(lm_locMag,nRstartMag:nRstopMag)
-      complex(cp) :: dVxVhLM_dist(lm_loc,nRstart:nRstop)
-      complex(cp) :: dVSrLM_dist(lm_loc,nRstart:nRstop)
-      complex(cp) :: dVXirLM_dist(lm_loc,nRstart:nRstop)
-      complex(cp) :: dVPrLM_dist(lm_loc,nRstart:nRstop)
-      
-      complex(cp) :: br_vt_lm_cmb_dist(lmP_loc) ! product br*vt at CMB
-      complex(cp) :: br_vp_lm_cmb_dist(lmP_loc) ! product br*vp at CMB
-      complex(cp) :: br_vt_lm_icb_dist(lmP_loc) ! product br*vt at ICB
-      complex(cp) :: br_vp_lm_icb_dist(lmP_loc) ! product br*vp at ICB
 
       PERFON('rloop')
       !LIKWID_ON('rloop')
@@ -199,24 +182,6 @@ contains
          call graphOut_header(time)
 #endif
       end if
-      
-      dwdt_dist = zero
-      dzdt_dist = zero
-      dpdt_dist = zero
-      dsdt_dist = zero
-      dxidt_dist = zero
-      dbdt_dist = zero
-      djdt_dist = zero
-      dVxBhLM_dist = zero
-      dVxVhLM_dist = zero
-      dVSrLM_dist = zero
-      dVXirLM_dist = zero
-      dVPrLM_dist = zero
-
-      br_vt_lm_cmb=zero
-      br_vp_lm_cmb=zero
-      br_vt_lm_icb=zero
-      br_vp_lm_icb=zero
       
       if ( l_cour ) then
          if ( coord_r == 0 ) then
@@ -230,7 +195,7 @@ contains
 
       !------ Set nonlinear terms that are possibly needed at the boundaries.
       !       They may be overwritten by get_td later.
-      do lm=1,lm_max
+      do lm=1,lm_loc
          if ( coord_r == 0 ) then
             dVSrLM(lm,n_r_cmb) =zero
             if ( l_chemical_conv ) dVXirLM(lm,n_r_cmb)=zero
@@ -268,7 +233,12 @@ contains
       !nRstop =n_r_icb-1
 
       !--- Start the big do loop over the radial threads:
-
+      
+      nR_Mag = 1
+      nRDC   = 1
+      nRTP   = 1
+      nRChe  = 1
+      
       !nThreadsRmax=1
       do nR=nRstart,nRstop
          !IF( nTh > nThreadsRmax ) nThreadsRmax=nTh
@@ -280,6 +250,11 @@ contains
          nBc = 0
          lDeriv = .true.
          isRadialBoundaryPoint=(nR == n_r_cmb).or.(nR == n_r_icb)
+         
+         if ((l_mag .or. l_mag_LF)) nR_Mag = nR
+         if (l_double_curl        ) nRDC   = nR
+         if (l_TP_form            ) nRTP   = nR
+         if (l_chemical_conv      ) nRChe  = nR
 
          if ( nR == n_r_cmb ) then 
             if ( lOutBc ) then
@@ -303,22 +278,16 @@ contains
             end if
          end if
 
-         if ( l_mag .or. l_mag_LF ) then
-            nR_Mag=nR
-         else
-            nR_Mag=1
-         end if
-
          call this_rIteration%set_steering_variables(l_cour,lTOCalc,lTOnext, &
               & lTOnext2,lDeriv,lRmsCalc,lHelCalc,lPowerCalc,l_frame,        &
               & lMagNlBc,l_graph,lViscBcCalc,lFluxProfCalc,lPerpParCalc,     &
               & lPressCalc, l_probe_out)
 
          call this_rIteration%do_iteration(nR,nBc,time,dt,dtLast,              &
-              & dsdt_dist(:,nR),dwdt_dist(:,nR),dzdt_dist(:,nR),dpdt_dist(:,nR),dxidt_dist(:,nR),            &
-              & dbdt_dist(:,nR_Mag),djdt_dist(:,nR_Mag),dVxVhLM_dist(:,nR),dVxBhLM_dist(:,nR_Mag),                 &
-              & dVSrLM_dist(:,nR),dVPrLM_dist(:,nR),dVXirLM_dist(:,nR),br_vt_lm_cmb_dist,        &
-              & br_vp_lm_cmb_dist,br_vt_lm_icb_dist,br_vp_lm_icb_dist,lorentz_torque_ic,      &
+              & dsdt(:,nR),dwdt(:,nR),dzdt(:,nR),dpdt(:,nR),dxidt(:,nR),            &
+              & dbdt(:,nR_Mag),djdt(:,nR_Mag),dVxVhLM(:,nRDC),dVxBhLM(:,nR_Mag),                 &
+              & dVSrLM(:,nR),dVPrLM(:,nR),dVXirLM(:,nR),br_vt_lm_cmb,        &
+              & br_vp_lm_cmb,br_vt_lm_icb,br_vp_lm_icb,lorentz_torque_ic,      &
               & lorentz_torque_ma,HelLMr(:,nR),Hel2LMr(:,nR),HelnaLMr(:,nR),   &
               & Helna2LMr(:,nR),viscLMr(:,nR),uhLMr(:,nR),duhLMr(:,nR),        &
               & gradsLMr(:,nR),fconvLMr(:,nR),fkinLMr(:,nR),fviscLMr(:,nR),    &
@@ -327,40 +296,11 @@ contains
 
          dtrkc(nR)=this_rIteration%dtrkc      
          dthkc(nR)=this_rIteration%dthkc
-         
-         !@>TODO: lots of things are set to zero (e.g. if some l_* flags are deactive)
-         !        those are, of course, unnecessary to gather. Others will bug everything
-         !        out if gathered e.g. dVxVhLM.
-
-      end do    ! Loop over radial levels 
-      
-      do nR=nRstart,nRstop
-         call gather_Flm(dsdt_dist   (1:lm_loc,nR), dsdt  (1:lm_max,nR)) 
-         call gather_Flm(dwdt_dist   (1:lm_loc,nR), dwdt  (1:lm_max,nR)) 
-         call gather_Flm(dzdt_dist   (1:lm_loc,nR), dzdt  (1:lm_max,nR)) 
-         call gather_Flm(dpdt_dist   (1:lm_loc,nR), dpdt  (1:lm_max,nR)) 
-         call gather_Flm(dVSrLM_dist (1:lm_loc,nR), dVSrLM(1:lm_max,nR)) 
-         !-----------
-         if (lm_maxMag==lm_max) call gather_Flm(dbdt_dist   (1:lm_loc,nR), dbdt   (1:lm_max,nR)) 
-         if (lm_maxMag==lm_max) call gather_Flm(djdt_dist   (1:lm_loc,nR), djdt   (1:lm_max,nR)) 
-         if (lm_maxMag==lm_max) call gather_Flm(dVxBhLM_dist(1:lm_loc,nR), dVxBhLM(1:lm_max,nR)) 
-         if ( l_chemical_conv ) call gather_Flm(dVXirLM_dist(1:lm_loc,nR), dVXirLM(1:lm_max,nR)) 
-         if ( l_chemical_conv ) call gather_Flm(dxidt_dist  (1:lm_loc,nR), dxidt  (1:lm_max,nR)) 
-         if ( l_TP_form       ) call gather_Flm(dVPrLM_dist (1:lm_loc,nR), dVPrLM (1:lm_max,nR)) 
-         if ( l_double_curl   ) call gather_Flm(dVxVhLM_dist(1:lm_loc,nR), dVxVhLM(1:lm_max,nR))
       end do
- 
-      if ( ((n_r_cmb >= nRstart) .or. (n_r_cmb <= nRstop)) .and. l_b_nl_cmb ) then
-         call gather_FlmP(br_vt_lm_cmb_dist,br_vt_lm_cmb) ! Is this needed? 180326-Lago
-         call gather_FlmP(br_vp_lm_cmb_dist,br_vp_lm_cmb) ! Is this needed? 180326-Lago
-      else if ( ((n_r_icb >= nRstart) .or. (n_r_icb <= nRstop)) .and. l_b_nl_icb ) then
-         call gather_FlmP(br_vt_lm_icb_dist,br_vt_lm_icb) ! Is this needed? 180326-Lago
-         call gather_FlmP(br_vp_lm_icb_dist,br_vp_lm_icb) ! Is this needed? 180326-Lago
-      end if
-
+         
       !----- Correct sign of mantel Lorentz torque (see above):
       lorentz_torque_ma=-lorentz_torque_ma
-
+      
       !LIKWID_OFF('rloop')
       PERFOFF
    end subroutine radialLoopG

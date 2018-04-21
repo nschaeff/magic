@@ -206,14 +206,14 @@ contains
       !-- Distributed version of some of the fields above
       !@>TODO: implement these with the containers, like above
       if (n_procs_theta > 1) then
-         allocate( s_dist  (1:lm_loc,nRstart:nRstop) )
-         allocate( ds_dist (1:lm_loc,nRstart:nRstop) )
-         allocate( z_dist  (1:lm_loc,nRstart:nRstop) )
-         allocate( dz_dist (1:lm_loc,nRstart:nRstop) )
-         allocate( p_dist  (1:lm_loc,nRstart:nRstop) )
-         allocate( dp_dist (1:lm_loc,nRstart:nRstop) )
-         allocate( w_dist  (1:lm_loc,nRstart:nRstop) )
-         allocate( dw_dist (1:lm_loc,nRstart:nRstop) )
+         allocate(   s_dist(1:lm_loc,nRstart:nRstop) )
+         allocate(  ds_dist(1:lm_loc,nRstart:nRstop) )
+         allocate(   z_dist(1:lm_loc,nRstart:nRstop) )
+         allocate(  dz_dist(1:lm_loc,nRstart:nRstop) )
+         allocate(   p_dist(1:lm_loc,nRstart:nRstop) )
+         allocate(  dp_dist(1:lm_loc,nRstart:nRstop) )
+         allocate(   w_dist(1:lm_loc,nRstart:nRstop) )
+         allocate(  dw_dist(1:lm_loc,nRstart:nRstop) )
          allocate( ddw_dist(1:lm_loc,nRstart:nRstop) )
          bytes_allocated = bytes_allocated + &
                            9*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
@@ -228,11 +228,11 @@ contains
          end if
          
          !-- Magnetic field potentials:
-         allocate( b_dist  (1:lm_maxMag,nRstart:nRstop) )
-         allocate( db_dist (1:lm_maxMag,nRstart:nRstop) )
+         allocate(   b_dist(1:lm_maxMag,nRstart:nRstop) )
+         allocate(  db_dist(1:lm_maxMag,nRstart:nRstop) )
          allocate( ddb_dist(1:lm_maxMag,nRstart:nRstop) )
-         allocate( aj_dist (1:lm_maxMag,nRstart:nRstop) )
-         allocate( dj_dist (1:lm_maxMag,nRstart:nRstop) )
+         allocate(  aj_dist(1:lm_maxMag,nRstart:nRstop) )
+         allocate(  dj_dist(1:lm_maxMag,nRstart:nRstop) )
          bytes_allocated = bytes_allocated + &
                            5*lm_maxMag*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
       end if

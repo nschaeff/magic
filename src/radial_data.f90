@@ -5,13 +5,16 @@ module radial_data
 
    use truncation, only: n_r_max
    use parallel_mod, only: coord_r, n_procs_r, nR_per_rank, nR_on_last_rank
-   use logic, only: l_mag, lVerbose, l_finite_diff
+   use logic, only: l_mag, lVerbose, l_finite_diff, l_chemical_conv, &
+        &           l_double_curl, l_TP_form
  
    implicit none
  
    private
  
    integer, public :: nRstart,nRstop,nRstartMag,nRstopMag
+   integer, public :: nRstartChe,nRstopChe,nRstartTP,nRstopTP
+   integer, public :: nRstartDC,nRstopDC
    integer, public :: n_r_cmb,n_r_icb
  
    public :: initialize_radial_data
@@ -59,13 +62,22 @@ contains
       nRstart = n_r_cmb
       nRstop  = n_r_icb
 #endif
-      if ( l_mag ) then
-         nRstartMag = nRstart
-         nRstopMag  = nRstop
-      else
-         nRstartMag = 1
-         nRstopMag  = 1
-      end if
+      nRstartMag = nRstart
+      nRstartChe = nRstart
+      nRstartTP  = nRstart
+      nRstartDC  = nRstart
+      nRstopMag  = nRstop
+      nRstopChe  = nRstop
+      nRstopTP   = nRstop
+      nRstopDC   = nRstop
+      if ( .not. l_mag           ) nRstartMag = 1
+      if ( .not. l_chemical_conv ) nRstartChe = 1
+      if ( .not. l_TP_form       ) nRstartTP  = 1
+      if ( .not. l_double_curl   ) nRstartDC  = 1
+      if ( .not. l_mag           ) nRstopMag  = 1
+      if ( .not. l_chemical_conv ) nRstopChe  = 1
+      if ( .not. l_TP_form       ) nRstopTP   = 1
+      if ( .not. l_double_curl   ) nRstopDC   = 1
 
       if ( lVerbose ) then
          write(*,"(4(A,I4))") "On coord_r ",coord_r," nR is in (", &
