@@ -460,17 +460,17 @@ program magic
    
    PERFOFF
    
-#ifdef WITHPERF
-   do n=0,n_procs-1
-      if (rank == n) then
-         print *, "PerfOut for rank: ", rank
-         print *, "======================================================="
-         PERFOUT('main')
-      end if
-      flush(6)
-      call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-   end do
-#endif
+! ! ! ! ! ! ! ! ! ! #ifdef WITHPERF
+! ! ! ! ! ! ! ! ! !    do n=0,n_procs-1
+! ! ! ! ! ! ! ! ! !       if (rank == n) then
+! ! ! ! ! ! ! ! ! !          print *, "PerfOut for rank: ", rank
+! ! ! ! ! ! ! ! ! !          print *, "======================================================="
+! ! ! ! ! ! ! ! ! !          PERFOUT('main')
+! ! ! ! ! ! ! ! ! !       end if
+! ! ! ! ! ! ! ! ! !       flush(6)
+! ! ! ! ! ! ! ! ! !       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+! ! ! ! ! ! ! ! ! !    end do
+! ! ! ! ! ! ! ! ! ! #endif
 
    !LIKWID_OFF('main')
    LIKWID_CLOSE

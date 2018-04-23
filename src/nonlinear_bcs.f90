@@ -2,14 +2,14 @@ module nonlinear_bcs
 
    use precision_mod
    use truncation, only: nrp, lmP_max, n_phi_max, l_axi, &
-                         n_theta_beg, n_theta_end, lmP_loc
+                         n_theta_beg, n_theta_end, lmP_loc, lm_loc
    use radial_data, only: n_r_cmb, n_r_icb
    use radial_functions, only: r_cmb, r_icb, rho0
    use blocking, only: lm2l, lm2m, lm2lmP, lmP2lmPS, lmP2lmPA, nfs, &
        &               sizeThetaB
    use physical_parameters, only: sigma_ratio, conductance_ma, prmag
-   use horizontal_data, only: dTheta1S, dTheta1A, dPhi, O_sin_theta, &
-       &                      dLh, sn2, cosTheta
+   use horizontal_data, only: dTheta1S_loc, dTheta1A_loc, dPhi_loc, O_sin_theta, &
+       &                      dLh_loc, sn2, cosTheta
    use fft, only: fft_thetab
    use legendre_grid_to_spec, only: legTF2
    use constants, only: two
@@ -17,6 +17,7 @@ module nonlinear_bcs
    use shtns, only: spat_to_SH, spat_to_SH_dist
 #endif
    use useful, only: abortRun
+   use distributed_theta, only: dist_map
 
    implicit none
 
@@ -98,9 +99,9 @@ contains
 #endif
     
    end subroutine get_br_v_bcs
+   
 !----------------------------------------------------------------------------
-   subroutine get_b_nl_bcs(bc,br_vt_lm,br_vp_lm, &
-                           lm_min_b,lm_max_b,b_nl_bc,aj_nl_bc)
+   subroutine get_b_nl_bcs(bc,br_vt_lm,br_vp_lm,b_nl_bc,aj_nl_bc)
       !
       !  Purpose of this subroutine is to calculate the nonlinear term    
       !  of the magnetic boundary condition for a conducting mantle in    
@@ -112,16 +113,18 @@ contains
       !
       !      n_theta_min<=n_theta<=n_theta_min+n_theta_block-1        
       !
+      ! This function has been θ-parallelized, but not fully tested yet
+      ! Please delete this comment once it is certain that it works as 
+      ! expected - Lago 20180502
          
       !-- Input variables:
       character(len=3), intent(in) :: bc                 ! Distinguishes 'CMB' and 'ICB'
-      integer,          intent(in) :: lm_min_b,lm_max_b  ! limits of lm-block
-      complex(cp),      intent(in) :: br_vt_lm(lmP_max)  ! [br*vt/(r**2*sin(theta)**2)]
-      complex(cp),      intent(in) :: br_vp_lm(lmP_max)  ! [br*vp/(r**2*sin(theta)**2)
+      complex(cp),      intent(in) :: br_vt_lm(lmP_loc)  ! [br*vt/(r**2*sin(theta)**2)]
+      complex(cp),      intent(in) :: br_vp_lm(lmP_loc)  ! [br*vp/(r**2*sin(theta)**2)
 
       !-- Output variables:
-      complex(cp), intent(out) :: b_nl_bc(lm_min_b:lm_max_b)  ! nonlinear bc for b
-      complex(cp), intent(out) :: aj_nl_bc(lm_min_b:lm_max_b) ! nonlinear bc for aj
+      complex(cp), intent(out) :: b_nl_bc(lm_loc)  ! nonlinear bc for b
+      complex(cp), intent(out) :: aj_nl_bc(lm_loc) ! nonlinear bc for aj
 
       !-- Local variables:
       integer :: l,m       ! degree and order
@@ -136,44 +139,54 @@ contains
 
          fac=conductance_ma*prmag
 
-         do lm=lm_min_b,lm_max_b
-            l   =lm2l(lm)
-            m   =lm2m(lm)
-            lmP =lm2lmP(lm)
-            lmPS=lmP2lmPS(lmP)
-            lmPA=lmP2lmPA(lmP)
+         if (dist_map%lm2(0,0) > 0)  b_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp) 
+         if (dist_map%lm2(0,0) > 0) aj_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp) 
+         
+         do lm=1,lm_loc
+            l   =dist_map%lm2l(lm)
+            m   =dist_map%lm2m(lm)
+            if ((l==0) .and. (m==0)) cycle
+
+            lmP =dist_map%lm2lmP(lm)
+            lmPS=dist_map%lmP2lmPS(lmP)
+            lmPA=dist_map%lmP2lmPA(lmP)
             if ( l > m ) then
-               b_nl_bc(lm)= fac/dLh(lm) * (  dTheta1S(lm)*br_vt_lm(lmPS)  &
-                                           - dTheta1A(lm)*br_vt_lm(lmPA)  &
-                                           +     dPhi(lm)*br_vp_lm(lmP)   )
-               aj_nl_bc(lm)=-fac/dLh(lm) * ( dTheta1S(lm)*br_vp_lm(lmPS)  &
-                                           - dTheta1A(lm)*br_vp_lm(lmPA)  &
-                                           -     dPhi(lm)*br_vt_lm(lmP)    )
+               b_nl_bc(lm)= fac/dLH_loc(lm) * (  dTheta1S_loc(lm)*br_vt_lm(lmPS)  &
+                                           - dTheta1A_loc(lm)*br_vt_lm(lmPA)  &
+                                           +     dPhi_loc(lm)*br_vp_lm(lmP)   )
+               aj_nl_bc(lm)=-fac/dLH_loc(lm) * ( dTheta1S_loc(lm)*br_vp_lm(lmPS)  &
+                                           - dTheta1A_loc(lm)*br_vp_lm(lmPA)  &
+                                           -     dPhi_loc(lm)*br_vt_lm(lmP)    )
             else if ( l == m ) then
-               b_nl_bc(lm)= fac/dLh(lm) * ( - dTheta1A(lm)*br_vt_lm(lmPA)  &
-                                                + dPhi(lm)*br_vp_lm(lmP)   )
-               aj_nl_bc(lm)=-fac/dLh(lm) * ( - dTheta1A(lm)*br_vp_lm(lmPA) &
-                                                 - dPhi(lm)*br_vt_lm(lmP)   )
+               b_nl_bc(lm)= fac/dLH_loc(lm) * ( - dTheta1A_loc(lm)*br_vt_lm(lmPA)  &
+                                                + dPhi_loc(lm)*br_vp_lm(lmP)   )
+               aj_nl_bc(lm)=-fac/dLH_loc(lm) * ( - dTheta1A_loc(lm)*br_vp_lm(lmPA) &
+                                                 - dPhi_loc(lm)*br_vt_lm(lmP)   )
             end if
          end do
 
       else if ( bc == 'ICB' ) then
 
          fac=sigma_ratio*prmag
+         
+         ! if m=0 is in this rank, aj_nl_bc(1) = 1.0
+         if (dist_map%lm2(0,0) > 0) aj_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp)  
+         
+         do lm=1,lm_loc
+            l   =dist_map%lm2l(lm)
+            m   =dist_map%lm2m(lm)
+            if ((l==0) .and. (m==0)) cycle
 
-         do lm=lm_min_b,lm_max_b
-            l   =lm2l(lm)
-            m   =lm2m(lm)
-            lmP =lm2lmP(lm)
-            lmPS=lmP2lmPS(lmP)
-            lmPA=lmP2lmPA(lmP)
+            lmP =dist_map%lm2lmP(lm)
+            lmPS=dist_map%lmP2lmPS(lmP)
+            lmPA=dist_map%lmP2lmPA(lmP)
             if ( l > m ) then
-               aj_nl_bc(lm)=-fac/dLh(lm) * ( dTheta1S(lm)*br_vp_lm(lmPS)   &
-                                           - dTheta1A(lm)*br_vp_lm(lmPA)   &
-                                           -     dPhi(lm)*br_vt_lm(lmP)    )
+               aj_nl_bc(lm)=-fac/dLH_loc(lm) * ( dTheta1S_loc(lm)*br_vp_lm(lmPS)   &
+                                           - dTheta1A_loc(lm)*br_vp_lm(lmPA)   &
+                                           -     dPhi_loc(lm)*br_vt_lm(lmP)    )
             else if ( l == m ) then
-               aj_nl_bc(lm)=-fac/dLh(lm) * (- dTheta1A(lm)*br_vp_lm(lmPA) &
-                                                - dPhi(lm)*br_vt_lm(lmP)    )
+               aj_nl_bc(lm)=-fac/dLH_loc(lm) * (- dTheta1A_loc(lm)*br_vp_lm(lmPA) &
+                                                - dPhi_loc(lm)*br_vt_lm(lmP)    )
             end if
          end do
 
@@ -188,7 +201,7 @@ contains
             &                  cvrr,dvrdtr,dvrdpr,dvtdpr,dvpdpr)
 !@>details Distributed version of the v_rigid_boundary; the difference is 
 !> basically the size of the data and the indexes. I've removed nThetaStart
-!> argument, though, 'cause I didn't understand what was its purpose 
+!> argument though, 'cause I didn't understand what was its purpose 
 !> (it is always called with nThetaStart=1 anyway)
 !
 !@>author Rafael Lago, MPCDF, December 2017

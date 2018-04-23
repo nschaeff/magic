@@ -57,7 +57,6 @@ contains
                   iThetastop,',',iRstart,':', iRstop, &
                   '), ',iThetastop-iThetastart+1,'x',iRstop-iRstart+1,' points'
          end do
-
          if ( l_save_out ) close(n_log_file)
       end if
       

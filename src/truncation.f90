@@ -246,8 +246,8 @@ contains
       allocate(lmP_dist(0:n_procs_theta-1, n_m_ext, 4))
       allocate(lm_dist(0:n_procs_theta-1, n_m_ext, 4))
       
-      call distribute_round_robin(lmP_dist, l_max+1, m_max, minc)
-      call distribute_round_robin(lm_dist,  l_max  , m_max, minc)
+      call distribute_snake(lmP_dist, l_max+1, m_max, minc)
+      call distribute_snake(lm_dist,  l_max  , m_max, minc)
       
       n_m_loc = n_m_ext - 1
       if (lmP_dist(coord_theta,n_m_ext,1) > -1) n_m_loc = n_m_ext
@@ -324,9 +324,53 @@ contains
          end do
          row_idx = row_idx + 1
       end do
-      
      
    end subroutine distribute_round_robin
+   
+!-------------------------------------------------------------------------------   
+   subroutine distribute_snake(idx_dist, l_max, m_max, minc)
+!@>details Same as above but for Snake Ordering.
+!@>author Rafael Lago, MPCDF, December 2017
+!-------------------------------------------------------------------------------
+      integer, intent(inout) :: idx_dist(0:n_procs_theta-1, n_m_ext, 4)
+      integer, intent(in)    :: l_max, m_max, minc
+      
+      integer :: m_idx, proc_idx, row_idx
+      
+      idx_dist        = -minc
+      idx_dist(:,:,2) =  0
+      idx_dist(:,1,3) =  1
+      
+      m_idx=0
+      row_idx = 1
+      do while (m_idx <= m_max)
+         do proc_idx=0, n_procs_theta-1
+            idx_dist(proc_idx, row_idx, 1) = m_idx
+            idx_dist(proc_idx, row_idx, 2) = l_max - m_idx + 1
+            if (row_idx > 1) idx_dist(proc_idx, row_idx, 3) = &
+                             idx_dist(proc_idx, row_idx-1, 4) + 1
+            idx_dist(proc_idx, row_idx, 4) = idx_dist(proc_idx, row_idx, 3) &
+                                           + l_max - m_idx
+            m_idx = m_idx + minc
+            if (m_idx > m_max) exit
+         end do
+         row_idx = row_idx + 1
+         do proc_idx=n_procs_theta-1,0,-1
+            if (m_idx > m_max) exit
+            idx_dist(proc_idx, row_idx, 1) = m_idx
+            idx_dist(proc_idx, row_idx, 2) = l_max - m_idx + 1
+            if (row_idx > 1) idx_dist(proc_idx, row_idx, 3) = &
+                             idx_dist(proc_idx, row_idx-1, 4) + 1
+            idx_dist(proc_idx, row_idx, 4) = idx_dist(proc_idx, row_idx, 3) &
+                                           + l_max - m_idx
+            
+            m_idx = m_idx + minc
+         end do
+         row_idx = row_idx + 1
+      end do
+      
+     
+   end subroutine distribute_snake
    
 !-------------------------------------------------------------------------------
    subroutine checkTruncation

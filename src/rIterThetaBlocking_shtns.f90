@@ -48,10 +48,10 @@ module rIterThetaBlocking_shtns_mod
 
    type, public, extends(rIterThetaBlocking_t) :: rIterThetaBlocking_shtns_t
       integer :: nThreads
-      type(grid_space_arrays_t) :: gsa_glb, gsa
+      type(grid_space_arrays_t) :: gsa
       type(TO_arrays_t) :: TO_arrays
       type(dtB_arrays_t) :: dtB_arrays
-      type(nonlinear_lm_t) :: nl_lm_glb, nl_lm
+      type(nonlinear_lm_t) :: nl_lm
       real(cp) :: lorentz_torque_ic,lorentz_torque_ma
       
    contains
@@ -84,12 +84,14 @@ contains
       if (n_procs_theta < 2) stop
       
       call this%allocate_common_arrays()
-      call this%gsa_glb%initialize(nrp,1,nfs)
+!       call this%gsa_glb%initialize(nrp,1,nfs)
+!       call this%gsa_glb%initialize(1,1,1)
       call this%gsa%initialize(n_phi_max, n_theta_beg, n_theta_end)
       if ( l_TO ) call this%TO_arrays%initialize()
       call this%dtB_arrays%initialize()
       
-      call this%nl_lm_glb%initialize(lmP_max)
+!       call this%nl_lm_glb%initialize(lmP_max)
+!       call this%nl_lm_glb%initialize(1)
       call this%nl_lm%initialize(lmP_loc)
       
       ! Distributed Update - Lago
@@ -101,10 +103,10 @@ contains
       class(rIterThetaBlocking_shtns_t) :: this
 
       call this%deallocate_common_arrays()
-      call this%gsa_glb%finalize()
+!       call this%gsa_glb%finalize()
       if ( l_TO ) call this%TO_arrays%finalize()
       call this%dtB_arrays%finalize()
-      call this%nl_lm_glb%finalize()
+!       call this%nl_lm_glb%finalize()
       
       ! Distributed Update - Lago
       call this%gsa%finalize()
@@ -241,7 +243,7 @@ contains
       end if
       
       !PERFOFF
-!       !--------- Calculate Lorentz torque on inner core:
+      !--------- Calculate Lorentz torque on inner core:
       !          each call adds the contribution of the theta-block to
       !          lorentz_torque_ic
       if ( this%nR == n_r_icb .and. l_mag_LF .and. l_rot_ic .and. l_cond_ic  ) then
@@ -275,19 +277,19 @@ contains
 !       if ( this%l_graph ) then
 ! #ifdef WITH_MPI
 !             PERFON('graphout')
-!             call graphOut_mpi(time,this%nR,this%gsa_glb%vrc,           &
-!                  &            this%gsa_glb%vtc,this%gsa_glb%vpc,           &
-!                  &            this%gsa_glb%brc,this%gsa_glb%btc,           &
-!                  &            this%gsa_glb%bpc,this%gsa_glb%sc,            &
-!                  &            this%gsa_glb%pc,this%gsa_glb%xic,            &
+!             call graphOut_mpi(time,this%nR,this%gsa%vrc,           &
+!                  &            this%gsa%vtc,this%gsa%vpc,           &
+!                  &            this%gsa%brc,this%gsa%btc,           &
+!                  &            this%gsa%bpc,this%gsa%sc,            &
+!                  &            this%gsa%pc,this%gsa%xic,            &
 !                  &            1 ,this%sizeThetaB, lGraphHeader)
 !             PERFOFF
 ! #else
-!             call graphOut(time,this%nR,this%gsa_glb%vrc,           &
-!                  &        this%gsa_glb%vtc,this%gsa_glb%vpc,           &
-!                  &        this%gsa_glb%brc,this%gsa_glb%btc,           &
-!                  &        this%gsa_glb%bpc,this%gsa_glb%sc,            &
-!                  &        this%gsa_glb%pc,this%gsa_glb%xic,            &
+!             call graphOut(time,this%nR,this%gsa%vrc,           &
+!                  &        this%gsa%vtc,this%gsa%vpc,           &
+!                  &        this%gsa%brc,this%gsa%btc,           &
+!                  &        this%gsa%bpc,this%gsa%sc,            &
+!                  &        this%gsa%pc,this%gsa%xic,            &
 !                  &        1 ,this%sizeThetaB,lGraphHeader)
 ! #endif
 !       end if
@@ -295,7 +297,7 @@ contains
 
       if ( this%l_probe_out ) then
          print *, "PANIC l_probe_out"
-         call probe_out(time,this%nR,this%gsa_glb%vpc, 1,this%sizeThetaB)
+         call probe_out(time,this%nR,this%gsa%vpc, 1,this%sizeThetaB)
       end if
       !< / parallelization postponed >
       
@@ -303,12 +305,12 @@ contains
       if ( this%lHelCalc ) then
          print *, "PANIC lHelCalc"
          PERFON('hel_out')
-         call get_helicity(this%gsa_glb%vrc,this%gsa_glb%vtc,          &
-              &        this%gsa_glb%vpc,this%gsa_glb%cvrc,             &
-              &        this%gsa_glb%dvrdtc,                        &
-              &        this%gsa_glb%dvrdpc,                        &
-              &        this%gsa_glb%dvtdrc,                        &
-              &        this%gsa_glb%dvpdrc,HelLMr,Hel2LMr,         &
+         call get_helicity(this%gsa%vrc,this%gsa%vtc,          &
+              &        this%gsa%vpc,this%gsa%cvrc,             &
+              &        this%gsa%dvrdtc,                        &
+              &        this%gsa%dvrdpc,                        &
+              &        this%gsa%dvtdrc,                        &
+              &        this%gsa%dvpdrc,HelLMr,Hel2LMr,         &
               &        HelnaLMr,Helna2LMr,this%nR,1 )
          PERFOFF
       end if
@@ -317,10 +319,10 @@ contains
       if ( this%lPowerCalc ) then
          print *, "PANIC lPowerCalc"
          PERFON('hel_out')
-         call get_visc_heat(this%gsa_glb%vrc,this%gsa_glb%vtc,this%gsa_glb%vpc,     &
-              &        this%gsa_glb%cvrc,this%gsa_glb%dvrdrc,this%gsa_glb%dvrdtc,   &
-              &        this%gsa_glb%dvrdpc,this%gsa_glb%dvtdrc,this%gsa_glb%dvtdpc, &
-              &        this%gsa_glb%dvpdrc,this%gsa_glb%dvpdpc,viscLMr,         &
+         call get_visc_heat(this%gsa%vrc,this%gsa%vtc,this%gsa%vpc,     &
+              &        this%gsa%cvrc,this%gsa%dvrdrc,this%gsa%dvrdtc,   &
+              &        this%gsa%dvrdpc,this%gsa%dvtdrc,this%gsa%dvtdpc, &
+              &        this%gsa%dvpdrc,this%gsa%dvpdpc,viscLMr,         &
               &        this%nR,1)
          PERFOFF
       end if
@@ -328,36 +330,36 @@ contains
       !--------- horizontal velocity :
       if ( this%lViscBcCalc ) then
          print *, "PANIC lViscBcCalc"
-         call get_nlBLayers(this%gsa_glb%vtc,    &
-              &             this%gsa_glb%vpc,    &
-              &             this%gsa_glb%dvtdrc, &
-              &             this%gsa_glb%dvpdrc, &
-              &             this%gsa_glb%drSc,   &
-              &             this%gsa_glb%dsdtc,  &
-              &             this%gsa_glb%dsdpc,  &
+         call get_nlBLayers(this%gsa%vtc,    &
+              &             this%gsa%vpc,    &
+              &             this%gsa%dvtdrc, &
+              &             this%gsa%dvpdrc, &
+              &             this%gsa%drSc,   &
+              &             this%gsa%dsdtc,  &
+              &             this%gsa%dsdpc,  &
               &             uhLMr,duhLMr,gradsLMr,nR,1 )
       end if
 
 
       if ( this%lFluxProfCalc ) then
          print *, "PANIC lFluxProfCalc"
-          call get_fluxes(this%gsa_glb%vrc,this%gsa_glb%vtc,             &
-                 &        this%gsa_glb%vpc,this%gsa_glb%dvrdrc,          &
-                 &        this%gsa_glb%dvtdrc,                       &
-                 &        this%gsa_glb%dvpdrc,                       &
-                 &        this%gsa_glb%dvrdtc,                       &
-                 &        this%gsa_glb%dvrdpc,this%gsa_glb%sc,           &
-                 &        this%gsa_glb%pc,this%gsa_glb%brc,              &
-                 &        this%gsa_glb%btc,this%gsa_glb%bpc,             &
-                 &        this%gsa_glb%cbtc,this%gsa_glb%cbpc,           &
+          call get_fluxes(this%gsa%vrc,this%gsa%vtc,             &
+                 &        this%gsa%vpc,this%gsa%dvrdrc,          &
+                 &        this%gsa%dvtdrc,                       &
+                 &        this%gsa%dvpdrc,                       &
+                 &        this%gsa%dvrdtc,                       &
+                 &        this%gsa%dvrdpc,this%gsa%sc,           &
+                 &        this%gsa%pc,this%gsa%brc,              &
+                 &        this%gsa%btc,this%gsa%bpc,             &
+                 &        this%gsa%cbtc,this%gsa%cbpc,           &
                  &        fconvLMr,fkinLMr,fviscLMr,fpoynLMr,    &
                  &        fresLMr,nR,1 )
       end if
 
       if ( this%lPerpParCalc ) then
          print *, "PANIC lPerpParCalc"
-          call get_perpPar(this%gsa_glb%vrc,this%gsa_glb%vtc,       &
-                 &         this%gsa_glb%vpc,EperpLMr,EparLMr,   &
+          call get_perpPar(this%gsa%vrc,this%gsa%vtc,       &
+                 &         this%gsa%vpc,EperpLMr,EparLMr,   &
                  &         EperpaxiLMr,EparaxiLMr,nR,1 )
       end if
 
@@ -366,18 +368,18 @@ contains
       if ( this%l_frame .and. l_movie_oc .and. l_store_frame ) then
          print *, "PANIC l_frame"
          PERFON('mov_out')
-         call store_movie_frame(this%nR,this%gsa_glb%vrc,                &
-              &                 this%gsa_glb%vtc,this%gsa_glb%vpc,           &
-              &                 this%gsa_glb%brc,this%gsa_glb%btc,           &
-              &                 this%gsa_glb%bpc,this%gsa_glb%sc,            &
-              &                 this%gsa_glb%drSc,                       &
-              &                 this%gsa_glb%dvrdpc,                     &
-              &                 this%gsa_glb%dvpdrc,                     &
-              &                 this%gsa_glb%dvtdrc,                     &
-              &                 this%gsa_glb%dvrdtc,                     &
-              &                 this%gsa_glb%cvrc,                       &
-              &                 this%gsa_glb%cbrc,                       &
-              &                 this%gsa_glb%cbtc,1 ,                    &
+         call store_movie_frame(this%nR,this%gsa%vrc,                &
+              &                 this%gsa%vtc,this%gsa%vpc,           &
+              &                 this%gsa%brc,this%gsa%btc,           &
+              &                 this%gsa%bpc,this%gsa%sc,            &
+              &                 this%gsa%drSc,                       &
+              &                 this%gsa%dvrdpc,                     &
+              &                 this%gsa%dvpdrc,                     &
+              &                 this%gsa%dvtdrc,                     &
+              &                 this%gsa%dvrdtc,                     &
+              &                 this%gsa%cvrc,                       &
+              &                 this%gsa%cbrc,                       &
+              &                 this%gsa%cbtc,1 ,                    &
               &                 this%sizeThetaB,this%leg_helper%bCMB)
          PERFOFF
       end if
@@ -389,9 +391,9 @@ contains
       if ( l_dtB ) then
          print *, "PANIC dtBLM"
          PERFON('dtBLM')
-         call get_dtBLM(this%nR,this%gsa_glb%vrc,this%gsa_glb%vtc,                    &
-              &         this%gsa_glb%vpc,this%gsa_glb%brc,                            &
-              &         this%gsa_glb%btc,this%gsa_glb%bpc,                            &
+         call get_dtBLM(this%nR,this%gsa%vrc,this%gsa%vtc,                    &
+              &         this%gsa%vpc,this%gsa%brc,                            &
+              &         this%gsa%btc,this%gsa%bpc,                            &
               &         1 ,this%sizeThetaB,this%dtB_arrays%BtVrLM,            &
               &         this%dtB_arrays%BpVrLM,this%dtB_arrays%BrVtLM,        &
               &         this%dtB_arrays%BrVpLM,this%dtB_arrays%BtVpLM,        &
@@ -408,8 +410,8 @@ contains
       PERFON('TO_terms')
       if ( ( this%lTONext .or. this%lTONext2 ) .and. l_mag ) then
          print *, "PANIC lTONext"
-         call getTOnext(this%leg_helper%zAS,this%gsa_glb%brc,   &
-              &         this%gsa_glb%btc,this%gsa_glb%bpc,&
+         call getTOnext(this%leg_helper%zAS,this%gsa%brc,   &
+              &         this%gsa%btc,this%gsa%bpc,&
               &         this%lTONext,this%lTONext2,dt,dtLast,this%nR, &
               &         1 ,this%sizeThetaB,this%BsLast,      &
               &         this%BpLast,this%BzLast)
@@ -417,11 +419,11 @@ contains
 
       if ( this%lTOCalc ) then
          print *, "PANIC lTOCalc"
-         call getTO(this%gsa_glb%vrc,this%gsa_glb%vtc,    &
-              &     this%gsa_glb%vpc,this%gsa_glb%cvrc,   &
-              &     this%gsa_glb%dvpdrc,this%gsa_glb%brc, &
-              &     this%gsa_glb%btc,this%gsa_glb%bpc,    &
-              &     this%gsa_glb%cbrc,this%gsa_glb%cbtc,  &
+         call getTO(this%gsa%vrc,this%gsa%vtc,    &
+              &     this%gsa%vpc,this%gsa%cvrc,   &
+              &     this%gsa%dvpdrc,this%gsa%brc, &
+              &     this%gsa%btc,this%gsa%bpc,    &
+              &     this%gsa%cbrc,this%gsa%cbtc,  &
               &     this%BsLast,this%BpLast,this%BzLast,              &
               &     this%TO_arrays%dzRstrLM,this%TO_arrays%dzAstrLM,  &
               &     this%TO_arrays%dzCorLM,this%TO_arrays%dzLFLM,     &
@@ -436,7 +438,7 @@ contains
 
       if (DEBUG_OUTPUT) then
          print *, "PANIC DEBUG_OUTPUT"
-         call this%nl_lm_glb%output()
+         call this%nl_lm%output()
       end if
 
       !-- Partial calculation of time derivatives (horizontal parts):

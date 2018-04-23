@@ -128,8 +128,6 @@ contains
     
       end if   ! Magnetic field ?
     
-      call mpi_allreduce(MPI_IN_PLACE, vr2max, 1, MPI_DEF_REAL, MPI_MAX, comm_theta, ierr)
-      call mpi_allreduce(MPI_IN_PLACE, vh2max, 1, MPI_DEF_REAL, MPI_MAX, comm_theta, ierr)
       if ( vr2max /= 0.0_cp ) dtrkc=min(dtrkc,sqrt(delxr2(n_r)/vr2max))
       if ( vh2max /= 0.0_cp ) dthkc=min(dthkc,sqrt(delxh2(n_r)/vh2max))
     
@@ -177,11 +175,10 @@ contains
          dt_r=min(dtrkc(n_r),dt_r)
          dt_h=min(dthkc(n_r),dt_h)
       end do
+      
 #ifdef WITH_MPI
-      call MPI_Allreduce(MPI_IN_PLACE,dt_r,1,MPI_DEF_REAL, &
-                         MPI_MIN,comm_r,ierr)
-      call MPI_Allreduce(MPI_IN_PLACE,dt_h,1,MPI_DEF_REAL, &
-                         MPI_MIN,comm_r,ierr)
+      call MPI_Allreduce(MPI_IN_PLACE,dt_r,1,MPI_DEF_REAL,MPI_MIN,comm_cart,ierr)
+      call MPI_Allreduce(MPI_IN_PLACE,dt_h,1,MPI_DEF_REAL,MPI_MIN,comm_cart,ierr)
 #endif
     
       dt_rh=min(dt_r,dt_h)

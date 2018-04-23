@@ -39,9 +39,9 @@ module updateS_mod
    real(cp), allocatable :: s0Mat_fac(:)
 #endif
    logical, public, allocatable :: lSmat(:)
-
+   
    integer :: maxThreads
-
+   
    public :: initialize_updateS, updateS, updateS_ala, finalize_updateS
 
 contains
@@ -126,7 +126,7 @@ contains
       integer, pointer :: sizeLMB2(:,:),lm2(:,:)
       integer, pointer :: lm22lm(:,:,:),lm22l(:,:,:),lm22m(:,:,:)
 
-      integer :: threadid,nThreads,iThread,all_lms,per_thread,start_lm,stop_lm
+      integer :: iThread,all_lms,start_lm,stop_lm
       integer :: iChunk,nChunks,size_of_last_chunk,lmB0
 
       if ( .not. l_update_s ) return
@@ -144,63 +144,29 @@ contains
       lmStop      =lmStopB(nLMB)
       w2  =one-w1
       O_dt=one/dt
-
-
-      !PERFON('upS_fin')
-      !$OMP PARALLEL  &
-      !$OMP private(iThread,start_lm,stop_lm,nR,lm) &
-      !$OMP shared(all_lms,per_thread,lmStart,lmStop) &
-      !$OMP shared(dVSrLM,dsdt,orho1,or2) &
-      !$OMP shared(n_r_max,rscheme_oc,work_LMloc,nThreads,llm,ulm)
-      !$OMP SINGLE
-#ifdef WITHOMP
-      nThreads=omp_get_num_threads()
-#else
-      nThreads=1
-#endif
-      !-- Get radial derivatives of s: work_LMloc,dsdtLast used as work arrays
       all_lms=lmStop-lmStart+1
-      per_thread=all_lms/nThreads
-      !$OMP END SINGLE
-      !$OMP BARRIER
-      !$OMP DO
-      do iThread=0,nThreads-1
-         start_lm=lmStart+iThread*per_thread
-         stop_lm = start_lm+per_thread-1
-         if (iThread == nThreads-1) stop_lm=lmStop
 
-         !--- Finish calculation of dsdt:
-         call get_dr( dVSrLM,work_LMloc,ulm-llm+1,start_lm-llm+1,  &
-              &       stop_lm-llm+1,n_r_max,rscheme_oc, nocopy=.true. )
-      end do
-      !$OMP end do
+      !-- Get radial derivatives of s: work_LMloc,dsdtLast used as work arrays
 
-      !$OMP DO
+      !--- Finish calculation of dsdt:
+      call get_dr( dVSrLM,work_LMloc,ulm-llm+1,lmStart-llm+1,  &
+            &       lmStop-llm+1,n_r_max,rscheme_oc, nocopy=.true. )
+
       do nR=1,n_r_max
          do lm=lmStart,lmStop
             dsdt(lm,nR)=orho1(nR)*(dsdt(lm,nR)-or2(nR)*work_LMloc(lm,nR))
          end do
       end do
-      !$OMP end do
-      !$OMP END PARALLEL
-      !PERFOFF
 
       ! one subblock is linked to one l value and needs therefore once the matrix
-      !$OMP PARALLEL default(shared)
-      !$OMP SINGLE
       do nLMB2=1,nLMBs2(nLMB)
          ! this inner loop is in principle over the m values which belong to the
          ! l value
-         !$OMP TASK default(shared) &
-         !$OMP firstprivate(nLMB2) &
-         !$OMP private(lm,lm1,l1,m1,lmB,threadid) &
-         !$OMP private(nChunks,size_of_last_chunk,iChunk)
          nChunks = (sizeLMB2(nLMB2,nLMB)+chunksize-1)/chunksize
          size_of_last_chunk = chunksize + (sizeLMB2(nLMB2,nLMB)-nChunks*chunksize)
 
          ! This task treats one l given by l1
          l1=lm22l(1,nLMB2,nLMB)
-         !write(*,"(3(A,I3),A)") "Launching task for nLMB2=",nLMB2," (l=",l1,") and scheduling ",nChunks," subtasks."
 
          if ( l1 == 0 ) then
             if ( .not. lSmat(l1) ) then
@@ -221,20 +187,10 @@ contains
                     sMat(1,1,l1),sPivot(1,l1))
 #endif
                lSmat(l1)=.true.
-               !write(*,"(A,I3,ES22.14)") "sMat: ",l1,SUM( sMat(:,:,l1) )
             end if
           end if
 
          do iChunk=1,nChunks
-            !$OMP TASK default(shared) &
-            !$OMP firstprivate(iChunk) &
-            !$OMP private(lmB0,lmB,lm,lm1,m1,nR,n_r_out) &
-            !$OMP private(threadid)
-#ifdef WITHOMP
-            threadid = omp_get_thread_num()
-#else
-            threadid = 0
-#endif
             lmB0=(iChunk-1)*chunksize
             lmB=lmB0
 
@@ -262,20 +218,20 @@ contains
                else ! l1  /=  0
                   lmB=lmB+1
 
-                  rhs1(1,lmB,threadid)=      tops(l1,m1)
-                  rhs1(n_r_max,lmB,threadid)=bots(l1,m1)
+                  rhs1(1,lmB,0)=      tops(l1,m1)
+                  rhs1(n_r_max,lmB,0)=bots(l1,m1)
 #ifdef WITH_PRECOND_S
-                  rhs1(1,lmB,threadid)=      sMat_fac(1,l1)*rhs1(1,lmB,threadid)
-                  rhs1(n_r_max,lmB,threadid)=sMat_fac(1,l1)*rhs1(n_r_max,lmB,threadid)
+                  rhs1(1,lmB,0)=      sMat_fac(1,l1)*rhs1(1,lmB,0)
+                  rhs1(n_r_max,lmB,0)=sMat_fac(1,l1)*rhs1(n_r_max,lmB,0)
 #endif
                   do nR=2,n_r_max-1
-                     rhs1(nR,lmB,threadid)=s(lm1,nR)*O_dt +            &
+                     rhs1(nR,lmB,0)=s(lm1,nR)*O_dt +            &
                          &                w1*dsdt(lm1,nR) +            &
                          &                w2*dsdtLast(lm1,nR) -        &
                          &  alpha*dLh(st_map%lm2(lm2l(lm1),lm2m(lm1))) &
                          &  *or2(nR)*orho1(nR)*dentropy0(nR)*w(lm1,nR)
 #ifdef WITH_PRECOND_S
-                     rhs1(nR,lmB,threadid) = sMat_fac(nR,l1)*rhs1(nR,lmB,threadid)
+                     rhs1(nR,lmB,0) = sMat_fac(nR,l1)*rhs1(nR,lmB,0)
 #endif
                   end do
                end if
@@ -285,7 +241,7 @@ contains
             !PERFON('upS_sol')
             if ( lmB  >  lmB0 ) then
                call cgeslML(sMat(:,:,l1),n_r_max,n_r_max, &
-                    &       sPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
+                    &       sPivot(:,l1),rhs1(:,lmB0+1:lmB,0),lmB-lmB0)
             end if
             !PERFOFF
 
@@ -304,11 +260,11 @@ contains
                   lmB=lmB+1
                   if ( m1 > 0 ) then
                      do n_r_out=1,rscheme_oc%n_max
-                        s(lm1,n_r_out)=rhs1(n_r_out,lmB,threadid)
+                        s(lm1,n_r_out)=rhs1(n_r_out,lmB,0)
                      end do
                   else
                      do n_r_out=1,rscheme_oc%n_max
-                        s(lm1,n_r_out)= cmplx(real(rhs1(n_r_out,lmB,threadid)), &
+                        s(lm1,n_r_out)= cmplx(real(rhs1(n_r_out,lmB,0)), &
                                        &     0.0_cp,kind=cp)
                      end do
                   end if
@@ -331,38 +287,11 @@ contains
       end do
 
       !PERFON('upS_drv')
-      all_lms=lmStop-lmStart+1
-#ifdef WITHOMP
-      if (all_lms < maxThreads) then
-         call omp_set_num_threads(all_lms)
-         per_thread=1
-      else
-         per_thread=all_lms/omp_get_max_threads()
-      end if
-#else
-      per_thread=all_lms
-#endif
-      !$OMP PARALLEL &
-      !$OMP private(iThread,start_lm,stop_lm) &
-      !$OMP shared(per_thread,lmStart,lmStop,nThreads) &
-      !$OMP shared(s,ds,dsdtLast,rscheme_oc) &
-      !$OMP shared(n_r_max,work_LMloc,llm,ulm) &
-      !$OMP shared(n_r_cmb,n_r_icb,dsdt,coex,opr,hdif_S) &
-      !$OMP shared(st_map,lm2l,lm2m,kappa,beta,dLtemp0,or1) &
-      !$OMP shared(dentropy0,dLkappa,dLh,or2)
-      !$OMP DO
-      do iThread=0,nThreads-1
-         start_lm=lmStart+iThread*per_thread
-         stop_lm = start_lm+per_thread-1
-         if (iThread == nThreads-1) stop_lm=lmStop
-         call rscheme_oc%costf1(s,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
-         call get_ddr(s, ds, work_LMloc, ulm-llm+1, start_lm-llm+1, stop_lm-llm+1, &
-              &        n_r_max, rscheme_oc)
-      end do
-      !$OMP end do
+      call rscheme_oc%costf1(s,ulm-llm+1,lmStart-llm+1,lmStop-llm+1)
+      call get_ddr(s, ds, work_LMloc, ulm-llm+1, lmStart-llm+1, lmStop-llm+1, &
+            &        n_r_max, rscheme_oc)
 
       !-- Calculate explicit time step part:
-      !$OMP do private(nR,lm1)
       do nR=n_r_cmb+1,n_r_icb-1
          do lm1=lmStart,lmStop
             dsdtLast(lm1,nR)=dsdt(lm1,nR) &
@@ -376,12 +305,6 @@ contains
                  &    *orho1(nR)*dentropy0(nR)*               w(lm1,nR)
          end do
       end do
-      !$OMP end do
-      !$OMP END PARALLEL
-#ifdef WITHOMP
-      call omp_set_num_threads(maxThreads)
-#endif
-      !PERFOFF
 
    end subroutine updateS
 !------------------------------------------------------------------------------

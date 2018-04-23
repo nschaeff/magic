@@ -1,3 +1,64 @@
+2018-05-28
+-------------------------------------------------------------------------------
+- Snake ordering for m-distribution implemented
+- After some further reading of the code, I've decided to re-rename some of the
+  variables.
+  - Rloc had been renamed to "dist". But now that I'm parallelizing the LMloc
+    variables, I'll need to distinguish them again. I'm renaming all "dist"
+    fields into Rdist instead
+  - LMloc fields will have a distributed version: LMdist
+
+2018-05-02
+-------------------------------------------------------------------------------
+- I honestly have no idea what is going on with lorentz_torque_ic and the likes
+  inside of do_iteration. It is set to zero, then passed, then copied, never 
+  used, then set to zero again... I'll just not touch anything related to 
+  lorentz_torque_ic, but I think that some of the allreduces inside 
+  get_lorentz_torque can be merged with the BCAST in the step_time cll, or at 
+  least put side-by-side.
+- step_time.f90
+   - [renamed] br_vt_lm_cmb_dist -> br_vt_lm_cmb
+   - [renamed] br_vp_lm_cmb_dist -> br_vp_lm_cmb
+   - [renamed] br_vt_lm_icb_dist -> br_vt_lm_icb
+   - [renamed] br_vp_lm_icb_dist -> br_vp_lm_icb
+- nonlinear_bcs.f90
+   - [parallelized] get_b_nl_bcs. Some arguments have been removed too.
+   - [TODO] test get_b_nl_bcs. It is not called with currently working 
+     parameters, for any of the tests from the magic_wizard
+
+2018-04-23
+-------------------------------------------------------------------------------
+- rIterThetaBlocking_shtns.f90
+   - Some memory optimization:
+      - [renamed] nl_lm_glb -> nl_lm
+      - [renamed] gsa_glb -> gsa
+      - [WARNING] Diagnostic functions will step outside the bounds
+      - [TODO] parallelize diagnostics
+- out_movie_file.f90
+   - [renamed] w_Rloc and b_Rloc -> *_dist
+      - [WARNING] Do not call this function! It will step outside of the bounds
+- outPar.f90
+   - [renamed] s_Rloc, ds_Rloc, p_Rloc, dp_Rloc -> *_dist
+      - [WARNING] Do not call this function! It will step outside of the bounds
+      - [TODO] parallelize this module
+- communication.f90
+   - [new] r2lo_redist_start_dist
+   - [new] lo2r_redist_start_dist
+   - [new] lo2r_redist_wait_dist
+      -[TODO] These is not "properly" parallel; it is just a quick cheat 
+- fields.f90
+   - Some memory optimization:
+       - [renamed] *_Rloc_container -> *_dist_container
+       - [renamed] *_Rloc -> *_dist
+       - all those variables are now (r,θ)-distributed
+- step_time.f90
+   - Some memory optimization:
+       - [renamed] dflowdt_Rloc_container => dflowdt_dist_container
+       - [renamed] dxidt_Rloc_container => dxidt_dist_container
+       - [renamed] dsdt_Rloc_container => dsdt_dist_container
+       - [renamed] dbdt_Rloc_container => dbdt_dist_container
+       - all those variables are now (r,θ)-distributed
+
 2018-04-19
 -------------------------------------------------------------------------------
 - rIterThetaBlocking_shtns.f90

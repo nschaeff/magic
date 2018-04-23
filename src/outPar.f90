@@ -14,7 +14,7 @@ module outPar_mod
        &            l_perpPar, l_save_out, l_temperature_diff,   &
        &            l_anelastic_liquid, l_TP_form
    use horizontal_data, only: gauss
-   use fields, only: s_Rloc, ds_Rloc, p_Rloc, dp_Rloc
+   use fields, only: s_dist, ds_dist, p_dist, dp_dist
    use physical_parameters, only: ek, prmag, OhmLossFac, ViscHeatFac, &
        &                          opr, kbots, ktops, ThExpNb
    use constants, only: pi, mass, osq4pi, sq4pi, half, two, four
@@ -183,12 +183,12 @@ contains
 
       if ( l_viscBcCalc ) then
          do nR=nRstart,nRstop
-            sR(nR) = real(s_Rloc(1,nR))
+            sR(nR) = real(s_dist(1,nR))
             ! calculate entropy/temperature variance:
             sR2(nR)=0.0_cp
             do lm=1,lm_max
               m=lm2m(lm)
-              sR2(nR)=sR2(nR)+cc2real(s_Rloc(lm,nR),m)
+              sR2(nR)=sR2(nR)+cc2real(s_dist(lm,nR),m)
             end do
             if ( nLogs  <=  1) then
                Mvar(nR)=sR(nR)
@@ -257,33 +257,33 @@ contains
          if ( l_TP_form .or. l_anelastic_liquid ) then
             if ( l_temperature_diff ) then
                do nR=nRstart,nRstop
-                  fcR(nR)=-real(ds_Rloc(1,nR))*kappa(nR)*rho0(nR)* &
+                  fcR(nR)=-real(ds_dist(1,nR))*kappa(nR)*rho0(nR)* &
                   &        r(nR)*r(nR)*sq4pi
                end do
             else
                do nR=nRstart,nRstop
                   fcR(nR)=-kappa(nR)*r(nR)*r(nR)*                 &
-                  &       sq4pi*( rho0(nR)*(real(ds_Rloc(1,nR))-  &
-                  &       dLtemp0(nR)*real(s_Rloc(1,nR)))-ThExpNb*&
+                  &       sq4pi*( rho0(nR)*(real(ds_dist(1,nR))-  &
+                  &       dLtemp0(nR)*real(s_dist(1,nR)))-ThExpNb*&
                   &       ViscHeatFac*alpha0(nR)*temp0(nR)*(      &
-                  &       real(dp_Rloc(1,nR))+(dLalpha0(nR)-      &
-                  &       beta(nR))*real(p_Rloc(1,nR))) )
+                  &       real(dp_dist(1,nR))+(dLalpha0(nR)-      &
+                  &       beta(nR))*real(p_dist(1,nR))) )
                end do
             end if
          else
             if  ( l_temperature_diff ) then
                do nR=nRstart,nRstop
                   fcR(nR)=-sq4pi*r(nR)*r(nR)*kappa(nR)*rho0(nR)*temp0(nR)*&
-                  &        (dLtemp0(nR)*real(s_Rloc(1,nR)) +   &
-                  &                     real(ds_Rloc(1,nR))+   &
+                  &        (dLtemp0(nR)*real(s_dist(1,nR)) +   &
+                  &                     real(ds_dist(1,nR))+   &
                   &        ViscHeatFac*ThExpNb*alpha0(nR)*     &
                   &        orho1(nR)*((dLalpha0(nR)+dLtemp0(nR)-beta(nR))*& 
-                  &                     real(p_Rloc(1,nR))+    &
-                  &                     real(dp_Rloc(1,nR))))
+                  &                     real(p_dist(1,nR))+    &
+                  &                     real(dp_dist(1,nR))))
                end do
             else
                do nR=nRstart,nRstop
-                  fcR(nR)=-real(ds_Rloc(1,nR))*kappa(nR)*rho0(nR)* &
+                  fcR(nR)=-real(ds_dist(1,nR))*kappa(nR)*rho0(nR)* &
                   &        temp0(nR)*r(nR)*r(nR)*sq4pi
                end do
             end if
