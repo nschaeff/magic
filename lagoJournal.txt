@@ -1,3 +1,16 @@
+2018-04-23
+-------------------------------------------------------------------------------
+- communication.f90
+   - [new] r2lo_redist_start_dist
+     -[TODO] This is not "properly" parallel; it is just a quick cheat 
+- step_time.f90
+   - Some memory optimization:
+      -[renamed] dflowdt_Rloc_container => dflowdt_dist_container
+      -[renamed] dxidt_Rloc_container => dxidt_dist_container
+      -[renamed] dsdt_Rloc_container => dsdt_dist_container
+      -[renamed] dbdt_Rloc_container => dbdt_dist_container
+      - all those variables are now (r,θ)-distributed
+
 2018-04-19
 -------------------------------------------------------------------------------
 - rIterThetaBlocking_shtns.f90

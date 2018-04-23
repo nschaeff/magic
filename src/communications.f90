@@ -7,9 +7,10 @@ module communications
    use precision_mod
    use mem_alloc, only: memWrite, bytes_allocated
    use parallel_mod, only: coord_r, n_procs_r, ierr, nR_per_rank, nR_on_last_rank, &
-                           comm_r, rank
+                           comm_r, rank, comm_cart
    use LMLoop_data, only: llm, ulm
-   use truncation, only: l_max, lm_max, minc, n_r_max, n_r_ic_max, l_axi
+   use truncation, only: l_max, lm_max, minc, n_r_max, n_r_ic_max, l_axi, lm_loc,  &
+       &                 gather_Flm
    use blocking, only: st_map, lo_map, lmStartB, lmStopB
    use radial_data, only: nRstart, nRstop
    use logic, only: l_mag, l_conv, l_heat, l_chemical_conv, &
@@ -23,6 +24,11 @@ module communications
    interface get_global_sum
       module procedure get_global_sum_cmplx_2d, get_global_sum_cmplx_1d, &
                        get_global_sum_real_2d
+   end interface
+   
+   interface get_global_sum_dist
+      module procedure get_global_sum_cmplx_2d_dist, get_global_sum_cmplx_1d_dist, &
+                       get_global_sum_real_2d_dist
    end interface
  
    type, public :: lm2r_type
@@ -60,6 +66,7 @@ module communications
    &         create_lm2r_type!,lo2r_redist,lm2r_redist
    public :: lo2r_redist_start,lo2r_redist_wait, create_r2lm_type,   &
    &         destroy_r2lm_type,destroy_lm2r_type
+   public :: get_global_sum_dist, r2lo_redist_start_dist
 #ifdef WITH_MPI
    public :: myAllGather
 #endif
@@ -342,6 +349,23 @@ contains
 
    end function get_global_sum_cmplx_2d
 !-------------------------------------------------------------------------------
+   complex(cp) function get_global_sum_cmplx_2d_dist(dwdt_local) result(global_sum)
+
+      complex(cp), intent(in) :: dwdt_local(:,:)
+      
+#ifdef WITH_MPI
+      integer :: ierr
+      complex(cp) :: local_sum
+      
+      local_sum = sum( dwdt_local )
+      call MPI_Allreduce(local_sum,global_sum,1,MPI_DEF_COMPLEX, &
+                         MPI_SUM,comm_cart,ierr)
+#else
+      global_sum= sum(dwdt_local)
+#endif
+
+   end function get_global_sum_cmplx_2d_dist
+!-------------------------------------------------------------------------------
    real(cp) function get_global_sum_real_2d(dwdt_local) result(global_sum)
 
       real(cp), intent(in) :: dwdt_local(:,:)
@@ -357,6 +381,23 @@ contains
 #endif
 
    end function get_global_sum_real_2d
+!-------------------------------------------------------------------------------
+   real(cp) function get_global_sum_real_2d_dist(dwdt_local) result(global_sum)
+
+      real(cp), intent(in) :: dwdt_local(:,:)
+      
+#ifdef WITH_MPI
+      integer :: ierr
+      real(cp) :: local_sum
+      
+      local_sum = sum( dwdt_local )
+      call MPI_Allreduce(local_sum,global_sum,1,MPI_DEF_REAL,MPI_SUM,&
+                         comm_cart,ierr)
+#else
+      global_sum= sum(dwdt_local)
+#endif
+
+   end function get_global_sum_real_2d_dist
 !-------------------------------------------------------------------------------
    complex(cp) function get_global_sum_cmplx_1d(arr_local) result(global_sum)
       !
@@ -410,6 +451,43 @@ contains
 #endif
 
    end function get_global_sum_cmplx_1d
+!-------------------------------------------------------------------------------
+   complex(cp) function get_global_sum_cmplx_1d_dist(arr_local) result(global_sum)
+      !
+      ! Kahan summation algorithm
+      ! 
+      ! Read the comment of the previous function
+      ! 
+      
+      complex(cp), intent(in) :: arr_local(:)
+      
+#ifdef WITH_MPI
+      integer :: lb,ub,ierr,i
+      complex(cp) :: local_sum,c,y,t
+
+      lb = lbound(arr_local,1)
+      ub = ubound(arr_local,1)
+      local_sum = 0.0_cp
+      c = 0.0_cp          !A running compensation for lost low-order bits.
+      do i=lb,ub
+         y = arr_local(i) - c ! So far, so good: c is zero.
+         t = local_sum + y    ! Alas, sum is big, y small, 
+                              ! so low-order digits of y are lost.
+         c = (t - local_sum) - y ! (t - sum) recovers the high-order part of y; 
+                                 ! subtracting y recovers -(low part of y)
+         local_sum = t           ! Algebraically, c should always be zero. 
+                                 ! Beware eagerly optimising compilers
+         ! Next time around, the lost low part will be added to y in a fresh attempt.
+      end do
+
+      !local_sum = sum( arr_local )
+      call MPI_Allreduce(local_sum,global_sum,1,MPI_DEF_COMPLEX, &
+                          MPI_SUM,comm_cart,ierr)
+#else
+      global_sum = sum( arr_local )
+#endif
+
+   end function get_global_sum_cmplx_1d_dist
 !-------------------------------------------------------------------------------
    subroutine gather_all_from_lo_to_rank0(self,arr_lo,arr_full)
 
@@ -1083,6 +1161,55 @@ contains
       !PERFOFF
 
    end subroutine r2lo_redist_start
+!-------------------------------------------------------------------------------
+   subroutine r2lo_redist_start_dist(self,arr_dist,arr_lo)
+      !
+      ! This is just a temporary cheat for performing the transposition.
+      !>@TODO Do a true paralellization in θ of this function
+      ! 
+
+      type(r2lm_type) :: self
+      complex(cp), intent(in) :: arr_dist(1:lm_loc,nRstart:nRstop,*)
+      complex(cp), intent(out) :: arr_lo(llm:ulm,1:n_r_max,*)
+  
+      ! Local variables
+      integer :: nR,l,m,i
+      complex(cp) :: tmp_glb(1:lm_max)
+      
+
+!       self%temp_Rloc(1:,nRstart:,1:) = arr_Rloc(1:lm_max,nRstart:nRstop,1:self%count)
+  
+      ! Just copy the array with permutation
+      !PERFON('r2lo_dst')
+      if ( .not. l_axi ) then
+         do i=1,self%count
+            do nR=nRstart,nRstop
+               call gather_Flm(arr_dist(1:lm_loc,nR,i), tmp_glb(1:lm_max))
+               self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
+               do l=0,l_max
+                  do m=0,l,minc
+                     self%temp_Rloc(lo_map%lm2(l,m),nR,i) = tmp_glb(st_map%lm2(l,m))
+                  end do
+               end do
+            end do
+         end do
+!          stop
+      else
+         do i=1,self%count
+            do nR=nRstart,nRstop
+               call gather_Flm(arr_dist(1:lm_loc,nR,i), tmp_glb(1:lm_max))
+               self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
+               do l=0,l_max
+                  self%temp_Rloc(lo_map%lm2(l,0),nR,i) = tmp_glb(st_map%lm2(l,0))
+               end do
+            end do
+         end do
+      end if
+  
+      call r2lm_redist_start(self,self%temp_Rloc,arr_lo)
+      !PERFOFF
+
+   end subroutine r2lo_redist_start_dist
 !-------------------------------------------------------------------------------
    subroutine r2lo_redist_wait(self)
 
