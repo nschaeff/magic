@@ -250,10 +250,8 @@ contains
       deallocate( dflowdt_LMloc_container )
       deallocate( dsdt_LMloc_container, dbdt_LMloc_container )
       deallocate( dbdt_CMB_LMloc, dxidt_LMloc_container )
-      
       deallocate( dsdt_dist_container, dxidt_dist_container )
       deallocate( dbdt_dist_container, dflowdt_dist_container )
-      
       nullify( dbdt_dist    )
       nullify( djdt_dist    )
       nullify( dVxBhLM_dist )
