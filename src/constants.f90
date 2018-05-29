@@ -9,6 +9,7 @@ module constants
    implicit none
  
    real(cp) :: c_z10_omega_ic,c_z10_omega_ma
+   real(cp) :: c_z11_omega_ic,c_z11_omega_ma
    real(cp) :: c_dt_z10_ic,c_dt_z10_ma
    real(cp) :: c_lorentz_ic,c_lorentz_ma
    real(cp) :: vol_ic ! Volume of the inner core

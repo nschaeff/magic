@@ -18,12 +18,12 @@ module updateZ_mod
    use horizontal_data, only: dLh, hdif_V
    use logic, only: l_rot_ma, l_rot_ic, l_SRMA, l_SRIC, l_z10mat, l_precession, &
        &            l_diff_prec, l_correct_AMe, l_correct_AMz, l_update_v, l_TO,&
-       &            l_RMS
+       &            l_RMS, l_diff_prec
    use RMS, only: DifTor2hInt, dtVTor2hInt
    use constants, only: c_lorentz_ma, c_lorentz_ic, c_dt_z10_ma, c_dt_z10_ic, &
        &                c_moi_ma, c_moi_ic, c_z10_omega_ma, c_z10_omega_ic,   &
        &                c_moi_oc, y10_norm, y11_norm, zero, one, two, four,   &
-       &                pi, third
+       &                pi, third, c_z11_omega_ma, c_z11_omega_ic
    use parallel_mod
    use algebra, only: cgeslML, cgesl, sgefa
    use LMLoop_data, only: llm,ulm
@@ -46,6 +46,7 @@ module updateZ_mod
    complex(cp), allocatable :: Dif(:) 
    real(cp), allocatable :: zMat(:,:,:)
    real(cp), allocatable :: z10Mat(:,:) 
+   real(cp), allocatable :: z11Mat(:,:)
 #ifdef WITH_PRECOND_Z
    real(cp), allocatable :: zMat_fac(:,:)
 #endif
@@ -53,8 +54,9 @@ module updateZ_mod
    real(cp), allocatable :: z10Mat_fac(:)
 #endif
    integer, allocatable :: z10Pivot(:)
+   integer, allocatable :: z11Pivot(:)
    integer, allocatable :: zPivot(:,:)
-   logical, public :: lZ10mat
+   logical, public :: lZ10mat, lZ11mat
    logical, public, allocatable :: lZmat(:)
 
    integer :: maxThreads
@@ -74,6 +76,14 @@ contains
       allocate( zPivot(n_r_max,l_max) )
       bytes_allocated = bytes_allocated+(n_r_max+n_r_max*l_max)*&
       &                 SIZEOF_INTEGER
+
+      if (l_diff_prec) then
+         allocate( z11Mat(n_r_max,n_r_max) ) ! for l=1,m=1
+         allocate( z11Pivot(n_r_max) )
+         bytes_allocated = bytes_allocated                     &
+         &                 + (n_r_max*n_r_max)*SIZEOF_DEF_REAL &
+         &                 + n_r_max * SIZEOF_INTEGER
+      end if
 
 #ifdef WITH_PRECOND_Z10
       allocate(z10Mat_fac(n_r_max))
@@ -122,6 +132,7 @@ contains
       deallocate( dtV, Dif )
 
       if ( l_RMS ) deallocate( workB )
+      if (l_diff_prec) deallocate(z11Mat, z11Pivot)
 
    end subroutine finalize_updateZ
 !-------------------------------------------------------------------------------
@@ -431,9 +442,9 @@ contains
 
                   if ( l_diff_prec .and. l1 == 1 .and. m1 == 1 ) then
                      rhs1(1,lmB,threadid)       =rhs1(1,lmB,threadid)+diff_prec_fac* &
-                     &    cmplx(-cos(po_diff*oek*time),sin(po_diff*oek*time),kind=cp)
+                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)
                      rhs1(n_r_max,lmB,threadid) =rhs1(n_r_max,lmB,threadid)+diff_prec_fac* &
-                     &    cmplx(-cos(po_diff*oek*time),sin(po_diff*oek*time),kind=cp)
+                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)
                   end if
 
                   do nR=2,n_r_max-1
