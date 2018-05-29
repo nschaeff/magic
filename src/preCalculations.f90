@@ -318,15 +318,19 @@ contains
       !-- Constants used for rotating core or mantle:
       y10_norm=half*sqrt(three/pi)  ! y10=y10_norm * cos(theta)
       y11_norm=half*sqrt(1.5_cp/pi) ! y11=y11_norm * sin(theta)
-    
+
       !----- Proportionality factor of (l=1,m=0) toroidal velocity potential
       !      and inner core rotation rate:
       c_z10_omega_ic=y10_norm/(r(n_r_max)*r(n_r_max))/rho0(n_r_max)
-    
+
       !----- Proportionality factor of (l=1,m=0) toroidal velocity potential
       !      and mantle rotation rate:
       c_z10_omega_ma=y10_norm/(r(1)*r(1))/rho0(1)
-    
+
+      !----- Proportionality factors for (l=1,m=1) toroidal velocity potential
+      c_z11_omega_ic=y11_norm/(r(n_r_max)*r(n_r_max))/rho0(n_r_max)
+      c_z11_omega_ma=y11_norm/(r(1)*r(1))/rho0(1)
+
       !----- Inner-core normalized moment of inertia:
       c_moi_ic=8.0_cp*pi/15.0_cp*r_icb**5*rho_ratio_ic*rho0(n_r_max)
     
