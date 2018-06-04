@@ -266,8 +266,8 @@ contains
 
                vrr(nPhi,nTheta)=0.0_cp
 
-               vtr(nPhi,nTheta)=r2*rho0(nR)*sinTheta(nThetaCalc)*(omx * sinPhi &
-               &                                               - omy * cosPhi)
+               vtr(nPhi,nTheta)=r2*rho0(nR)*sinTheta(nThetaCalc)*(-omx * sinPhi &
+               &                                               +   omy * cosPhi)
 
                vpr(nPhi,nTheta)=r2*rho0(nR)*sn2(nThetaNHS)*omz                   &
                &              - r2*rho0(nR)*sinTheta(nThetaCalc)*cosTheta(nThetaCalc) &
