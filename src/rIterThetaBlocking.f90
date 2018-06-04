@@ -16,7 +16,7 @@ module rIterThetaBlocking_mod
        &            l_conv_nl, l_mag_nl, l_b_nl_cmb, l_b_nl_icb, l_rot_ic, &
        &            l_cond_ic, l_rot_ma, l_cond_ma, l_dtB, l_store_frame,  &
        &            l_movie_oc, l_chemical_conv, l_TP_form, l_precession
-   use radial_data,only: n_r_cmb, n_r_icb, nRstart, nRstop
+   use radial_data,only: n_r_cmb, n_r_icb, l_r, u_r
    use radial_functions, only: or2, orho1
    use fft
    use legendre_spec_to_grid, only: legTFG, legTFGnomag, leg_scal_to_grad_spat, &
@@ -71,11 +71,11 @@ contains
       !      of the field scalars.
       call this%leg_helper%initialize(lm_loc,lm_locMag,l_max)
 
-      allocate( this%BsLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop) )
-      allocate( this%BpLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop) )
-      allocate( this%BzLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop) )
+      allocate( this%BsLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r) )
+      allocate( this%BpLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r) )
+      allocate( this%BzLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r) )
       bytes_allocated = bytes_allocated+ &
-                       3*n_phi_maxStr*n_theta_maxStr*(nRstop-nRstart+1)*& 
+                       3*n_phi_maxStr*n_theta_maxStr*(u_r-l_r+1)*& 
                        SIZEOF_DEF_REAL
 
    end subroutine allocate_common_arrays

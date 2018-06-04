@@ -23,7 +23,7 @@ module out_movie
    use horizontal_data, only: O_sin_theta, sinTheta, cosTheta,        &
        &                      n_theta_cal2ord, O_sin_theta_E2, Plm,   &
        &                      dLh, dPlm, osn1, D_l, dPhi, phi, theta_ord
-   use fields, only: w_dist, b_dist, b_ic, b
+   use fields, only: w_Rdist, b_Rdist, b_ic, b
    use fft, only: fft_thetab
    use logic, only: l_save_out, l_cond_ic
    use constants, only: zero, one, two
@@ -1435,7 +1435,7 @@ contains
          do l=1,l_max
             lm=lm+1
             sign=-sign
-            sl_1=O_r*real(w_dist(lm,n_r))*dPlm(lm,n_theta_nhs)
+            sl_1=O_r*real(w_Rdist(lm,n_r))*dPlm(lm,n_theta_nhs)
              !-------- Northern hemisphere:
             sl_n=sl_n+sl_1
              !-------- Southern hemisphere:
@@ -1459,7 +1459,7 @@ contains
 
       !  This routine is called for l_ic=.true. only from coord_r 0 with full
       !  field b_ic in standard lm ordering available.
-      !  The case l_ic=.false. is called from all ranks and uses b_dist.
+      !  The case l_ic=.false. is called from all ranks and uses b_Rdist.
 
       !-- Input variables:
       integer, intent(in) :: n_r             ! No. of radial grid point
@@ -1515,7 +1515,7 @@ contains
                   fl_1=r_dep(l)*dPlm(lm,n_theta_nhs)*real(b(lm,n_r_icb))
                end if
             else             ! Outer Core
-               fl_1=O_r*dPlm(lm,n_theta_nhs) * real(b_dist(lm,n_r))
+               fl_1=O_r*dPlm(lm,n_theta_nhs) * real(b_Rdist(lm,n_r))
             end if
             !-------- Northern hemisphere:
             fl_n=fl_n+fl_1

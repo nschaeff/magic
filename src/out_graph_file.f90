@@ -902,9 +902,9 @@ contains
     
     
 #ifdef WITH_MPI
-         ! in process n_procs_r-1 the last oc fields have been written,
+         ! in process n_ranks_r-1 the last oc fields have been written,
          ! Now just append on this process.
-         if ( coord_r == n_procs_r-1 ) then
+         if ( coord_r == n_ranks_r-1 ) then
             call MPI_FILE_WRITE(graph_mpi_fh,4*4,1,MPI_INTEGER,status,ierr)
             call MPI_FILE_WRITE(graph_mpi_fh,real(n_r_max+nR-2,outp),1, &
                                 MPI_OUT_REAL,status,ierr)
@@ -923,7 +923,7 @@ contains
 
          !-- Write radial magnetic field:
 #ifdef WITH_MPI
-         if (coord_r == n_procs_r-1) then
+         if (coord_r == n_ranks_r-1) then
             call graph_write_mpi(n_phi_max,n_theta_max,Br,graph_mpi_fh)
          end if
 #else
@@ -932,7 +932,7 @@ contains
 
          !-- Write latitudinal magnetic field:
 #ifdef WITH_MPI
-         if (coord_r == n_procs_r-1) then
+         if (coord_r == n_ranks_r-1) then
             call graph_write_mpi(n_phi_max,n_theta_max,Bt,graph_mpi_fh)
          end if
 #else
@@ -941,7 +941,7 @@ contains
   
          !-- Write longitudinal magnetic field:
 #ifdef WITH_MPI
-         if (coord_r == n_procs_r-1) then
+         if (coord_r == n_ranks_r-1) then
             call graph_write_mpi(n_phi_max,n_theta_max,Bp,graph_mpi_fh)
          end if
 #else

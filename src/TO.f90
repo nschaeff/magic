@@ -7,7 +7,7 @@ module torsional_oscillations
    use mem_alloc, only: bytes_allocated
    use truncation, only: nrp, n_phi_maxStr, n_r_maxStr, l_max, &
        &                 n_theta_maxStr
-   use radial_data, only: n_r_cmb, nRstart, nRstop
+   use radial_data, only: n_r_cmb, l_r, u_r
    use LMLoop_data, only: llmMag, ulmMag
    use radial_functions, only: r, or1, or2, or3, or4, beta, orho1, &
        &                       dbeta
@@ -66,27 +66,27 @@ contains
       allocate( dzddVpLMr(l_max+1,n_r_maxStr) )
       bytes_allocated = bytes_allocated+7*n_r_maxStr*(l_max+1)*SIZEOF_DEF_REAL
 
-      allocate( dzStrLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( dzRstrLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( dzAStrLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( dzCorLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( dzLFLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( dzdVpLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( dzddVpLMr_Rloc(l_max+1,nRstart:nRstop) )
+      allocate( dzStrLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( dzRstrLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( dzAStrLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( dzCorLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( dzLFLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( dzdVpLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( dzddVpLMr_Rloc(l_max+1,l_r:u_r) )
       bytes_allocated = bytes_allocated+ &
-      &                 7*(nRstop-nRstart+1)*(l_max+1)*SIZEOF_DEF_REAL
+      &                 7*(u_r-l_r+1)*(l_max+1)*SIZEOF_DEF_REAL
 
-      allocate( V2AS_Rloc(n_theta_maxstr,nRstart:nRstop) )
-      allocate( Bs2AS_Rloc(n_theta_maxstr,nRstart:nRstop) )
-      allocate( BszAS_Rloc(n_theta_maxstr,nRstart:nRstop) )
-      allocate( BspAS_Rloc(n_theta_maxstr,nRstart:nRstop) )
-      allocate( BpzAS_Rloc(n_theta_maxstr,nRstart:nRstop) )
-      allocate( BspdAS_Rloc(n_theta_maxstr,nRstart:nRstop) )
-      allocate( BpsdAS_Rloc(n_theta_maxstr,nRstart:nRstop) )
-      allocate( BzpdAS_Rloc(n_theta_maxstr,nRstart:nRstop) )
-      allocate( BpzdAS_Rloc(n_theta_maxstr,nRstart:nRstop) )
+      allocate( V2AS_Rloc(n_theta_maxstr,l_r:u_r) )
+      allocate( Bs2AS_Rloc(n_theta_maxstr,l_r:u_r) )
+      allocate( BszAS_Rloc(n_theta_maxstr,l_r:u_r) )
+      allocate( BspAS_Rloc(n_theta_maxstr,l_r:u_r) )
+      allocate( BpzAS_Rloc(n_theta_maxstr,l_r:u_r) )
+      allocate( BspdAS_Rloc(n_theta_maxstr,l_r:u_r) )
+      allocate( BpsdAS_Rloc(n_theta_maxstr,l_r:u_r) )
+      allocate( BzpdAS_Rloc(n_theta_maxstr,l_r:u_r) )
+      allocate( BpzdAS_Rloc(n_theta_maxstr,l_r:u_r) )
       bytes_allocated = bytes_allocated+ &
-      &                 9*(nRstop-nRstart+1)*n_theta_maxStr*SIZEOF_DEF_REAL
+      &                 9*(u_r-l_r+1)*n_theta_maxStr*SIZEOF_DEF_REAL
 
       allocate( ddzASL(l_max+1,n_r_maxStr) ) 
       bytes_allocated = bytes_allocated+ (l_max+1)*n_r_maxStr*SIZEOF_DEF_REAL
@@ -140,9 +140,9 @@ contains
       real(cp), intent(in) :: cvr(nrp,nfs),dvpdr(nrp,nfs)
       real(cp), intent(in) :: br(nrp,nfs),bt(nrp,nfs),bp(nrp,nfs)
       real(cp), intent(in) :: cbr(nrp,nfs),cbt(nrp,nfs)
-      real(cp), intent(in) :: BsLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop)
-      real(cp), intent(in) :: BpLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop)
-      real(cp), intent(in) :: BzLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop)
+      real(cp), intent(in) :: BsLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r)
+      real(cp), intent(in) :: BpLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r)
+      real(cp), intent(in) :: BzLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r)
 
       !-- Output of arrays needing further treatment in s_getTOfinish.f:
       real(cp), intent(out) :: dzRstrLM(l_max+2),dzAstrLM(l_max+2)
@@ -339,9 +339,9 @@ contains
       real(cp), intent(in) :: br(nrp,nfs),bt(nrp,nfs),bp(nrp,nfs)
 
       !-- Output variables:
-      real(cp), intent(out) :: BsLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop)
-      real(cp), intent(out) :: BpLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop)
-      real(cp), intent(out) :: BzLast(n_phi_maxStr,n_theta_maxStr,nRstart:nRstop)
+      real(cp), intent(out) :: BsLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r)
+      real(cp), intent(out) :: BpLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r)
+      real(cp), intent(out) :: BzLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r)
 
       !-- Local variables:
       integer :: l,lm

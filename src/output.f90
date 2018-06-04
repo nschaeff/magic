@@ -8,7 +8,7 @@ module output_mod
        &                 n_r_maxMag, lm_max
    use radial_functions, only: or1, or2, r, rscheme_oc, r_cmb, r_icb,  &
        &                       orho1, sigma
-   use radial_data, only: nRstart, nRstop, nRstartMag, nRstopMag,    &
+   use radial_data, only: l_r, u_r, l_r_Mag, u_r_Mag,    &
        &                  n_r_cmb, n_r_icb
    use physical_parameters, only: opm,ek,ktopv,prmag,nVarCond,LFfac
    use num_param, only: tScale
@@ -16,7 +16,7 @@ module output_mod
    use horizontal_data, only: dLh,hdif_B,dPl0Eq
    use logic, only: l_average, l_mag, l_power, l_anel, l_mag_LF, lVerbose, &
        &            l_dtB, l_RMS, l_r_field, l_r_fieldT, l_PV, l_SRIC,     &
-       &            l_cond_ic,l_rMagSpec, l_movie_ic, l_store_frame,       &
+       &            l_cond_ic,l_r_MagSpec, l_movie_ic, l_store_frame,       &
        &            l_cmb_field, l_dt_cmb_field, l_save_out, l_non_rot,    &
        &            l_perpPar, l_energy_modes, l_heat, l_hel, l_par,       &
        &            l_chemical_conv, l_movie
@@ -357,23 +357,23 @@ contains
       !    for calculating axisymmetric helicity.
       !    Parallelization note: These fields are R-distribute on input 
       !    and must also be collected on the processor performing this routine.
-      real(cp),    intent(in) :: HelLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: Hel2LMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: HelnaLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: Helna2LMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: viscLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: uhLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: gradsLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: duhLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: fconvLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: fkinLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: fviscLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: fpoynLMr(l_maxMag+1,nRstartMag:nRstopMag)
-      real(cp),    intent(in) :: fresLMr(l_maxMag+1,nRstartMag:nRstopMag)
-      real(cp),    intent(in) :: EperpLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: EparLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: EperpaxiLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(in) :: EparaxiLMr(l_max+1,nRstart:nRstop)
+      real(cp),    intent(in) :: HelLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: Hel2LMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: HelnaLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: Helna2LMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: viscLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: uhLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: gradsLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: duhLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: fconvLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: fkinLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: fviscLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: fpoynLMr(l_maxMag+1,l_r_Mag:u_r_Mag)
+      real(cp),    intent(in) :: fresLMr(l_maxMag+1,l_r_Mag:u_r_Mag)
+      real(cp),    intent(in) :: EperpLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: EparLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: EperpaxiLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(in) :: EparaxiLMr(l_max+1,l_r:u_r)
 
       complex(cp), intent(in) :: dbdt_CMB_LMloc(llmMag:ulmMag)
   
@@ -707,7 +707,7 @@ contains
            &                   nTpotSets,'T_lmr.',omega_ma,omega_ic)
 
       !--- Write spectra output that has partially been calculated in LMLoop
-      if ( l_rMagSpec .and. n_time_step > 1 ) then
+      if ( l_r_MagSpec .and. n_time_step > 1 ) then
          if ( l_frame ) then
             call rBrSpec(time,b_LMloc, b_ic_LMloc ,'rBrSpecMov',.true.,lo_map)
             call rBpSpec(time,aj_LMloc,aj_ic_LMloc,'rBpSpecMov',.true.,lo_map)

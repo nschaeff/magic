@@ -29,7 +29,7 @@ module init_fields
        &                       epscProf, ddLtemp0, ddLalpha0, rgrav,   &
        &                       rho0, dLalpha0, alpha0, otemp1, ogrun,  &
        &                       rscheme_oc
-   use radial_data, only: n_r_icb, n_r_cmb, nRstart, nRstop
+   use radial_data, only: n_r_icb, n_r_cmb, l_r, u_r
    use constants, only: pi, y10_norm, c_z10_omega_ic, c_z10_omega_ma, osq4pi, &
        &                zero, one, two, three, four, third, half
    use useful, only: random, abortRun
@@ -148,7 +148,7 @@ contains
       real(cp), intent(out) :: omega_ic,omega_ma
     
       !-- Local variables
-      complex(cp) :: z_Rloc(lm_max,nRstart:nRstop)
+      complex(cp) :: z_Rloc(lm_max,l_r:u_r)
       integer :: lm,l,m,n,st_lmP,l1m0
       integer :: nR,nTheta,nThetaB,nThetaStart,nPhi
       real(cp) :: ra1,ra2,c_r,c_i
@@ -172,7 +172,7 @@ contains
          call lo2r_redist_wait(lo2r_initv)
     
          !-- Approximating the Stewardson solution:
-         do nR=nRstart,nRstop
+         do nR=l_r,u_r
     
             nTheta=0
             do n=1,nThetaBs ! loop over the theta blocks
@@ -244,7 +244,7 @@ contains
          call lo2r_redist_wait(lo2r_initv)
     
          !-- Approximating the Stewardson solution:
-         do nR=nRstart,nRstop
+         do nR=l_r,u_r
     
             nTheta=0
             do n=1,nThetaBs ! loop over the theta blocks

@@ -66,11 +66,11 @@ contains
       nZmaxA=2*nSmax
 
       !-- Distribute over the ranks
-      nS_per_rank = nSmax/n_procs_r
+      nS_per_rank = nSmax/n_ranks_r
       nSstart = 1+coord_r*nS_per_rank
       nSstop = 1+(coord_r+1)*nS_per_rank-1
-      nS_remaining = nSmax-(1+n_procs_r*nS_per_rank-1)
-      if ( coord_r == n_procs_r-1 ) then
+      nS_remaining = nSmax-(1+n_ranks_r*nS_per_rank-1)
+      if ( coord_r == n_ranks_r-1 ) then
          nSstop = nSstop+nS_remaining
       end if
       nS_on_last_rank = nS_per_rank + nS_remaining
@@ -229,7 +229,7 @@ contains
       real(outp) :: CHel_Sloc(nrp,nSstart:nSstop)
 
 #ifdef WITH_MPI
-      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: i,sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
 #endif
 
 
@@ -591,8 +591,8 @@ contains
 #ifdef WITH_MPI
          sendcount  = (nSstop-nSstart+1)*nrp
          recvcounts = nS_per_rank*nrp
-         recvcounts(n_procs_r-1)=nS_on_last_rank*nrp
-         do i=0,n_procs_r-1
+         recvcounts(n_ranks_r-1)=nS_on_last_rank*nrp
+         do i=0,n_ranks_r-1
             displs(i) = i*nS_per_rank*nrp
          end do
 
@@ -759,7 +759,7 @@ contains
       integer :: n_pvz_file, n_vcy_file
 
 #ifdef WITH_MPI
-      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: i,sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
 #endif
 
       if ( lVerbose ) write(*,*) '! Starting outPV!'
@@ -890,31 +890,31 @@ contains
 
 #ifdef WITH_MPI
          sendcount  = (nSstop-nSstart+1)*nZmaxA
-         do i=0,n_procs_r-1
+         do i=0,n_ranks_r-1
             recvcounts(i) = nS_per_rank*nZmaxA
             displs(i) = i*nS_per_rank*nZmaxA
          end do
-         recvcounts(n_procs_r-1)=nS_on_last_rank*nZmaxA
+         recvcounts(n_ranks_r-1)=nS_on_last_rank*nZmaxA
          call MPI_GatherV(omS_Sloc, sendcount, MPI_DEF_REAL,      &
               &           omS, recvcounts, displs, MPI_DEF_REAL,  &
               &           0, comm_r, ierr)
 
          sendcount  = (nSstop-nSstart+1)*nZmaxA*n_phi_max*5
-         do i=0,n_procs_r-1
+         do i=0,n_ranks_r-1
             recvcounts(i) = nS_per_rank*nZmaxA*n_phi_max*5
             displs(i) = i*nS_per_rank*nZmaxA*n_phi_max*5
          end do
-         recvcounts(n_procs_r-1)=nS_on_last_rank*nZmaxA*n_phi_max*5
+         recvcounts(n_ranks_r-1)=nS_on_last_rank*nZmaxA*n_phi_max*5
          call MPI_GatherV(frame_Sloc, sendcount, MPI_OUT_REAL,    &
               &           frame, recvcounts, displs, MPI_OUT_REAL,&
               &           0, comm_r, ierr)
 
          sendcount  = (nSstop-nSstart+1)
-         do i=0,n_procs_r-1
+         do i=0,n_ranks_r-1
             recvcounts(i) = nS_per_rank
             displs(i) = i*nS_per_rank
          end do
-         recvcounts(n_procs_r-1)=nS_on_last_rank
+         recvcounts(n_ranks_r-1)=nS_on_last_rank
          call MPI_GatherV(nZC_Sloc, sendcount, MPI_INTEGER,       &
               &           nZC, recvcounts, displs, MPI_INTEGER,   &
               &           0, comm_r, ierr)

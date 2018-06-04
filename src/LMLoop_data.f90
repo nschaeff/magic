@@ -1,6 +1,6 @@
 module LMLoop_data
 
-   use parallel_mod, only: coord_r, nLMBs_per_rank, n_procs_r
+   use parallel_mod, only: coord_r, nLMBs_per_rank, n_ranks_r
    use blocking, only: nLMBs, sizeLMB, lmStartB, lmStopB
    use logic, only: l_mag
 #ifndef WITH_MPI
@@ -40,8 +40,8 @@ contains
          ulmMag = 1
       end if
       lm_per_rank=nLMBs_per_rank*sizeLMB
-      lm_on_last_rank=lmStopB (min(n_procs_r*nLMBs_per_rank,nLMBs))- &
-                      lmStartB(1+(n_procs_r-1)*nLMBs_per_rank)+1
+      lm_on_last_rank=lmStopB (min(n_ranks_r*nLMBs_per_rank,nLMBs))- &
+                      lmStartB(1+(n_ranks_r-1)*nLMBs_per_rank)+1
 #else
       llm = 1
       ulm = lm_max

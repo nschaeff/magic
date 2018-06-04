@@ -6,7 +6,7 @@ module blocking
 
    use precision_mod
    use mem_alloc, only: memWrite, bytes_allocated
-   use parallel_mod, only: nThreads, rank, coord_r, n_procs_r, nLMBs_per_rank, &
+   use parallel_mod, only: nThreads, rank, coord_r, n_ranks_r, nLMBs_per_rank, &
        &                   rank_with_l1m0
    use truncation, only: lmP_max, lm_max, l_max, nrp, n_theta_max, &
        &                 minc, n_r_max, m_max, l_axi
@@ -132,12 +132,12 @@ contains
             open(newunit=n_log_file, file=log_file, status='unknown', &
             &    position='append')
          end if
-         write(n_log_file,*) '! Number of ranks I will use:',n_procs_r
+         write(n_log_file,*) '! Number of ranks I will use:',n_ranks_r
          if ( l_save_out ) close(n_log_file)
       end if
 
-      nLMBs = n_procs_r
-      nLMBs_per_rank = nLMBs/n_procs_r
+      nLMBs = n_ranks_r
+      nLMBs_per_rank = nLMBs/n_ranks_r
       !nThreadsMax = 1
       !PRINT*,"nLMBs first = ",nLMBs
       sizeLMB=(lm_max-1)/nLMBs+1
@@ -160,10 +160,10 @@ contains
 
       !--- Get radial blocking
       if ( .not. l_finite_diff ) then
-         if ( mod(n_r_max-1,n_procs_r) /= 0 ) then
+         if ( mod(n_r_max-1,n_ranks_r) /= 0 ) then
             if ( rank == 0 ) then
                write(*,*) 'Number of MPI ranks has to be multiple of n_r_max-1!'
-               write(*,*) 'n_procs_r :',n_procs_r
+               write(*,*) 'n_ranks_r :',n_ranks_r
                write(*,*) 'n_r_max-1:',n_r_max-1
             end if
             call abortRun('Stop run in blocking')
@@ -179,7 +179,7 @@ contains
 
       call get_standard_lm_blocking(st_map,minc)
       !call get_standard_lm_blocking(lo_map,minc)
-      if (n_procs_r <= l_max/2) then
+      if (n_ranks_r <= l_max/2) then
          !better load balancing, but only up to l_max/2
          call get_snake_lm_blocking(lo_map,minc)
          write(message,*) "Using snake ordering."
@@ -205,7 +205,7 @@ contains
       end do
 
       ! which coord_r does have the LMB with LMB_with_l1m0?
-      do irank=0,n_procs_r-1
+      do irank=0,n_ranks_r-1
          if ((LMB_with_l1m0-1 >= irank*nLMBs_per_rank).and.&
               &(LMB_with_l1m0-1 <= (irank+1)*nLMBs_per_rank-1)) then
             rank_with_l1m0 = irank
@@ -689,8 +689,8 @@ contains
       ! Local variables
       integer :: l,proc,lm,m,i_l,lmP,mc
       logical :: Ascending
-      integer :: l_list(0:n_procs_r-1,map%l_max+1)
-      integer :: l_counter(0:n_procs_r-1)
+      integer :: l_list(0:n_ranks_r-1,map%l_max+1)
+      integer :: l_counter(0:n_ranks_r-1)
       integer :: temp_l_counter,l0proc,pc,src_proc,temp
       integer :: temp_l_list(map%l_max+1)
 
@@ -719,9 +719,9 @@ contains
          if (l == 0) l0proc=proc
          ! now determine on which proc to put the next l value
          if (Ascending) then
-            if (proc < n_procs_r-1) then
+            if (proc < n_ranks_r-1) then
                proc=proc+1
-            else if (proc == n_procs_r-1) then
+            else if (proc == n_ranks_r-1) then
                Ascending=.false.
             end if
          else
@@ -734,7 +734,7 @@ contains
       end do
 
       if (DEBUG_OUTPUT) then
-         do proc=0,n_procs_r-1
+         do proc=0,n_ranks_r-1
             if (proc == l0proc) then
                write(*,"(A,I4,A)") "==== proc ",proc," has l=0 ===="
             else
@@ -754,7 +754,7 @@ contains
          temp_l_counter=l_counter(0)
          pc = 0
          do while (.true.)
-            src_proc=modulo(l0proc+pc,n_procs_r)
+            src_proc=modulo(l0proc+pc,n_ranks_r)
             if (src_proc /= 0) then
                l_list(pc,:)=l_list(src_proc,:)
                l_counter(pc)=l_counter(src_proc)
@@ -783,7 +783,7 @@ contains
 
       if (DEBUG_OUTPUT) then
          write(*,"(A)") "Ordering after the l0proc reordering:"
-         do proc=0,n_procs_r-1
+         do proc=0,n_ranks_r-1
             if (proc == l0proc) then
                write(*,"(A,I4,A)") "==== proc ",proc," has l=0 ===="
             else
@@ -799,7 +799,7 @@ contains
       lm=1
       lmP=1
       if ( .not. l_axi ) then
-         do proc=0,n_procs_r-1
+         do proc=0,n_ranks_r-1
             lmStartB(proc+1)=lm
             do i_l=1,l_counter(proc)-1
                l=l_list(proc,i_l)
@@ -827,7 +827,7 @@ contains
                proc,": lmStartB=",lmStartB(proc+1), ", lmStopB=",lmStopB(proc+1)
          end do
       else
-         do proc=0,n_procs_r-1
+         do proc=0,n_ranks_r-1
             lmStartB(proc+1)=lm
             do i_l=1,l_counter(proc)-1
                l=l_list(proc,i_l)

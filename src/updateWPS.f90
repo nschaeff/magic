@@ -802,7 +802,7 @@ contains
                &        dLh*or2(nR) ) *             rscheme_oc%rMat(nR,nR_out) )
 
 
-               !Advection of the background entropy u_r * dso/dr
+               !Advection of the background entropy l_r * dso/dr
                wpsMat(nR_s,nR_out)=rscheme_oc%rnorm*alpha*dLh*or2(nR)*      &
                &                   dentropy0(nR)*orho1(nR)*rscheme_oc%rMat(nR,nR_out)
 
@@ -864,7 +864,7 @@ contains
 
                wpsMat(nR_s,nR_out_p)=0.0_cp ! temperature diffusion
 
-               !Advection of the background entropy u_r * dso/dr
+               !Advection of the background entropy l_r * dso/dr
                wpsMat(nR_s,nR_out)=rscheme_oc%rnorm*alpha*dLh*or2(nR)*dentropy0(nR)* &
                &                 orho1(nR)*rscheme_oc%rMat(nR,nR_out)
 

@@ -7,7 +7,7 @@ module outTO_mod
        &                 n_theta_max, n_phi_max, minc, lStressMem,   &
        &                 lm_max
    use radial_functions, only: r_ICB, rscheme_oc, r, r_CMB, orho1, rscheme_oc
-   use radial_data, only: nRstart, nRstop
+   use radial_data, only: l_r, u_r
    use physical_parameters, only: ra, ek, pr, prmag, radratio, LFfac
    use torsional_oscillations, only: BpzAS_Rloc, BspdAS_Rloc, BpsdAS_Rloc, &
        &                             BzpdAS_Rloc, BpzdAS_Rloc, dzCorLMr,   &
@@ -100,16 +100,16 @@ contains
       integer :: nS_remaining
 
       !-- R-distributed arrays
-      allocate( V2LMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( Bs2LMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( BszLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( BspLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( BpzLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( BspdLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( BpsdLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( BzpdLMr_Rloc(l_max+1,nRstart:nRstop) )
-      allocate( BpzdLMr_Rloc(l_max+1,nRstart:nRstop) )
-      bytes_allocated=bytes_allocated+9*(nRstop-nRstart+1)*(l_max+1)* &
+      allocate( V2LMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( Bs2LMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( BszLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( BspLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( BpzLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( BspdLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( BpsdLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( BzpdLMr_Rloc(l_max+1,l_r:u_r) )
+      allocate( BpzdLMr_Rloc(l_max+1,l_r:u_r) )
+      bytes_allocated=bytes_allocated+9*(u_r-l_r+1)*(l_max+1)* &
       &               SIZEOF_DEF_REAL
 
       !-- Global arrays
@@ -131,11 +131,11 @@ contains
       nZmaxA=2*nSmax
 
       !-- Distribute over the ranks
-      nS_per_rank = nSmax/n_procs_r
+      nS_per_rank = nSmax/n_ranks_r
       nSstart = 1+coord_r*nS_per_rank
       nSstop = 1+(coord_r+1)*nS_per_rank-1
-      nS_remaining = nSmax-(1+n_procs_r*nS_per_rank-1)
-      if ( coord_r == n_procs_r-1 ) then
+      nS_remaining = nSmax-(1+n_ranks_r*nS_per_rank-1)
+      if ( coord_r == n_ranks_r-1 ) then
          nSstop = nSstop+nS_remaining
       end if
       nS_on_last_rank = nS_per_rank + nS_remaining
@@ -365,7 +365,7 @@ contains
 
 #ifdef WITH_MPI
       real(cp) :: global_sum
-      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: i,sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
 #endif
 
       if ( lVerbose ) write(*,*) '! Starting outTO!'
@@ -391,7 +391,7 @@ contains
 
       !--- Transform to lm-space for all radial grid points:
 
-      do nR=nRstart,nRstop
+      do nR=l_r,u_r
          do n=1,nThetaBs
             nThetaStart=(n-1)*sizeThetaB+1
             call legTFAS(V2LMr_Rloc(:,nR),V2AS_Rloc(nThetaStart,nR),               &
@@ -830,11 +830,11 @@ contains
       if ( coord_r == 0 ) TayVRMS = global_sum
 
       sendcount  = (nSstop-nSstart+1)*nZmaxA
-      do i=0,n_procs_r-1
+      do i=0,n_ranks_r-1
          recvcounts(i) = nS_per_rank*nZmaxA
          displs(i) = i*nS_per_rank*nZmaxA
       end do
-      recvcounts(n_procs_r-1)=nS_on_last_rank*nZmaxA
+      recvcounts(n_ranks_r-1)=nS_on_last_rank*nZmaxA
       call MPI_GatherV(zZ_Sloc, sendcount, MPI_DEF_REAL,        &
            &           zZ, recvcounts, displs, MPI_DEF_REAL,    &
            &           0, comm_r, ierr)
@@ -892,8 +892,8 @@ contains
 
       sendcount  = (nSstop-nSstart+1)
       recvcounts = nS_per_rank
-      recvcounts(n_procs_r-1)=nS_on_last_rank
-      do i=0,n_procs_r-1
+      recvcounts(n_ranks_r-1)=nS_on_last_rank
+      do i=0,n_ranks_r-1
          displs(i) = i*nS_per_rank
       end do
 
@@ -1522,13 +1522,13 @@ contains
 
 #ifdef WITH_MPI
       !-- Local variables:
-      integer :: sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
       integer :: i,ierr
 
-      sendcount  = (nRstop-nRstart+1)*(l_max+1)
+      sendcount  = (u_r-l_r+1)*(l_max+1)
       recvcounts = nR_per_rank*(l_max+1)
-      recvcounts(n_procs_r-1) = nR_on_last_rank*(l_max+1)
-      do i=0,n_procs_r-1
+      recvcounts(n_ranks_r-1) = nR_on_last_rank*(l_max+1)
+      do i=0,n_ranks_r-1
          displs(i) = i*nR_per_rank*(l_max+1)
       end do
       call MPI_AllGatherV(dzStrLMr_Rloc,sendcount,MPI_DEF_REAL,    &

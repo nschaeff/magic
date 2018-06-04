@@ -15,7 +15,7 @@ module fieldsLast
        &                 n_r_ic_maxMag
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag
    use logic, only: l_chemical_conv
-   use parallel_Mod, only: coord_r
+   use parallel_mod, only: coord_r
 
    implicit none
 

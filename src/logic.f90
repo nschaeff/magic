@@ -51,7 +51,7 @@ module logic
    logical :: l_dtB          ! Switch to reserve memory for dtB movie
    logical :: l_store_frame  ! Switch for storing movie frames
    logical :: l_non_rot      ! Switch to non-rotating
-   logical :: l_rMagSpec     ! Switch for magnetic spectra at different depths at log times
+   logical :: l_r_MagSpec     ! Switch for magnetic spectra at different depths at log times
    logical :: l_DTrMagSpec   ! Switch for magnetic spectra at different depths at movie output times
    logical :: l_TO           ! Switch for TO output in TOnhs.TAG, TOshs.TAG
    logical :: l_TOmovie      ! Switch for TO movie output 

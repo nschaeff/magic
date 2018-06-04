@@ -15,6 +15,7 @@ module useful
 
    public :: l_correct_step, random, factorise, cc2real, cc22real, &
    &         logWrite, getMSD2, polynomial_interpolation, abortRun
+   
 
 contains
 

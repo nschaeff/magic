@@ -95,7 +95,7 @@ program magic
    use torsional_oscillations
    use init_fields
    use special, only: initialize_Grenoble, finalize_Grenoble
-   use blocking, only: initialize_blocking, finalize_blocking, lmP2, lm2
+   use blocking, only: initialize_blocking, finalize_blocking
    use LMLoop_data, only: llm, ulm
    use horizontal_data
    use logic
@@ -186,7 +186,7 @@ program magic
    PERFON('main')
    LIKWID_INIT
    !LIKWID_ON('main')
-   call parallel
+   call initialize_mpi_world
 
    !--- Read starting time
    if ( rank == 0 ) then
@@ -201,10 +201,11 @@ program magic
    end if
 
    !--- Read input parameters:
-   call readNamelists  ! includes sent to other procs !
+   call readNamelists  ! includes sent to other procs
 
-   !--- Reasigns the coord_r variable and creates the parallel cartesian grid
-   call initialize_cartesian
+   !--- Creates all the MPI communicators for all the different
+   !    cartesian grids
+   call initialize_domain_decomposition
    call initialize_output
 
    !--- Check parameters and write info to SDTOUT
@@ -253,7 +254,9 @@ program magic
    call initialize_blocking
    
    !>@TODO merge the two following calls
-   call distribute_truncation(lmP2, lm2)
+   call distribute_truncation
+   call distribute_gs
+   call distribute_lm
    
    local_bytes_used=bytes_allocated
    call initialize_radial_data
@@ -327,7 +330,7 @@ program magic
          open(newunit=n_log_file, file=log_file, status='unknown', &
          &    position='append')
       end if
-      call writeNamelists(6)
+!       call writeNamelists(6)
       call writeNamelists(n_log_file)
       if ( l_save_out ) close(n_log_file)
    end if
@@ -433,7 +436,7 @@ program magic
    call finalize_kinetic_energy
    if ( l_probe ) call finalize_probes
    call finalize_communications
-   call finalize_cartesian
+   call finalize_domain_decomposition
    call finalize_step_time
    call finalize_fieldsLast
    call finalize_fields
@@ -461,7 +464,7 @@ program magic
    PERFOFF
    
 ! ! ! ! ! ! ! ! ! ! #ifdef WITHPERF
-! ! ! ! ! ! ! ! ! !    do n=0,n_procs-1
+! ! ! ! ! ! ! ! ! !    do n=0,n_ranks-1
 ! ! ! ! ! ! ! ! ! !       if (rank == n) then
 ! ! ! ! ! ! ! ! ! !          print *, "PerfOut for rank: ", rank
 ! ! ! ! ! ! ! ! ! !          print *, "======================================================="

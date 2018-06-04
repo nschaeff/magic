@@ -224,10 +224,10 @@ else()
 endif()
 
 
-# add_definitions(-DWITHPERF)
+add_definitions(-DWITHPERF)
 add_library(ooperf SHARED IMPORTED)
-# set_property(TARGET ooperf PROPERTY IMPORTED_LOCATION /u/system/soft/SLES122/common/perflib/3.1/gnu-6.3.0/lib/libooperf.a)
-# include_directories(/u/system/soft/SLES122/common/perflib/3.1/gnu-6.3.0/include/)
+set_property(TARGET ooperf PROPERTY IMPORTED_LOCATION /u/system/soft/SLES122/common/perflib/3.1/gnu-6.3.0/lib/libooperf.a)
+include_directories(/u/system/soft/SLES122/common/perflib/3.1/gnu-6.3.0/include/)
 set_property(TARGET ooperf PROPERTY IMPORTED_LOCATION /u/system/soft/SLES122/common/perflib/3.2/amd64_sles12/gnu-6.3/lib/libooperf.so)
 include_directories(/u/system/soft/SLES122/common/perflib/3.2/amd64_sles12/gnu-6.3/include/)
 link_libraries(ooperf)

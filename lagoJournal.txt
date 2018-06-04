@@ -1,12 +1,61 @@
-2018-05-28
+2018-05-29
 -------------------------------------------------------------------------------
-- Snake ordering for m-distribution implemented
+- A large restructuring is incoming!
+- Adopting one comment structure. Comments follow the indentation of the 
+  subroutine, e.g.
+  
+         subroutine foo
+            !
+            !-- This subroutine does X
+            !
+            !-- Author: Rafael Lago
+            !
+         end subroutine
+         
+   This change will take a while to consolidate, as I re-write the modules.
+    
+- parallel_mod.f90 
+   - Big header explaining some of the changes.
+   - [renamed] n_procs_* -> n_ranks_*
+   - [renamed] comm_*. Several modifications. Read comments.
+   - [renamed] initialize_cartesian -> initialize_domain_decomposition 
+   - [renamed] parallel -> initialize_mpi_world
+   - [renamed] finalize_cartesian -> finalize_domain_decomposition
+
+- communications.f90 
+  - [moved] slice_* and gather_* from truncation.f90
+  - [moved] transpose_* from truncation.f90
+
+- truncation.f90 
+  - [moved] slice_* and gather_* to communications.f90
+  - [moved] transpose_* to communications.f90
+
+- [moved] everything from radial_data.f90 into truncation.f90 
+   
+   
 - After some further reading of the code, I've decided to re-rename some of the
   variables.
   - Rloc had been renamed to "dist". But now that I'm parallelizing the LMloc
     variables, I'll need to distinguish them again. I'm renaming all "dist"
-    fields into Rdist instead
-  - LMloc fields will have a distributed version: LMdist
+    fields into Rdist instead. In the future, they will all be re-re-renamed
+    to Rloc again
+  - LMloc fields will have a distributed version: MLdist
+    Yes, M first, then L, because M is the fast direction for this part of the
+    code. I will have to modify the name of some other variables for that to be
+    clear though. The whole module "LMLoop" might need renaming also!
+    In the future, they will be re-renamed to MLloc again.
+
+- The following bash tricks may help future porting/modification.
+
+   ⚫ change STRING_A for STRING_B in every .F90 file:
+   for x in *.f90 ; do sed -i "s/STRING_A/STRING_B/g" $x ; done
+   
+   ⚫ delete all lines containing STRING_A in every .F90 file:
+   for x in *.f90 ; do sed -i "/STRING_A/d" $x ; done
+
+2018-05-28
+-------------------------------------------------------------------------------
+- Snake ordering for m-distribution implemented
 
 2018-05-02
 -------------------------------------------------------------------------------

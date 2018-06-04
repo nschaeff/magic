@@ -139,7 +139,16 @@ contains
       real(cp), save :: omega_icLast
       real(cp) :: z10(n_r_max)
       complex(cp) :: sum_dwdt
-
+      
+      ! Duplicatas ------------------------------------------
+      complex(cp) :: z_LMloc_dist(llm:ulm,n_r_max)      ! Toroidal velocity potential z
+      complex(cp) :: dzdtLast_lo_dist(llm:ulm,n_r_max)  ! Time derivative of z of previous step
+      real(cp)    :: d_omega_ma_dtLast_dist             ! Time derivative of OC rotation of previous step
+      real(cp)    :: d_omega_ic_dtLast_dist             ! Time derivative of IC rotation of previous step
+      complex(cp) :: dz_LMloc_dist(llm:ulm,n_r_max)   ! Radial derivative of z
+      real(cp)    :: omega_ma_dist              ! Calculated OC rotation
+      real(cp)    :: omega_ic_dist              ! Calculated IC rotation
+      
 
       PERFON('LMloop')
       !LIKWID_ON('LMloop')
@@ -202,6 +211,8 @@ contains
                call updateS_ala(s_LMloc, ds_LMloc, w_LMloc, dVSrLM,dsdt,  & 
                     &           dsdtLast_LMloc, w1, coex, dt, nLMB)
             else
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !                print *, "Not Parallelized!", __LINE__, __FILE__
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !                stop
                call updateS( s_LMloc, ds_LMloc, w_LMloc, dVSrLM,dsdt, &
                     &        dsdtLast_LMloc, w1, coex, dt, nLMB )
             end if
@@ -209,7 +220,7 @@ contains
             ! Here one could start the redistribution of s_LMloc,ds_LMloc etc. with a 
             ! nonblocking send
             !PERFON('rdstSst')
-            call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_dist_container)
+            call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_Rdist_container)
             !PERFOFF
          end if
 
@@ -226,10 +237,12 @@ contains
       end if
 
       if ( l_chemical_conv ) then ! dp,workA usead as work arrays
+         print *, "Not Parallelized!", __LINE__, __FILE__
+         stop
          call updateXi(xi_LMloc,dxi_LMloc,dVXirLM,dxidt,dxidtLast_LMloc, &
               &        w1,coex,dt,nLMB)
 
-         call lo2r_redist_start_dist(lo2r_xi,xi_LMloc_container,xi_dist_container)
+         call lo2r_redist_start_dist(lo2r_xi,xi_LMloc_container,xi_Rdist_container)
       end if
 
       if ( l_conv ) then
@@ -239,14 +252,32 @@ contains
                  & GET_GLOBAL_SUM( dz_LMloc(:,:) ),         &
                  & GET_GLOBAL_SUM( dzdtLast_lo(:,:) )
          end if
+         
          PERFON('up_Z')
+         
+         z_LMloc_dist = z_LMloc
+         dz_LMloc_dist = dz_LMloc
+         dzdtLast_lo_dist = dzdtLast_lo
+         omega_ma_dist = omega_ma
+         omega_ic_dist = omega_ic
+         d_omega_ma_dtLast_dist = d_omega_ma_dtLast
+         d_omega_ic_dtLast_dist = d_omega_ic_dtLast
+         
+         call updateZ_dist( z_LMloc_dist, dz_LMloc_dist, dzdt, dzdtLast_lo_dist, time, &
+              &        omega_ma_dist,d_omega_ma_dtLast_dist,            &
+              &        omega_ic_dist,d_omega_ic_dtLast_dist,            &
+              &        lorentz_torque_ma,lorentz_torque_maLast,    &
+              &        lorentz_torque_ic,lorentz_torque_icLast,    &
+              &        w1,coex,dt,lRmsNext )
+              
          ! dp, dVSrLM, workA used as work arrays
          call updateZ( z_LMloc, dz_LMloc, dzdt, dzdtLast_lo, time, &
               &        omega_ma,d_omega_ma_dtLast,                 &
               &        omega_ic,d_omega_ic_dtLast,                 &
               &        lorentz_torque_ma,lorentz_torque_maLast,    &
               &        lorentz_torque_ic,lorentz_torque_icLast,    &
-              &        w1,coex,dt,lRmsNext)
+              &        w1,coex,dt,lRmsNext )
+              
          PERFOFF
 
          !call MPI_Barrier(comm_r,ierr)
@@ -293,7 +324,7 @@ contains
                  &             lRmsNext )
             end if
 
-            call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_dist_container)
+            call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_Rdist_container)
          else
             PERFON('up_WP')
             call updateWP( w_LMloc, dw_LMloc, ddw_LMloc, dVxVhLM, dwdt,     &
@@ -314,7 +345,7 @@ contains
                     & GET_GLOBAL_SUM( w_LMloc(:,n_r_cmb) )
             end if
          end if
-         call lo2r_redist_start_dist(lo2r_flow,flow_LMloc_container,flow_dist_container)
+         call lo2r_redist_start_dist(lo2r_flow,flow_LMloc_container,flow_Rdist_container)
       end if
       if ( l_mag ) then ! dwdt,dpdt used as work arrays
          if ( DEBUG_OUTPUT ) then
@@ -337,7 +368,7 @@ contains
               &        omega_icLast, w1, coex, dt, time, nLMB, lRmsNext )
          PERFOFF
          !LIKWID_OFF('up_B')
-         call lo2r_redist_start_dist(lo2r_field,field_LMloc_container,field_dist_container)
+         call lo2r_redist_start_dist(lo2r_field,field_LMloc_container,field_Rdist_container)
 
          if ( DEBUG_OUTPUT ) then
             write(*,"(A,I2,8ES20.12)") "b_after: ",nLMB, &

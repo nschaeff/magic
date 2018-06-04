@@ -11,10 +11,10 @@ module leg_helper_mod
    use horizontal_data, only: dLh_loc
    use logic, only: l_conv, l_mag_kin, l_heat, l_mag, l_movie_oc,    &
        &            l_mag_LF, l_fluxProfs, l_chemical_conv
-   use fields, only: s_dist,ds_dist, z_dist,dz_dist, p_dist,dp_dist, &
-       &             b_dist,db_dist,ddb_dist, aj_dist,dj_dist,       &
-       &             w_dist,dw_dist,ddw_dist, omega_ic,omega_ma,     &
-       &             xi_dist
+   use fields, only: s_Rdist,ds_Rdist, z_Rdist,dz_Rdist, p_Rdist,dp_Rdist, &
+       &             b_Rdist,db_Rdist,ddb_Rdist, aj_Rdist,dj_Rdist,       &
+       &             w_Rdist,dw_Rdist,ddw_Rdist, omega_ic,omega_ma,     &
+       &             xi_Rdist
    use constants, only: zero, one, two
    use distributed_theta, only: dist_map
 
@@ -145,13 +145,13 @@ contains
 
          if ( l_heat ) then
             do lm=1,lm_loc
-               this%sR(lm) =s_dist(lm,nR)   
-               this%dsR(lm)=ds_dist(lm,nR)  ! used for plotting and Rms
+               this%sR(lm) =s_Rdist(lm,nR)   
+               this%dsR(lm)=ds_Rdist(lm,nR)  ! used for plotting and Rms
             end do
          end if
          if ( l_chemical_conv ) then
             do lm=1,lm_loc
-               this%xiR(lm)=xi_dist(lm,nR) 
+               this%xiR(lm)=xi_Rdist(lm,nR) 
             end do
          end if
          if ( lTOnext .or. lTOnext2 .or. lTOCalc ) then
@@ -163,21 +163,21 @@ contains
                l=dist_map%lm2l(lm)
                m=dist_map%lm2m(lm)
                if ( l <= l_max .and. m == 0 ) then
-                  this%zAS(l+1)  =real(z_dist(lm,nR))   ! used in TO
-                  this%dzAS(l+1) =real(dz_dist(lm,nR))  ! used in TO (anelastic)
+                  this%zAS(l+1)  =real(z_Rdist(lm,nR))   ! used in TO
+                  this%dzAS(l+1) =real(dz_Rdist(lm,nR))  ! used in TO (anelastic)
                   this%ddzAS(l+1)=ddzASL(l+1,nR)        ! used in TO
                end if
             end do
          end if
          if ( lPressCalc ) then
             do lm=1,lm_loc
-               this%preR(lm)= p_dist(lm,nR) ! used for Rms in get_td (anelastic)
-               this%dpR(lm) =dp_dist(lm,nR) ! used for Rms in get_td
+               this%preR(lm)= p_Rdist(lm,nR) ! used for Rms in get_td (anelastic)
+               this%dpR(lm) =dp_Rdist(lm,nR) ! used for Rms in get_td
             end do
          end if
          if ( l_mag .and. l_frame .and. l_movie_oc .and. nR == n_r_cmb ) then
             do lm=1,lm_loc
-               this%bCMB(lm)=b_dist(lm,nR)  ! used for movie output of surface field
+               this%bCMB(lm)=b_Rdist(lm,nR)  ! used for movie output of surface field
             end do
             if (lm_zero > 0) then
                this%bCMB(lm_zero)=zero
@@ -186,11 +186,11 @@ contains
 
          if ( nBc /= 2 ) then ! nBc=2 is flag for fixed boundary
             do lm=1,lm_loc 
-               this%dLhw(lm)=dLh_loc(lm)*w_dist(lm,nR)
-               this%vhG(lm) =dw_dist(lm,nR) - &
-                    cmplx(-aimag(z_dist(lm,nR)),real(z_dist(lm,nR)),kind=cp)
-               this%vhC(lm) =dw_dist(lm,nR) + &
-                    cmplx(-aimag(z_dist(lm,nR)),real(z_dist(lm,nR)),kind=cp)
+               this%dLhw(lm)=dLh_loc(lm)*w_Rdist(lm,nR)
+               this%vhG(lm) =dw_Rdist(lm,nR) - &
+                    cmplx(-aimag(z_Rdist(lm,nR)),real(z_Rdist(lm,nR)),kind=cp)
+               this%vhC(lm) =dw_Rdist(lm,nR) + &
+                    cmplx(-aimag(z_Rdist(lm,nR)),real(z_Rdist(lm,nR)),kind=cp)
             end do
             if (lm_zero > 0) then
                this%dLhw(lm_zero)=zero
@@ -207,12 +207,12 @@ contains
 
          if ( lDeriv ) then
             do lm=1,lm_loc
-               this%dLhz(lm)  =dLh_loc(lm)*z_dist(lm,nR)
-               this%dLhdw(lm) =dLh_loc(lm)*dw_dist(lm,nR)
-               this%dvhdrG(lm)=ddw_dist(lm,nR) - &
-                    cmplx(-aimag(dz_dist(lm,nR)),real(dz_dist(lm,nR)),kind=cp)
-               this%dvhdrC(lm)=ddw_dist(lm,nR) + &
-                    cmplx(-aimag(dz_dist(lm,nR)),real(dz_dist(lm,nR)),kind=cp)
+               this%dLhz(lm)  =dLh_loc(lm)*z_Rdist(lm,nR)
+               this%dLhdw(lm) =dLh_loc(lm)*dw_Rdist(lm,nR)
+               this%dvhdrG(lm)=ddw_Rdist(lm,nR) - &
+                    cmplx(-aimag(dz_Rdist(lm,nR)),real(dz_Rdist(lm,nR)),kind=cp)
+               this%dvhdrC(lm)=ddw_Rdist(lm,nR) + &
+                    cmplx(-aimag(dz_Rdist(lm,nR)),real(dz_Rdist(lm,nR)),kind=cp)
             end do
             if (lm_zero > 0) then
                this%dLhdw(lm_zero) =zero
@@ -228,11 +228,11 @@ contains
          !PRINT*,"aj: ",SUM(ABS(aj(:,nR))),SUM(ABS(dLh_loc))
          !PRINT*,"dj: ",SUM(ABS(dj(:,nR)))
          do lm=1,lm_loc
-            this%dLhb(lm)=dLh_loc(lm)*b_dist(lm,nR)
-            this%bhG(lm) =db_dist(lm,nR) - &
-                 cmplx(-aimag(aj_dist(lm,nR)),real(aj_dist(lm,nR)),kind=cp)
-            this%bhC(lm) =db_dist(lm,nR) + &
-                 cmplx(-aimag(aj_dist(lm,nR)),real(aj_dist(lm,nR)),kind=cp)
+            this%dLhb(lm)=dLh_loc(lm)*b_Rdist(lm,nR)
+            this%bhG(lm) =db_Rdist(lm,nR) - &
+                 cmplx(-aimag(aj_Rdist(lm,nR)),real(aj_Rdist(lm,nR)),kind=cp)
+            this%bhC(lm) =db_Rdist(lm,nR) + &
+                 cmplx(-aimag(aj_Rdist(lm,nR)),real(aj_Rdist(lm,nR)),kind=cp)
          end do
          if (lm_zero > 0) then
             this%dLhb(lm_zero)=zero
@@ -246,10 +246,10 @@ contains
          end if
          if ( lDeriv ) then
             do lm=1,lm_loc
-               this%dLhj(lm)=dLh_loc(lm)*aj_dist(lm,nR)
-               dbd     =or2(nR)*this%dLhb(lm)-ddb_dist(lm,nR)
-               this%cbhG(lm)=dj_dist(lm,nR)-cmplx(-aimag(dbd),real(dbd),kind=cp)
-               this%cbhC(lm)=dj_dist(lm,nR)+cmplx(-aimag(dbd),real(dbd),kind=cp)
+               this%dLhj(lm)=dLh_loc(lm)*aj_Rdist(lm,nR)
+               dbd     =or2(nR)*this%dLhb(lm)-ddb_Rdist(lm,nR)
+               this%cbhG(lm)=dj_Rdist(lm,nR)-cmplx(-aimag(dbd),real(dbd),kind=cp)
+               this%cbhC(lm)=dj_Rdist(lm,nR)+cmplx(-aimag(dbd),real(dbd),kind=cp)
             end do
             if (lm_zero > 0) then
                this%dLhj(lm_zero)=zero

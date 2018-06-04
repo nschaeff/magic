@@ -27,14 +27,14 @@ contains
       integer :: iproc
 
       bytes_allocated = 0 ! 
-      n_ranks_print = min(n_procs_r-1, 6)
+      n_ranks_print = min(n_ranks_r-1, 6)
 
       if ( n_ranks_print > 0 ) then
          allocate ( ranks_selected(n_ranks_print) )
-         if ( n_procs_r < 8 ) then
-            ranks_selected = [(iproc,iproc=1,n_procs_r-1)]
+         if ( n_ranks_r < 8 ) then
+            ranks_selected = [(iproc,iproc=1,n_ranks_r-1)]
          else
-            ranks_selected =[1,2,3,4,n_procs_r-2,n_procs_r-1]
+            ranks_selected =[1,2,3,4,n_ranks_r-2,n_ranks_r-1]
          end if
       end if
 
@@ -88,7 +88,7 @@ contains
             if ( rank == 0 ) then
                call MPI_Recv(bytes_other_proc,1,MPI_LONG,iproc,sr_tag+iproc, &
                              mpi_comm_world,status,ierr)
-               if ( n_procs > 8 .and. iproc == n_procs -2 ) then
+               if ( n_ranks > 8 .and. iproc == n_ranks -2 ) then
                   write(n_memory_file, *) "               ..."
                end if
                st = human_readable_size(bytes_other_proc)
@@ -140,7 +140,7 @@ contains
             if ( rank == 0 ) then
                call MPI_Recv(bytes_other_proc,1,MPI_LONG,iproc,sr_tag+iproc, &
                              mpi_comm_world,status,ierr)
-               if ( n_procs_r > 8 .and. iproc == n_procs_r-2 ) then
+               if ( n_ranks_r > 8 .and. iproc == n_ranks_r-2 ) then
                   write(n_memory_file, *) "               ..."
                end if
                st = human_readable_size(bytes_other_proc)

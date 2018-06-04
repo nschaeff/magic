@@ -11,7 +11,7 @@ module radialLoop
        &            l_single_matrix, l_double_curl, l_chemical_conv,         &
        &            l_b_nl_icb, l_b_nl_cmb, l_TP_form
    use constants, only: zero
-   use parallel_mod, only: coord_r, n_procs_r, rank
+   use parallel_mod, only: coord_r, n_ranks_r, rank
    use radial_data
 #ifdef WITH_LIKWID
 #include "likwid_f90.h"
@@ -120,38 +120,38 @@ contains
       !---- Output of explicit time step:
       !---- dVSrLM and dVxBhLM are output of contributions to explicit time step that
       !     need a further treatment (radial derivatives required):
-      complex(cp), intent(out) :: dwdt(lm_loc,nRstart:nRstop)
-      complex(cp), intent(out) :: dzdt(lm_loc,nRstart:nRstop)
-      complex(cp), intent(out) :: dpdt(lm_loc,nRstart:nRstop)
-      complex(cp), intent(out) :: dsdt(lm_loc,nRstart:nRstop)
-      complex(cp), intent(out) :: dxidt(lm_locChe,nRstartChe:nRstopChe)
-      complex(cp), intent(out) :: dVSrLM(lm_loc,nRstart:nRstop)
-      complex(cp), intent(out) :: dVPrLM(lm_locTP,nRstartTP:nRstopTP)
-      complex(cp), intent(out) :: dVXirLM(lm_locChe,nRstartChe:nRstopChe)
-      complex(cp), intent(out) :: dbdt(lm_locMag,nRstartMag:nRstopMag)
-      complex(cp), intent(out) :: djdt(lm_locMag,nRstartMag:nRstopMag)
-      complex(cp), intent(out) :: dVxVhLM(lm_locDC,nRstartDC:nRstopDC)
-      complex(cp), intent(out) :: dVxBhLM(lm_locMag,nRstartMag:nRstopMag)
+      complex(cp), intent(out) :: dwdt(lm_loc,l_r:u_r)
+      complex(cp), intent(out) :: dzdt(lm_loc,l_r:u_r)
+      complex(cp), intent(out) :: dpdt(lm_loc,l_r:u_r)
+      complex(cp), intent(out) :: dsdt(lm_loc,l_r:u_r)
+      complex(cp), intent(out) :: dxidt(lm_locChe,l_r_Che:u_r_Che)
+      complex(cp), intent(out) :: dVSrLM(lm_loc,l_r:u_r)
+      complex(cp), intent(out) :: dVPrLM(lm_locTP,l_r_TP:u_r_TP)
+      complex(cp), intent(out) :: dVXirLM(lm_locChe,l_r_Che:u_r_Che)
+      complex(cp), intent(out) :: dbdt(lm_locMag,l_r_Mag:u_r_Mag)
+      complex(cp), intent(out) :: djdt(lm_locMag,l_r_Mag:u_r_Mag)
+      complex(cp), intent(out) :: dVxVhLM(lm_locDC,l_r_DC:u_r_DC)
+      complex(cp), intent(out) :: dVxBhLM(lm_locMag,l_r_Mag:u_r_Mag)
       real(cp),    intent(out) :: lorentz_torque_ma,lorentz_torque_ic
 
       !---- Output for axisymmetric helicity:
-      real(cp),    intent(out) :: HelLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: Hel2LMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: HelnaLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: Helna2LMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: uhLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: duhLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: viscLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: gradsLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: fkinLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: fconvLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: fviscLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: fresLMr(l_maxMag+1,nRstartMag:nRstopMag)
-      real(cp),    intent(out) :: fpoynLMr(l_maxMag+1,nRstartMag:nRstopMag)
-      real(cp),    intent(out) :: EperpLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: EparLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: EperpaxiLMr(l_max+1,nRstart:nRstop)
-      real(cp),    intent(out) :: EparaxiLMr(l_max+1,nRstart:nRstop)
+      real(cp),    intent(out) :: HelLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: Hel2LMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: HelnaLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: Helna2LMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: uhLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: duhLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: viscLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: gradsLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: fkinLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: fconvLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: fviscLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: fresLMr(l_maxMag+1,l_r_Mag:u_r_Mag)
+      real(cp),    intent(out) :: fpoynLMr(l_maxMag+1,l_r_Mag:u_r_Mag)
+      real(cp),    intent(out) :: EperpLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: EparLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: EperpaxiLMr(l_max+1,l_r:u_r)
+      real(cp),    intent(out) :: EparaxiLMr(l_max+1,l_r:u_r)
 
       !---- Output of nonlinear products for nonlinear
       !     magnetic boundary conditions (needed in s_updateB.f):
@@ -161,7 +161,7 @@ contains
       complex(cp), intent(out) :: br_vp_lm_icb(lmP_loc) ! product br*vp at ICB
 
       !---- Output for Courant criteria:
-      real(cp),intent(out) :: dtrkc(nRstart:nRstop),dthkc(nRstart:nRstop)
+      real(cp),intent(out) :: dtrkc(l_r:u_r),dthkc(l_r:u_r)
 
 
       !--- Local variables:
@@ -187,7 +187,7 @@ contains
          if ( coord_r == 0 ) then
             dtrkc(n_r_cmb)=1.e10_cp
             dthkc(n_r_cmb)=1.e10_cp
-         elseif (coord_r == n_procs_r-1) then
+         elseif (coord_r == n_ranks_r-1) then
             dtrkc(n_r_icb)=1.e10_cp
             dthkc(n_r_icb)=1.e10_cp
          end if
@@ -201,7 +201,7 @@ contains
             if ( l_chemical_conv ) dVXirLM(lm,n_r_cmb)=zero
             if ( l_mag ) dVxBhLM(lm,n_r_cmb)=zero
             if ( l_double_curl ) dVxVhLM(lm,n_r_cmb)=zero
-         elseif (coord_r == n_procs_r-1) then
+         elseif (coord_r == n_ranks_r-1) then
             dVSrLM(lm,n_r_icb) =zero
             if ( l_chemical_conv ) dVXirLM(lm,n_r_icb)=zero
             if ( l_mag ) dVxBhLM(lm,n_r_icb)=zero
@@ -229,8 +229,8 @@ contains
            & lFluxProfCalc .or. lRmsCalc .or. lPowerCalc   &
            & .or. l_single_matrix ) lOutBc=.true.
 
-      !nRstart=n_r_cmb
-      !nRstop =n_r_icb-1
+      !l_r=n_r_cmb
+      !u_r =n_r_icb-1
 
       !--- Start the big do loop over the radial threads:
       
@@ -240,7 +240,7 @@ contains
       nRChe  = 1
       
       !nThreadsRmax=1
-      do nR=nRstart,nRstop
+      do nR=l_r,u_r
          !IF( nTh > nThreadsRmax ) nThreadsRmax=nTh
          if ( lVerbose ) then
             write(*,'(/," ! Starting radial level ",i4)') nR

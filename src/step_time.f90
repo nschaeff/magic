@@ -13,11 +13,10 @@ module step_time_mod
    use mem_alloc, only: bytes_allocated, memWrite
    use truncation, only: n_r_max, l_max, l_maxMag, n_r_maxMag, &
        &                 lm_max, lmP_max, lm_maxMag, lm_loc,   &
-       &                 lm_locMag, gather_Flm, slice_Flm,     &
-       &                 gather_FlmP, lmP_loc
+       &                 lm_locMag, lmP_loc
    use num_param, only: n_time_steps, runTimeLimit, tEnd, dtMax, &
        &                dtMin, tScale, alpha, runTime
-   use radial_data, only: nRstart, nRstop, nRstartMag, nRstopMag, &
+   use radial_data, only: l_r, u_r, l_r_Mag, u_r_Mag, &
        &                  n_r_icb, n_r_cmb
    use blocking, only: nLMBs, lmStartB, lmStopB
    use logic, only: l_mag, l_mag_LF, l_dtB, l_RMS, l_hel, l_TO,        &
@@ -62,7 +61,8 @@ module step_time_mod
        &                     lo2r_flow, scatter_from_rank0_to_lo, lo2r_xi,  &
        &                     r2lo_redist_wait, r2lo_flow, r2lo_s, r2lo_xi,  &
        &                     r2lo_b, lo2r_s, get_global_sum_dist,           &
-       &                     r2lo_redist_start_dist, lo2r_redist_wait_dist
+       &                     r2lo_redist_start_dist, lo2r_redist_wait_dist, &
+       &                     gather_Flm, slice_Flm, gather_FlmP
    use courant_mod, only: dt_courant
    use nonlinear_bcs, only: get_b_nl_bcs
    use timing ! Everything is needed
@@ -86,10 +86,10 @@ module step_time_mod
    complex(cp), allocatable :: dbdt_CMB_LMloc(:)
    
    !--- (r,θ)-distributed arrays"
-   complex(cp), allocatable, target  :: dxidt_dist_container(:,:,:)
-   complex(cp), allocatable, target  :: dflowdt_dist_container(:,:,:)
-   complex(cp), allocatable, target  :: dsdt_dist_container(:,:,:)
-   complex(cp), allocatable, target  :: dbdt_dist_container(:,:,:)
+   complex(cp), allocatable, target  :: dxidt_Rdist_container(:,:,:)
+   complex(cp), allocatable, target  :: dflowdt_Rdist_container(:,:,:)
+   complex(cp), allocatable, target  :: dsdt_Rdist_container(:,:,:)
+   complex(cp), allocatable, target  :: dbdt_Rdist_container(:,:,:)
    
    !DIR$ ATTRIBUTES ALIGN:64 :: dwdt_dist,dzdt_dist,dpdt_dist
    complex(cp), pointer :: dwdt_dist(:,:), dzdt_dist(:,:), dpdt_dist(:,:)
@@ -118,52 +118,52 @@ contains
       local_bytes_used = bytes_allocated
 
       if ( l_double_curl ) then
-         allocate( dflowdt_dist_container(lm_loc,nRstart:nRstop,1:4) )
-         dVxVhLM_dist(1:lm_loc,nRstart:nRstop) => dflowdt_dist_container(:,:,4)
-         bytes_allocated = bytes_allocated+ 4*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         allocate( dflowdt_Rdist_container(lm_loc,l_r:u_r,1:4) )
+         dVxVhLM_dist(1:lm_loc,l_r:u_r) => dflowdt_Rdist_container(:,:,4)
+         bytes_allocated = bytes_allocated+ 4*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       else
-         allocate( dflowdt_dist_container(lm_loc,nRstart:nRstop,1:3) )
+         allocate( dflowdt_Rdist_container(lm_loc,l_r:u_r,1:3) )
          allocate( dVxVhLM_dist(1:1,1:1) )
-         bytes_allocated = bytes_allocated+ 3*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         bytes_allocated = bytes_allocated+ 3*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       end if
-      dwdt_dist(1:lm_loc,nRstart:nRstop) => dflowdt_dist_container(:,:,1)
-      dzdt_dist(1:lm_loc,nRstart:nRstop) => dflowdt_dist_container(:,:,2)
-      dpdt_dist(1:lm_loc,nRstart:nRstop) => dflowdt_dist_container(:,:,3)
+      dwdt_dist(1:lm_loc,l_r:u_r) => dflowdt_Rdist_container(:,:,1)
+      dzdt_dist(1:lm_loc,l_r:u_r) => dflowdt_Rdist_container(:,:,2)
+      dpdt_dist(1:lm_loc,l_r:u_r) => dflowdt_Rdist_container(:,:,3)
       
 
       if ( l_TP_form ) then
-         allocate( dsdt_dist_container(lm_loc,nRstart:nRstop,1:3) )
-         dVPrLM_dist(1:lm_loc,nRstart:nRstop) => dsdt_dist_container(:,:,3)
-         bytes_allocated = bytes_allocated+ 3*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         allocate( dsdt_Rdist_container(lm_loc,l_r:u_r,1:3) )
+         dVPrLM_dist(1:lm_loc,l_r:u_r) => dsdt_Rdist_container(:,:,3)
+         bytes_allocated = bytes_allocated+ 3*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       else
-         allocate( dsdt_dist_container(lm_loc,nRstart:nRstop,1:2) )
+         allocate( dsdt_Rdist_container(lm_loc,l_r:u_r,1:2) )
          allocate( dVPrLM_dist(1:1,1:1) )
-         bytes_allocated = bytes_allocated+ 2*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         bytes_allocated = bytes_allocated+ 2*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       end if
-      dsdt_dist(1:lm_loc,nRstart:nRstop)   => dsdt_dist_container(:,:,1)
-      dVSrLM_dist(1:lm_loc,nRstart:nRstop) => dsdt_dist_container(:,:,2)
+      dsdt_dist(1:lm_loc,l_r:u_r)   => dsdt_Rdist_container(:,:,1)
+      dVSrLM_dist(1:lm_loc,l_r:u_r) => dsdt_Rdist_container(:,:,2)
 
       if ( l_chemical_conv ) then
-         allocate( dxidt_dist_container(lm_loc,nRstart:nRstop,1:2) )
-         dxidt_dist(1:lm_loc,nRstart:nRstop)   => dxidt_dist_container(:,:,1)
-         dVXirLM_dist(1:lm_loc,nRstart:nRstop) => dxidt_dist_container(:,:,2)
-         bytes_allocated = bytes_allocated+2*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+         allocate( dxidt_Rdist_container(lm_loc,l_r:u_r,1:2) )
+         dxidt_dist(1:lm_loc,l_r:u_r)   => dxidt_Rdist_container(:,:,1)
+         dVXirLM_dist(1:lm_loc,l_r:u_r) => dxidt_Rdist_container(:,:,2)
+         bytes_allocated = bytes_allocated+2*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       else
-         allocate( dxidt_dist_container(1,1,1:2) )
-         dxidt_dist(1:1,1:1)   => dxidt_dist_container(:,:,1)
-         dVXirLM_dist(1:1,1:1) => dxidt_dist_container(:,:,2)
+         allocate( dxidt_Rdist_container(1,1,1:2) )
+         dxidt_dist(1:1,1:1)   => dxidt_Rdist_container(:,:,1)
+         dVXirLM_dist(1:1,1:1) => dxidt_Rdist_container(:,:,2)
          bytes_allocated = bytes_allocated+2*SIZEOF_DEF_COMPLEX
       end if
 
       ! the magnetic part
-      allocate( dbdt_dist_container(lm_locMag,nRstartMag:nRstopMag,1:3) )
-      dbdt_dist(1:lm_locMag,nRstartMag:nRstopMag)   => dbdt_dist_container(:,:,1)
-      djdt_dist(1:lm_locMag,nRstartMag:nRstopMag)   => dbdt_dist_container(:,:,2)
-      dVxBhLM_dist(1:lm_locMag,nRstartMag:nRstopMag)=> dbdt_dist_container(:,:,3)
-      bytes_allocated = bytes_allocated+ 3*lm_locMag*(nRstopMag-nRstartMag+1)*SIZEOF_DEF_COMPLEX
+      allocate( dbdt_Rdist_container(lm_locMag,l_r_Mag:u_r_Mag,1:3) )
+      dbdt_dist(1:lm_locMag,l_r_Mag:u_r_Mag)   => dbdt_Rdist_container(:,:,1)
+      djdt_dist(1:lm_locMag,l_r_Mag:u_r_Mag)   => dbdt_Rdist_container(:,:,2)
+      dVxBhLM_dist(1:lm_locMag,l_r_Mag:u_r_Mag)=> dbdt_Rdist_container(:,:,3)
+      bytes_allocated = bytes_allocated+ 3*lm_locMag*(u_r_Mag-l_r_Mag+1)*SIZEOF_DEF_COMPLEX
 
       ! first touch dist
-      do nR=nRstart,nRstop
+      do nR=l_r,u_r
          !$OMP PARALLEL do 
          do lm=1,lm_loc
             if ( l_mag ) then
@@ -250,8 +250,8 @@ contains
       deallocate( dflowdt_LMloc_container )
       deallocate( dsdt_LMloc_container, dbdt_LMloc_container )
       deallocate( dbdt_CMB_LMloc, dxidt_LMloc_container )
-      deallocate( dsdt_dist_container, dxidt_dist_container )
-      deallocate( dbdt_dist_container, dflowdt_dist_container )
+      deallocate( dsdt_Rdist_container, dxidt_Rdist_container )
+      deallocate( dbdt_Rdist_container, dflowdt_Rdist_container )
       nullify( dbdt_dist    )
       nullify( djdt_dist    )
       nullify( dVxBhLM_dist )
@@ -328,7 +328,7 @@ contains
       !--- Courant criteria/diagnosis:
       real(cp) :: dtr,dth
       !-- Saves values for time step
-      real(cp) :: dtrkc_Rloc(nRstart:nRstop), dthkc_Rloc(nRstart:nRstop) 
+      real(cp) :: dtrkc_Rloc(l_r:u_r), dthkc_Rloc(l_r:u_r) 
 
       !--- Explicit part of time stepping, calculated in s_radialLoopG.f and
       !    passed to LMLoop.f where the time step is preformed.
@@ -340,23 +340,23 @@ contains
       real(cp) :: lorentz_torque_ma,lorentz_torque_ic
 
       !-- Arrays for m_outMisc.F90 and m_outPar.F90
-      real(cp) :: HelLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: Hel2LMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: HelnaLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: Helna2LMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: viscLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: uhLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: duhLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: gradsLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: fconvLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: fkinLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: fviscLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: fpoynLMr_Rloc(l_maxMag+1,nRstartMag:nRstopMag)
-      real(cp) :: fresLMr_Rloc(l_maxMag+1,nRstartMag:nRstopMag)
-      real(cp) :: EperpLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: EparLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: EperpaxiLMr_Rloc(l_max+1,nRstart:nRstop)
-      real(cp) :: EparaxiLMr_Rloc(l_max+1,nRstart:nRstop)
+      real(cp) :: HelLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: Hel2LMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: HelnaLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: Helna2LMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: viscLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: uhLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: duhLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: gradsLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: fconvLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: fkinLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: fviscLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: fpoynLMr_Rloc(l_maxMag+1,l_r_Mag:u_r_Mag)
+      real(cp) :: fresLMr_Rloc(l_maxMag+1,l_r_Mag:u_r_Mag)
+      real(cp) :: EperpLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: EparLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: EperpaxiLMr_Rloc(l_max+1,l_r:u_r)
+      real(cp) :: EparaxiLMr_Rloc(l_max+1,l_r:u_r)
 
       !--- Nonlinear magnetic boundary conditions needed in s_updateB.f :
       complex(cp) :: br_vt_lm_cmb(lmP_loc)    ! product br*vt at CMB
@@ -421,16 +421,16 @@ contains
       complex(cp) :: tmp_cp
       
 !       !--- Duplications - yay -.-"  [180419.Lago]
-      complex(cp) :: b_nl_cmb_dist(lm_loc)         ! nonlinear bc for b at CMB
-      complex(cp) :: aj_nl_cmb_dist(lm_loc)        ! nonlinear bc for aj at CMB
-      complex(cp) :: aj_nl_icb_dist(lm_loc)        ! nonlinear bc for dr aj at ICB
+      complex(cp) :: b_nl_cmb_Rdist(lm_loc)         ! nonlinear bc for b at CMB
+      complex(cp) :: aj_nl_cmb_Rdist(lm_loc)        ! nonlinear bc for aj at CMB
+      complex(cp) :: aj_nl_icb_Rdist(lm_loc)        ! nonlinear bc for dr aj at ICB
 
 
       if ( lVerbose ) write(*,'(/,'' ! STARTING STEP_TIME !'')')
 
 #ifdef WITH_MPI
       ! allocate the buffers for MPI gathering
-      allocate(recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1))
+      allocate(recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1))
       call MPI_INFO_CREATE(info,ierr)
 #endif
 
@@ -624,7 +624,7 @@ contains
                  & (old_rst_signal /= n_rst_signal) .or.     &
                  & (old_spec_signal /= n_spec_signal) .or.   &
                  & (old_pot_signal /= n_pot_signal) then
-               do iRank=1,n_procs_r-1
+               do iRank=1,n_ranks_r-1
                   write(*,"(A,I4)") "MPI_putting from coord_r 0 to coord_r ",iRank
                   call MPI_Put(signals,5,MPI_integer,&
                        &       iRank,0,5,MPI_integer,signal_window,ierr)
@@ -848,7 +848,7 @@ contains
                if ( l_save_out ) close(n_log_file)
             end if
 #ifdef WITH_MPI
-            call MPI_File_open(comm_cart,graph_file,                  &
+            call MPI_File_open(comm_gs,graph_file,                  &
                  &             IOR(MPI_MODE_WRONLY,MPI_MODE_CREATE),  &
                  &             MPI_INFO_NULL,graph_mpi_fh,ierr)
 #else
@@ -958,8 +958,8 @@ contains
 
          if ( DEBUG_OUTPUT ) then
             print *, "This part needs to be reviewed!", __LINE__, __FILE__
-            nR_i1=max(1,nRstart)
-            nR_i2=min(n_r_max,nRstop)
+            nR_i1=max(1,l_r)
+            nR_i2=min(n_r_max,u_r)
             write(*,"(A,10ES20.12)") "middl: dwdt,dsdt,dzdt,dpdt = ",&
                  & get_global_sum_dist( dwdt_dist(1:lm_loc,nR_i1:nR_i2) ),       &
                  & get_global_sum_dist( dsdt_dist(1:lm_loc,nR_i1:nR_i2) ),       &
@@ -983,22 +983,22 @@ contains
          
          PERFON('r2lo_dst')
          if ( l_conv .or. l_mag_kin ) then
-            call r2lo_redist_start_dist(r2lo_flow,dflowdt_dist_container,dflowdt_LMloc_container)
+            call r2lo_redist_start_dist(r2lo_flow,dflowdt_Rdist_container,dflowdt_LMloc_container)
             call r2lo_redist_wait(r2lo_flow)
          end if
 
          if ( l_heat ) then
-            call r2lo_redist_start_dist(r2lo_s,dsdt_dist_container,dsdt_LMloc_container)
+            call r2lo_redist_start_dist(r2lo_s,dsdt_Rdist_container,dsdt_LMloc_container)
             call r2lo_redist_wait(r2lo_s)
          end if
 
          if ( l_chemical_conv ) then
-            call r2lo_redist_start_dist(r2lo_xi,dxidt_dist_container,dxidt_LMloc_container)
+            call r2lo_redist_start_dist(r2lo_xi,dxidt_Rdist_container,dxidt_LMloc_container)
             call r2lo_redist_wait(r2lo_xi)
          end if
 
          if ( l_mag ) then
-            call r2lo_redist_start_dist(r2lo_b,dbdt_dist_container,dbdt_LMloc_container)
+            call r2lo_redist_start_dist(r2lo_b,dbdt_Rdist_container,dbdt_LMloc_container)
             call r2lo_redist_wait(r2lo_b)
          end if
 #ifdef WITH_MPI
@@ -1007,7 +1007,7 @@ contains
          ! but are needed on all processes.
          ! This might be "optimizeable" if being done together with the other allreduces
          ! (or if all the allreduces can be done in here). Need to be checked - Lago
-         call MPI_Bcast(lorentz_torque_ic,1,MPI_DEF_REAL,n_procs_r-1,comm_r,ierr)
+         call MPI_Bcast(lorentz_torque_ic,1,MPI_DEF_REAL,n_ranks_r-1,comm_r,ierr)
          call MPI_Bcast(lorentz_torque_ma,1,MPI_DEF_REAL,0,comm_r,ierr)
 #endif
          PERFOFF
@@ -1061,7 +1061,7 @@ contains
          if ( lVerbose ) write(*,*) "! start output"
          if ( lVerbose ) write(*,*) "This part needs to be reviewed!", __LINE__, __FILE__
          PERFON('output')
-         if ( nRstart <= n_r_cmb .and. l_cmb .and. l_dt_cmb_field ) then
+         if ( l_r <= n_r_cmb .and. l_cmb .and. l_dt_cmb_field ) then
             call gather_Flm(dbdt_dist(1:lm_loc,n_r_cmb), dbdt_CMB(1:lm_max))
             call scatter_from_rank0_to_lo(dbdt_CMB, dbdt_CMB_LMloc)
          end if
@@ -1107,12 +1107,12 @@ contains
          if ( l_b_nl_cmb ) then
             print *, "Parallelized, but never (properly) tested !", __LINE__, __FILE__
             call get_b_nl_bcs('CMB', br_vt_lm_cmb,br_vp_lm_cmb, &
-                 &            b_nl_cmb_dist,aj_nl_cmb_dist)
+                 &            b_nl_cmb_Rdist,aj_nl_cmb_Rdist)
          end if
          if ( l_b_nl_icb ) then
             print *, "Parallelized, but never (properly) tested !", __LINE__, __FILE__
             call get_b_nl_bcs('ICB', br_vt_lm_icb,br_vp_lm_icb, &
-                 &            b_nl_cmb_dist,aj_nl_icb_dist)
+                 &            b_nl_cmb_Rdist,aj_nl_icb_Rdist)
          end if
          PERFOFF
          
@@ -1432,12 +1432,12 @@ contains
    !-------------------------------------------------------------------------------
          
          if ( l_b_nl_cmb ) then
-            call gather_Flm(b_nl_cmb_dist, b_nl_cmb)
-            call gather_Flm(aj_nl_cmb_dist,aj_nl_cmb)
+            call gather_Flm(b_nl_cmb_Rdist, b_nl_cmb)
+            call gather_Flm(aj_nl_cmb_Rdist,aj_nl_cmb)
          end if
          if ( l_b_nl_icb ) then
-            call gather_Flm(b_nl_cmb_dist, b_nl_cmb)
-            call gather_Flm(aj_nl_icb_dist,aj_nl_cmb)
+            call gather_Flm(b_nl_cmb_Rdist, b_nl_cmb)
+            call gather_Flm(aj_nl_icb_Rdist,aj_nl_cmb)
          end if
       end subroutine gather_all
    !-------------------------------------------------------------------------------

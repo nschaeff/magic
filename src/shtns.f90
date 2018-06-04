@@ -2,6 +2,7 @@ module shtns
 
    use precision_mod, only: cp
    use constants, only: ci
+   use communications
    use truncation
    use horizontal_data, only: dLh, O_sin_theta_E2, dLh_loc, D_m_loc
    use radial_functions, only: or2

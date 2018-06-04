@@ -12,7 +12,7 @@ module rIterThetaBlocking_shtns_mod
        &            l_cond_ma, l_dtB, l_store_frame, l_movie_oc,     &
        &            l_TO, l_chemical_conv, l_TP_form, l_probe,       &
        &            l_precession, l_double_curl
-   use radial_data, only: n_r_cmb, n_r_icb, nRstart, nRstop
+   use radial_data, only: n_r_cmb, n_r_icb, l_r, u_r
    use radial_functions, only: or2, orho1
    use constants, only: zero
    use leg_helper_mod, only: leg_helper_t
@@ -34,9 +34,9 @@ module rIterThetaBlocking_shtns_mod
    use nl_special_calc
    use shtns
    use horizontal_data
-   use fields, only: s_dist,ds_dist, z_dist,dz_dist, p_dist,dp_dist, &
-       &             b_dist,db_dist,ddb_dist, aj_dist,dj_dist,       &
-       &             w_dist,dw_dist,ddw_dist, xi_dist
+   use fields, only: s_Rdist,ds_Rdist, z_Rdist,dz_Rdist, p_Rdist,dp_Rdist, &
+       &             b_Rdist,db_Rdist,ddb_Rdist, aj_Rdist,dj_Rdist,       &
+       &             w_Rdist,dw_Rdist,ddw_Rdist, xi_Rdist
    use physical_parameters, only: ktops, kbots, n_r_LCR
    use probe_mod
    use parallel_mod
@@ -80,21 +80,16 @@ contains
 
       class(rIterThetaBlocking_shtns_t) :: this
 
-      if (n_procs_theta < 2) print *, "n_procs_theta is too small!!!!!!!!!!!"
-      if (n_procs_theta < 2) stop
+      if (n_ranks_theta < 2) print *, "n_ranks_theta is too small!!!!!!!!!!!"
+      if (n_ranks_theta < 2) stop
       
       call this%allocate_common_arrays()
-!       call this%gsa_glb%initialize(nrp,1,nfs)
-!       call this%gsa_glb%initialize(1,1,1)
       call this%gsa%initialize(n_phi_max, n_theta_beg, n_theta_end)
       if ( l_TO ) call this%TO_arrays%initialize()
       call this%dtB_arrays%initialize()
       
-!       call this%nl_lm_glb%initialize(lmP_max)
-!       call this%nl_lm_glb%initialize(1)
       call this%nl_lm%initialize(lmP_loc)
       
-      ! Distributed Update - Lago
 
    end subroutine initialize_rIterThetaBlocking_shtns
 !------------------------------------------------------------------------------
@@ -500,9 +495,9 @@ contains
       PERFON('lm2sp_d')
       if ( l_conv .or. l_mag_kin ) then
          if ( l_heat ) then
-            call sh_to_spat_dist(s_dist(:, nR), this%gsa%sc)
+            call sh_to_spat_dist(s_Rdist(:, nR), this%gsa%sc)
             if ( this%lViscBcCalc ) then
-               call sph_to_spat_dist(s_dist(:, nR), this%gsa%dsdtc, this%gsa%dsdpc)
+               call sph_to_spat_dist(s_Rdist(:, nR), this%gsa%dsdtc, this%gsa%dsdpc)
                if (this%nR == n_r_cmb .and. ktops==1) then
                   this%gsa%dsdtc=0.0_cp
                   this%gsa%dsdpc=0.0_cp
@@ -515,46 +510,46 @@ contains
          end if
 
          if ( this%lRmsCalc ) then
-            call sph_to_spat_dist(p_dist(:, nR), this%gsa%dpdtc, this%gsa%dpdpc)
+            call sph_to_spat_dist(p_Rdist(:, nR), this%gsa%dpdtc, this%gsa%dpdpc)
          end if
 
          if ( this%lPressCalc ) then ! Pressure
-            call sh_to_spat_dist(p_dist(:, nR), this%gsa%pc)
+            call sh_to_spat_dist(p_Rdist(:, nR), this%gsa%pc)
          end if
 
          if ( l_chemical_conv ) then ! Chemical composition
-            call sh_to_spat_dist(xi_dist(:, nR), this%gsa%xic)
+            call sh_to_spat_dist(xi_Rdist(:, nR), this%gsa%xic)
          end if
 
          if ( l_HT .or. this%lViscBcCalc ) then
-            call sh_to_spat_dist(ds_dist(:, nR), this%gsa%drsc)
+            call sh_to_spat_dist(ds_Rdist(:, nR), this%gsa%drsc)
          endif
          if ( this%nBc == 0 ) then
-            call torpol_to_spat_dist(w_dist(:, nR), dw_dist(:, nR),  z_dist(:, nR), &
+            call torpol_to_spat_dist(w_Rdist(:, nR), dw_Rdist(:, nR),  z_Rdist(:, nR), &
                  &              this%gsa%vrc, this%gsa%vtc, this%gsa%vpc)
             if ( this%lDeriv ) then
-               call torpol_to_spat_dist(dw_dist(:, nR), ddw_dist(:, nR), dz_dist(:, nR), &
+               call torpol_to_spat_dist(dw_Rdist(:, nR), ddw_Rdist(:, nR), dz_Rdist(:, nR), &
                     &              this%gsa%dvrdrc, this%gsa%dvtdrc, this%gsa%dvpdrc)
 
-               call pol_to_curlr_spat_dist(z_dist(:, nR), this%gsa%cvrc)
+               call pol_to_curlr_spat_dist(z_Rdist(:, nR), this%gsa%cvrc)
 
-               call pol_to_grad_spat_dist(w_dist(:, nR), this%gsa%dvrdtc, this%gsa%dvrdpc)
-               call torpol_to_dphspat_dist(dw_dist(:, nR),  z_dist(:, nR), &
+               call pol_to_grad_spat_dist(w_Rdist(:, nR), this%gsa%dvrdtc, this%gsa%dvrdpc)
+               call torpol_to_dphspat_dist(dw_Rdist(:, nR),  z_Rdist(:, nR), &
                     &                 this%gsa%dvtdpc, this%gsa%dvpdpc)
 
             end if
          else if ( this%nBc == 1 ) then ! Stress free
              ! TODO don't compute vrc as it is set to 0 afterward
-            call torpol_to_spat_dist(w_dist(:, nR), dw_dist(:, nR),  z_dist(:, nR), &
+            call torpol_to_spat_dist(w_Rdist(:, nR), dw_Rdist(:, nR),  z_Rdist(:, nR), &
                  &              this%gsa%vrc, this%gsa%vtc, this%gsa%vpc)
             this%gsa%vrc = 0.0_cp
             if ( this%lDeriv ) then
                this%gsa%dvrdtc = 0.0_cp
                this%gsa%dvrdpc = 0.0_cp
-               call torpol_to_spat_dist(dw_dist(:, nR), ddw_dist(:, nR), dz_dist(:, nR), &
+               call torpol_to_spat_dist(dw_Rdist(:, nR), ddw_Rdist(:, nR), dz_Rdist(:, nR), &
                     &              this%gsa%dvrdrc, this%gsa%dvtdrc, this%gsa%dvpdrc)
-               call pol_to_curlr_spat_dist(z_dist(:, nR), this%gsa%cvrc)
-               call torpol_to_dphspat_dist(dw_dist(:, nR),  z_dist(:, nR), &
+               call pol_to_curlr_spat_dist(z_Rdist(:, nR), this%gsa%cvrc)
+               call torpol_to_dphspat_dist(dw_Rdist(:, nR),  z_Rdist(:, nR), &
                     &                 this%gsa%dvtdpc, this%gsa%dvpdpc)
             end if
          else if ( this%nBc == 2 ) then
@@ -568,19 +563,19 @@ contains
                     &                this%gsa%dvrdpc,this%gsa%dvtdpc,this%gsa%dvpdpc)
             end if
             if ( this%lDeriv ) then
-               call torpol_to_spat_dist(dw_dist(:, nR), ddw_dist(:, nR), dz_dist(:, nR), &
+               call torpol_to_spat_dist(dw_Rdist(:, nR), ddw_Rdist(:, nR), dz_Rdist(:, nR), &
                     &              this%gsa%dvrdrc, this%gsa%dvtdrc, this%gsa%dvpdrc)
             end if
          end if
       end if
 
       if ( l_mag .or. l_mag_LF ) then
-         call torpol_to_spat_dist(b_dist(:, nR), db_dist(:, nR),  aj_dist(:, nR),    &
+         call torpol_to_spat_dist(b_Rdist(:, nR), db_Rdist(:, nR),  aj_Rdist(:, nR),    &
               &              this%gsa%brc, this%gsa%btc, this%gsa%bpc)
 
          if ( this%lDeriv ) then
-            call torpol_to_curl_spat_dist(b_dist(:, nR), ddb_dist(:, nR),        &
-                 &                   aj_dist(:, nR), dj_dist(:, nR), nR,    &
+            call torpol_to_curl_spat_dist(b_Rdist(:, nR), ddb_Rdist(:, nR),        &
+                 &                   aj_Rdist(:, nR), dj_Rdist(:, nR), nR,    &
                  &                   this%gsa%cbrc, this%gsa%cbtc, this%gsa%cbpc)
          end if
       end if

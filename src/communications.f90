@@ -6,13 +6,13 @@ module communications
 #endif
    use precision_mod
    use mem_alloc, only: memWrite, bytes_allocated
-   use parallel_mod, only: coord_r, n_procs_r, ierr, nR_per_rank, nR_on_last_rank, &
-                           comm_r, rank, comm_cart
+   use parallel_mod, only: coord_r, n_ranks_r, ierr, nR_per_rank, & 
+                           nR_on_last_rank, comm_r, rank, comm_gs,   &
+                           comm_m, n_ranks_r, n_ranks_theta
    use LMLoop_data, only: llm, ulm
-   use truncation, only: l_max, lm_max, minc, n_r_max, n_r_ic_max, l_axi, lm_loc,  &
-       &                 gather_Flm
-   use blocking, only: st_map, lo_map, lmStartB, lmStopB
-   use radial_data, only: nRstart, nRstop
+   use truncation 
+   use blocking, only: st_map, lo_map, lmStartB, lmStopB, lm2, lmP2
+   use radial_data, only: l_r, u_r
    use logic, only: l_mag, l_conv, l_heat, l_chemical_conv, &
        &            l_mag_kin, l_TP_form, l_double_curl
    use useful, only: abortRun
@@ -65,12 +65,15 @@ module communications
    public :: get_global_sum, finalize_communications,                      &
    &         r2lo_redist_wait,r2lo_redist_start,initialize_communications, &
    &         create_lm2r_type!,lo2r_redist,lm2r_redist
-   public :: lo2r_redist_start,lo2r_redist_wait, create_r2lm_type,   &
+   public :: lo2r_redist_start,lo2r_redist_wait, create_r2lm_type,         &
    &         destroy_r2lm_type,destroy_lm2r_type
-   public :: get_global_sum_dist, r2lo_redist_start_dist,            &
+   public :: get_global_sum_dist, r2lo_redist_start_dist,                  &
    &         lo2r_redist_start_dist, lo2r_redist_wait_dist
+
 #ifdef WITH_MPI
-   public :: myAllGather
+   public :: myAllGather, slice_f, slice_Flm, slice_FlmP, gather_f, &
+             gather_FlmP, gather_Flm, transpose_m_theta, transpose_theta_m
+   
 #endif
  
    ! declaration of the types for the redistribution
@@ -83,6 +86,14 @@ module communications
  
    complex(cp), allocatable :: temp_gather_lo(:)
    complex(cp), allocatable :: temp_r2lo(:,:)
+   
+   interface slice_Flm
+      module procedure slice_Flm_cmplx, slice_Flm_real
+   end interface slice_Flm
+   
+   interface slice_FlmP
+      module procedure slice_FlmP_cmplx, slice_FlmP_real
+   end interface slice_FlmP
 
 contains
   
@@ -97,13 +108,13 @@ contains
       integer :: blocklengths(8),blocklengths_on_last(8),displs(8),displs_on_last(8)
       integer :: i
 
-      ! first setup the datatype. It is not equal for all ranks. The n_procs_r-1 coord_r can
+      ! first setup the datatype. It is not equal for all ranks. The n_ranks_r-1 coord_r can
       ! have a smaller datatype.
       ! Due to the different number of radial and lm points for the ranks, 
       ! we need essentially three different datatypes
-      ! transfer_type: Standard for the transfers between ranks 0-(n_procs_r-2)
-      ! transfer_type_nr_end: for transfers involving coord_r (n_procs_r-1) as receiver
-      ! transfer_type_lm_end: for transfers involving coord_r (n_procs_r-1) as sender
+      ! transfer_type: Standard for the transfers between ranks 0-(n_ranks_r-2)
+      ! transfer_type_nr_end: for transfers involving coord_r (n_ranks_r-1) as receiver
+      ! transfer_type_lm_end: for transfers involving coord_r (n_ranks_r-1) as sender
       ! +----+----+----+----+
       ! |    |    |    |    |
       ! |    |    |    |    |
@@ -117,17 +128,17 @@ contains
       !            stored in nR_on_last_rank and lm_on_last_rank
 
       local_bytes_used = bytes_allocated
-      allocate(s_transfer_type(n_procs_r))
-      allocate(s_transfer_type_nr_end(n_procs_r))
-      allocate(r_transfer_type(n_procs_r))
-      allocate(r_transfer_type_nr_end(n_procs_r))
-      allocate(s_transfer_type_cont(n_procs_r,8))
-      allocate(s_transfer_type_nr_end_cont(n_procs_r,8))
-      allocate(r_transfer_type_cont(n_procs_r,8))
-      allocate(r_transfer_type_nr_end_cont(n_procs_r,8))
-      bytes_allocated = bytes_allocated + 32*n_procs_r*SIZEOF_INTEGER
+      allocate(s_transfer_type(n_ranks_r))
+      allocate(s_transfer_type_nr_end(n_ranks_r))
+      allocate(r_transfer_type(n_ranks_r))
+      allocate(r_transfer_type_nr_end(n_ranks_r))
+      allocate(s_transfer_type_cont(n_ranks_r,8))
+      allocate(s_transfer_type_nr_end_cont(n_ranks_r,8))
+      allocate(r_transfer_type_cont(n_ranks_r,8))
+      allocate(r_transfer_type_nr_end_cont(n_ranks_r,8))
+      bytes_allocated = bytes_allocated + 32*n_ranks_r*SIZEOF_INTEGER
 
-      do proc=0,n_procs_r-1
+      do proc=0,n_ranks_r-1
          my_lm_per_rank=lmStopB(proc+1)-lmStartB(proc+1)+1
          !write(*,"(2(A,I4))") "lm_per_rank on coord_r ", proc," is ",my_lm_per_rank
          call MPI_Type_vector(nR_per_rank,my_lm_per_rank,&
@@ -243,13 +254,13 @@ contains
       call create_gather_type(gt_IC,n_r_ic_max)
 
 #ifdef WITH_MPI
-      allocate(s_request(n_procs_r-1),r_request(n_procs_r-1))
-      bytes_allocated = bytes_allocated + 2*(n_procs_r-1)*SIZEOF_INTEGER
-      allocate(array_of_statuses(MPI_STATUS_SIZE,2*(n_procs_r-1)))
+      allocate(s_request(n_ranks_r-1),r_request(n_ranks_r-1))
+      bytes_allocated = bytes_allocated + 2*(n_ranks_r-1)*SIZEOF_INTEGER
+      allocate(array_of_statuses(MPI_STATUS_SIZE,2*(n_ranks_r-1)))
       bytes_allocated = bytes_allocated + &
-                        2*(n_procs_r-1)*MPI_STATUS_SIZE*SIZEOF_INTEGER
-      allocate(final_wait_array(2*(n_procs_r-1)))
-      bytes_allocated = bytes_allocated + 2*(n_procs_r-1)*SIZEOF_INTEGER
+                        2*(n_ranks_r-1)*MPI_STATUS_SIZE*SIZEOF_INTEGER
+      allocate(final_wait_array(2*(n_ranks_r-1)))
+      bytes_allocated = bytes_allocated + 2*(n_ranks_r-1)*SIZEOF_INTEGER
 #endif
 
       if ( l_heat ) then
@@ -280,9 +291,9 @@ contains
 
 
       ! allocate a temporary array for the gather operations.
-      allocate(temp_r2lo(lm_max,nRstart:nRstop))
+      allocate(temp_r2lo(lm_max,l_r:u_r))
       bytes_allocated = bytes_allocated + &
-                        lm_max*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+                        lm_max*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       if ( coord_r == 0 ) then
          allocate(temp_gather_lo(1:lm_max))
          bytes_allocated = bytes_allocated + lm_max*SIZEOF_DEF_COMPLEX
@@ -361,7 +372,7 @@ contains
       
       local_sum = sum( dwdt_local )
       call MPI_Allreduce(local_sum,global_sum,1,MPI_DEF_COMPLEX, &
-                         MPI_SUM,comm_cart,ierr)
+                         MPI_SUM,comm_gs,ierr)
 #else
       global_sum= sum(dwdt_local)
 #endif
@@ -394,7 +405,7 @@ contains
       
       local_sum = sum( dwdt_local )
       call MPI_Allreduce(local_sum,global_sum,1,MPI_DEF_REAL,MPI_SUM,&
-                         comm_cart,ierr)
+                         comm_gs,ierr)
 #else
       global_sum= sum(dwdt_local)
 #endif
@@ -484,7 +495,7 @@ contains
 
       !local_sum = sum( arr_local )
       call MPI_Allreduce(local_sum,global_sum,1,MPI_DEF_COMPLEX, &
-                          MPI_SUM,comm_cart,ierr)
+                          MPI_SUM,comm_gs,ierr)
 #else
       global_sum = sum( arr_local )
 #endif
@@ -505,7 +516,7 @@ contains
       integer :: gather_tag,status(MPI_STATUS_SIZE)
 
       if ( coord_r == 0 ) allocate(temp_lo(1:lm_max,self%dim2))
-      if (n_procs_r == 1) then
+      if (n_ranks_r == 1) then
          ! copy the data on coord_r 0
          do nR=1,self%dim2
             temp_lo(llm:ulm,nR)=arr_lo(:,nR)
@@ -514,7 +525,7 @@ contains
          !call MPI_Barrier(comm_r,ierr)
          gather_tag=1990
          if ( coord_r == 0 ) then
-            do irank=1,n_procs_r-1
+            do irank=1,n_ranks_r-1
                call MPI_Recv(temp_lo(lmStartB(irank+1),1),1,       &
                     & self%gather_mpi_type(irank),irank,gather_tag,&
                     & comm_r,status,ierr)
@@ -590,9 +601,9 @@ contains
       integer :: proc
 
 #ifdef WITH_MPI
-      allocate(self%gather_mpi_type(0:n_procs_r-1))
+      allocate(self%gather_mpi_type(0:n_ranks_r-1))
       ! 1. Datatype for the data on one coord_r 
-      do proc=0,n_procs_r-1
+      do proc=0,n_ranks_r-1
          call MPI_type_vector(dim2,lmStopB(proc+1)-lmStartB(proc+1)+1,&
               &               lm_max,MPI_DEF_COMPLEX,              &
               &               self%gather_mpi_type(proc),ierr)
@@ -601,7 +612,7 @@ contains
       end do
 #endif
       ! 2. Datatype for the data on the last coord_r
-      !call MPI_Type_vector(dim2,lmStopB(n_procs_r)-lmStartB(n_procs_r)+1,&
+      !call MPI_Type_vector(dim2,lmStopB(n_ranks_r)-lmStartB(n_ranks_r)+1,&
       !     &lm_max,MPI_DEF_COMPLEX,&
       !     & self%gather_mpi_type_end,ierr)
       !call MPI_Type_commit(self%gather_mpi_type_end,ierr)
@@ -616,7 +627,7 @@ contains
       integer :: proc
 
 #ifdef WITH_MPI
-      do proc=0,n_procs_r-1
+      do proc=0,n_ranks_r-1
          call MPI_Type_free(self%gather_mpi_type(proc),ierr)
       end do
 
@@ -632,15 +643,15 @@ contains
 
       integer :: l,m
 #ifdef WITH_MPI
-      integer :: sendcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: sendcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
       integer :: irank
       !complex(cp) :: temp_lo(1:lm_max)
 
-      do irank=0,n_procs_r-1
+      do irank=0,n_ranks_r-1
          sendcounts(irank) = lmStopB(irank+1)-lmStartB(irank+1)+1
          displs(irank) = lmStartB(irank+1)-1 !irank*lm_per_rank
       end do
-      !sendcounts(n_procs_r-1) = lm_on_last_rank
+      !sendcounts(n_ranks_r-1) = lm_on_last_rank
       
       call MPI_GatherV(arr_lo,sendcounts(coord_r),MPI_DEF_COMPLEX,&
            &           temp_gather_lo,sendcounts,displs,          &
@@ -683,11 +694,11 @@ contains
 
       integer :: l,m
 #ifdef WITH_MPI
-      integer :: sendcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: sendcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
       integer :: irank
       !complex(cp) :: temp_lo(1:lm_max)
 
-      do irank=0,n_procs_r-1
+      do irank=0,n_ranks_r-1
          sendcounts(irank) = lmStopB(irank+1)-lmStartB(irank+1)+1
          displs(irank) = lmStartB(irank+1)-1
       end do
@@ -737,14 +748,14 @@ contains
          self%count = count
       end if
 #ifdef WITH_MPI
-      allocate(self%s_request(n_procs_r-1))
-      allocate(self%r_request(n_procs_r-1))
-      allocate(self%final_wait_array(2*(n_procs_r-1)))
-      bytes_allocated = bytes_allocated+4*(n_procs_r-1)*SIZEOF_INTEGER
+      allocate(self%s_request(n_ranks_r-1))
+      allocate(self%r_request(n_ranks_r-1))
+      allocate(self%final_wait_array(2*(n_ranks_r-1)))
+      bytes_allocated = bytes_allocated+4*(n_ranks_r-1)*SIZEOF_INTEGER
 #endif
-      allocate(self%temp_Rloc(1:lm_max,nRstart:nRstop,1:self%count))
+      allocate(self%temp_Rloc(1:lm_max,l_r:u_r,1:self%count))
       bytes_allocated = bytes_allocated+&
-                        lm_max*(nRstop-nRstart+1)*self%count*SIZEOF_DEF_COMPLEX
+                        lm_max*(u_r-l_r+1)*self%count*SIZEOF_DEF_COMPLEX
 
    end subroutine create_lm2r_type
 !-------------------------------------------------------------------------------
@@ -772,14 +783,14 @@ contains
          self%count = count
       end if
 #ifdef WITH_MPI
-      allocate(self%s_request(n_procs_r-1))
-      allocate(self%r_request(n_procs_r-1))
-      allocate(self%final_wait_array(2*(n_procs_r-1)))
-      bytes_allocated = bytes_allocated+4*(n_procs_r-1)*SIZEOF_INTEGER
+      allocate(self%s_request(n_ranks_r-1))
+      allocate(self%r_request(n_ranks_r-1))
+      allocate(self%final_wait_array(2*(n_ranks_r-1)))
+      bytes_allocated = bytes_allocated+4*(n_ranks_r-1)*SIZEOF_INTEGER
 #endif
-      allocate(self%temp_Rloc(1:lm_max,nRstart:nRstop,1:self%count))
+      allocate(self%temp_Rloc(1:lm_max,l_r:u_r,1:self%count))
       bytes_allocated = bytes_allocated+&
-                        lm_max*(nRstop-nRstart+1)*self%count*SIZEOF_DEF_COMPLEX
+                        lm_max*(u_r-l_r+1)*self%count*SIZEOF_DEF_COMPLEX
 
    end subroutine create_r2lm_type
 !-------------------------------------------------------------------------------
@@ -802,7 +813,7 @@ contains
 
       type(lm2r_type) :: self
       complex(cp), intent(in)  :: arr_LMloc(llm:ulm,n_r_max,*)
-      complex(cp), intent(out) :: arr_Rloc(lm_max,nRstart:nRstop,*)
+      complex(cp), intent(out) :: arr_Rloc(lm_max,l_r:u_r,*)
 
       integer :: i
 #ifdef WITH_MPI
@@ -812,35 +823,35 @@ contains
 
       !PERFON('lm2r_st')
 
-      if ( coord_r < n_procs_r-1 ) then
-         ! all the ranks from [0,n_procs_r-2]
-         do irank=0,n_procs_r-1
+      if ( coord_r < n_ranks_r-1 ) then
+         ! all the ranks from [0,n_ranks_r-2]
+         do irank=0,n_ranks_r-1
             !if (coord_r == irank) then
             ! just copy
-            !   arr_LMLoc(llm:ulm,nRstart:nRstop)=arr_Rloc(llm:ulm,nRstart:nRstop)
+            !   arr_LMLoc(llm:ulm,l_r:u_r)=arr_Rloc(llm:ulm,l_r:u_r)
             !else
             ! send_pe: send to this coord_r
             ! recv_pe: receive from this coord_r
-            send_pe = modulo(coord_r+irank,n_procs_r)
-            recv_pe = modulo(coord_r-irank+n_procs_r,n_procs_r)
+            send_pe = modulo(coord_r+irank,n_ranks_r)
+            recv_pe = modulo(coord_r-irank+n_ranks_r,n_ranks_r)
             !print*,"send to ",send_pe,",     recv from ",recv_pe
             if (coord_r == send_pe) then
                !PERFON('loc_copy')
                ! just copy
                do i=1,self%count
-                  arr_Rloc(llm:ulm,nRstart:nRstop,i)= &
-                       arr_LMloc(llm:ulm,nRstart:nRstop,i)
+                  arr_Rloc(llm:ulm,l_r:u_r,i)= &
+                       arr_LMloc(llm:ulm,l_r:u_r,i)
                end do
                !PERFOFF
             else
                !PERFON('irecv')
-               !if (recv_pe == n_procs_r-1) then
-               !   call MPI_Irecv(arr_Rloc(lmStartB(recv_pe+1),nRstart,1),   &
-               !        &         1,s_transfer_type_cont(n_procs_r,self%count),&
+               !if (recv_pe == n_ranks_r-1) then
+               !   call MPI_Irecv(arr_Rloc(lmStartB(recv_pe+1),l_r,1),   &
+               !        &         1,s_transfer_type_cont(n_ranks_r,self%count),&
                !        &         recv_pe,transfer_tag,comm_r,       &
                !        &         self%r_request(irank),ierr)
                !else
-                  call MPI_Irecv(arr_Rloc(lmStartB(recv_pe+1),nRstart,1),     &
+                  call MPI_Irecv(arr_Rloc(lmStartB(recv_pe+1),l_r,1),     &
                        &         1,s_transfer_type_cont(recv_pe+1,self%count),&
                        &         recv_pe,transfer_tag,comm_r,         &
                        &         self%r_request(irank),ierr)
@@ -848,7 +859,7 @@ contains
                !end if
                !PERFOFF
                !PERFON('isend')
-               if (send_pe == n_procs_r-1) then
+               if (send_pe == n_ranks_r-1) then
                   call MPI_Isend(arr_LMloc(llm,1+nR_per_rank*send_pe,1),          &
                        &         1,r_transfer_type_nr_end_cont(coord_r+1,self%count),&
                        &         send_pe,transfer_tag,comm_r,             &
@@ -866,35 +877,35 @@ contains
          end do
 
          i=1
-         do irank=1,n_procs_r-1
+         do irank=1,n_ranks_r-1
             self%final_wait_array(i)=self%s_request(irank)
             self%final_wait_array(i+1)=self%r_request(irank)
             i = i + 2
          end do
          !print*,"Waiting for completion of nonblocking communication 1"
-         !call mpi_waitall(2*n_procs_r,final_wait_array,array_of_statuses,ierr)
+         !call mpi_waitall(2*n_ranks_r,final_wait_array,array_of_statuses,ierr)
          !print*,"Nonblocking communication 1 is done."
       else
-         ! coord_r  ==  n_procs_r-1
+         ! coord_r  ==  n_ranks_r-1
          ! all receives are with the s_transfer_type_nr_end
          ! all sends are done with r_transfer_type_lm_end
-         do irank=0,n_procs_r-1
+         do irank=0,n_ranks_r-1
             ! send_pe: send to this coord_r
             ! recv_pe: receive from this coord_r
-            send_pe = modulo(coord_r+irank,n_procs_r)
-            recv_pe = modulo(coord_r-irank+n_procs_r,n_procs_r)
+            send_pe = modulo(coord_r+irank,n_ranks_r)
+            recv_pe = modulo(coord_r-irank+n_ranks_r,n_ranks_r)
             !print*,"send to ",send_pe,",     recv from ",recv_pe
             if (coord_r == send_pe) then
                !PERFON('loc_copy')
                ! just copy
                do i=1,self%count
-                  arr_Rloc(llm:ulm,nRstart:nRstop,i)= &
-                        arr_LMloc(llm:ulm,nRstart:nRstop,i)
+                  arr_Rloc(llm:ulm,l_r:u_r,i)= &
+                        arr_LMloc(llm:ulm,l_r:u_r,i)
                end do
                !PERFOFF
             else
                !PERFON('irecv')
-               call MPI_Irecv(arr_Rloc(lmStartB(recv_pe+1),nRstart,1),            &
+               call MPI_Irecv(arr_Rloc(lmStartB(recv_pe+1),l_r,1),            &
                     &         1,s_transfer_type_nr_end_cont(recv_pe+1,self%count),&
                     &         recv_pe,transfer_tag,comm_r,                &
                     &         self%r_request(irank),ierr)
@@ -910,22 +921,22 @@ contains
             end if
          end do
          i=1
-         do irank=1,n_procs_r-1
+         do irank=1,n_ranks_r-1
             self%final_wait_array(i)=self%s_request(irank)
             self%final_wait_array(i+1)=self%r_request(irank)
             i = i + 2
          end do
          !print*,"Waiting for completion of nonblocking communication 1"
-         !call mpi_waitall(2*(n_procs_r-1),final_wait_array,array_of_statuses,ierr)
+         !call mpi_waitall(2*(n_ranks_r-1),final_wait_array,array_of_statuses,ierr)
          !print*,"Nonblocking communication 1 is done."
       end if
-      !write(*,"(A,I3)") "lm2r_redist_start on n_procs_r=",n_procs_r
+      !write(*,"(A,I3)") "lm2r_redist_start on n_ranks_r=",n_ranks_r
       !PERFOFF
 
 
 #else
       do i=1,self%count
-         arr_Rloc(llm:ulm,nRstart:nRstop,i)= arr_LMloc(llm:ulm,nRstart:nRstop,i)
+         arr_Rloc(llm:ulm,l_r:u_r,i)= arr_LMloc(llm:ulm,l_r:u_r,i)
       end do
 #endif
 
@@ -936,13 +947,13 @@ contains
       type(lm2r_type) :: self
 #ifdef WITH_MPI
       integer :: ierr
-      integer :: array_of_statuses(MPI_STATUS_SIZE,2*n_procs_r)
+      integer :: array_of_statuses(MPI_STATUS_SIZE,2*n_ranks_r)
 
       !PERFON('lm2r_wt')
-      !write(*,"(A,I3)") "n_procs_r = ",n_procs_r
-      !write(*,"(2(A,I3))") "Waiting for ",2*(n_procs_r-1)," requests,", &
+      !write(*,"(A,I3)") "n_ranks_r = ",n_ranks_r
+      !write(*,"(2(A,I3))") "Waiting for ",2*(n_ranks_r-1)," requests,", &
       !   &             size(self%final_wait_array)
-      call MPI_Waitall(2*(n_procs_r-1),self%final_wait_array,array_of_statuses,ierr)
+      call MPI_Waitall(2*(n_ranks_r-1),self%final_wait_array,array_of_statuses,ierr)
       if (ierr /= MPI_SUCCESS) print *,"~~~~~>",rank,__LINE__,__FILE__
       !PERFOFF
 #endif
@@ -953,13 +964,13 @@ contains
 
       type(lm2r_type) :: self
       complex(cp), intent(in) :: arr_lo(llm:ulm,1:n_r_max,*)
-      complex(cp), target, intent(out) :: arr_Rloc(1:lm_max,nRstart:nRstop,*)
+      complex(cp), target, intent(out) :: arr_Rloc(1:lm_max,l_r:u_r,*)
   
   
       PERFON('lo2r_st')
       !call lm2r_redist(arr_lo,temp_lo)
-      self%arr_Rloc(1:,nRstart:,1:) => arr_Rloc(1:lm_max,nRstart:nRstop,1:self%count)
-      !self%arr_Rloc(1:,nRstart:) => arr_Rloc(1:,nRstart:)
+      self%arr_Rloc(1:,l_r:,1:) => arr_Rloc(1:lm_max,l_r:u_r,1:self%count)
+      !self%arr_Rloc(1:,l_r:) => arr_Rloc(1:,l_r:)
       call lm2r_redist_start(self,arr_lo,self%temp_Rloc)
       PERFOFF
 
@@ -969,12 +980,12 @@ contains
 
       type(lm2r_type) :: self
       complex(cp), intent(in) :: arr_lo(llm:ulm,1:n_r_max,*)
-      complex(cp), target, intent(out) :: arr_dist(1:lm_loc,nRstart:nRstop,*)
+      complex(cp), target, intent(out) :: arr_dist(1:lm_loc,l_r:u_r,*)
   
   
       PERFON('lo2r_st')
       !call lm2r_redist(arr_lo,temp_lo)
-      self%arr_Rloc(1:,nRstart:,1:) => arr_dist(1:lm_loc,nRstart:nRstop,1:self%count)
+      self%arr_Rloc(1:,l_r:,1:) => arr_dist(1:lm_loc,l_r:u_r,1:self%count)
       call lm2r_redist_start(self,arr_lo,self%temp_Rloc)
       PERFOFF
 
@@ -993,7 +1004,7 @@ contains
       ! now reorder to the original ordering
       if ( .not. l_axi ) then
          do i=1,self%count
-            do nR=nRstart,nRstop
+            do nR=l_r,u_r
                do l=0,l_max
                   do m=0,l,minc
                      self%arr_Rloc(st_map%lm2(l,m),nR,i) = &
@@ -1004,7 +1015,7 @@ contains
          end do
       else
          do i=1,self%count
-            do nR=nRstart,nRstop
+            do nR=l_r,u_r
                do l=0,l_max
                   self%arr_Rloc(st_map%lm2(l,0),nR,i) = &
                          self%temp_Rloc(lo_map%lm2(l,0),nR,i)
@@ -1029,7 +1040,7 @@ contains
       ! now reorder to the original ordering
       if ( .not. l_axi ) then
          do i=1,self%count
-            do nR=nRstart,nRstop
+            do nR=l_r,u_r
                do lm=1,lm_loc
                   l = dist_map%lm2l(lm)
                   m = dist_map%lm2m(lm)
@@ -1039,7 +1050,7 @@ contains
          end do
       else
          do i=1,self%count
-            do nR=nRstart,nRstop
+            do nR=l_r,u_r
                if (dist_map%lm2(0,0) > 0) then
                   do l=0,l_max
                      self%arr_Rloc(dist_map%lm2(l,0),nR,i) = &
@@ -1056,7 +1067,7 @@ contains
    subroutine r2lm_redist_start(self,arr_rloc,arr_LMloc)
 
       type(r2lm_type) :: self
-      complex(cp), intent(in) :: arr_Rloc(lm_max,nRstart:nRstop,*)
+      complex(cp), intent(in) :: arr_Rloc(lm_max,l_r:u_r,*)
       complex(cp), intent(out) :: arr_LMloc(llm:ulm,n_r_max,*)
   
       integer :: i
@@ -1067,29 +1078,29 @@ contains
   
       !write(*,"(A)") "----------- start r2lm_redist -------------"
       !PERFON('r2lm_dst')
-      if (coord_r < n_procs_r-1) then
-         ! all the ranks from [0,n_procs_r-2]
-         do irank=0,n_procs_r-1
+      if (coord_r < n_ranks_r-1) then
+         ! all the ranks from [0,n_ranks_r-2]
+         do irank=0,n_ranks_r-1
             !if (coord_r == irank) then
             ! just copy
-            !   arr_LMLoc(llm:ulm,nRstart:nRstop)=arr_Rloc(llm:ulm,nRstart:nRstop)
+            !   arr_LMLoc(llm:ulm,l_r:u_r)=arr_Rloc(llm:ulm,l_r:u_r)
             !else
             ! send_pe: send to this coord_r
             ! recv_pe: receive from this coord_r
-            send_pe = modulo(coord_r+irank,n_procs_r)
-            recv_pe = modulo(coord_r-irank+n_procs_r,n_procs_r)
+            send_pe = modulo(coord_r+irank,n_ranks_r)
+            recv_pe = modulo(coord_r-irank+n_ranks_r,n_ranks_r)
             if (coord_r == send_pe) then
                do i=1,self%count
-                  arr_LMLoc(llm:ulm,nRstart:nRstop,i)= &
-                            arr_Rloc(llm:ulm,nRstart:nRstop,i)
+                  arr_LMLoc(llm:ulm,l_r:u_r,i)= &
+                            arr_Rloc(llm:ulm,l_r:u_r,i)
                end do
             else
-               call MPI_Isend(arr_Rloc(lmStartB(send_pe+1),nRstart,1),     &
+               call MPI_Isend(arr_Rloc(lmStartB(send_pe+1),l_r,1),     &
                     &         1,s_transfer_type_cont(send_pe+1,self%count),&
                     &         send_pe,transfer_tag,comm_r,         &
                     &         self%s_request(irank),ierr)
                if (ierr /= MPI_SUCCESS) print *,"~~~~~>",rank,__LINE__,__FILE__
-               if (recv_pe == n_procs_r-1) then
+               if (recv_pe == n_ranks_r-1) then
                   call MPI_Irecv(arr_LMloc(llm,1+nR_per_rank*recv_pe,1),          &
                        &         1,r_transfer_type_nr_end_cont(coord_r+1,self%count),&
                        &         recv_pe,transfer_tag,comm_r,             &
@@ -1106,26 +1117,26 @@ contains
          end do
   
          i=1
-         do irank=1,n_procs_r-1
+         do irank=1,n_ranks_r-1
             self%final_wait_array(i)=self%s_request(irank)
             self%final_wait_array(i+1)=self%r_request(irank)
             i = i + 2
          end do
       else
-         ! coord_r  ==  n_procs_r-1
+         ! coord_r  ==  n_ranks_r-1
          ! all receives are with the r_transfer_type_lm_end
          ! all sends are done with s_transfer_type_nr_end
-         do irank=0,n_procs_r-1
+         do irank=0,n_ranks_r-1
             ! send_pe: send to this coord_r
             ! recv_pe: receive from this coord_r
-            send_pe = modulo(coord_r+irank,n_procs_r)
-            recv_pe = modulo(coord_r-irank+n_procs_r,n_procs_r)
+            send_pe = modulo(coord_r+irank,n_ranks_r)
+            recv_pe = modulo(coord_r-irank+n_ranks_r,n_ranks_r)
             !print*,"send to ",send_pe,",     recv from ",recv_pe
             if (coord_r == send_pe) then
                ! just copy
                do i=1,self%count
-                  arr_LMLoc(llm:ulm,nRstart:nRstop,i)= &
-                  &        arr_Rloc(llm:ulm,nRstart:nRstop,i)
+                  arr_LMLoc(llm:ulm,l_r:u_r,i)= &
+                  &        arr_Rloc(llm:ulm,l_r:u_r,i)
                end do
             else
                call MPI_Irecv(arr_LMloc(llm,1+nR_per_rank*recv_pe,1),    &
@@ -1133,7 +1144,7 @@ contains
                     &         recv_pe,transfer_tag,comm_r,       &
                     &         self%r_request(irank),ierr)
                if (ierr /= MPI_SUCCESS) print *,"~~~~~>",rank,__LINE__,__FILE__
-               call MPI_Isend(arr_Rloc(lmStartB(send_pe+1),nRstart,1),            &
+               call MPI_Isend(arr_Rloc(lmStartB(send_pe+1),l_r,1),            &
                     &         1,s_transfer_type_nr_end_cont(send_pe+1,self%count),&
                     &         send_pe,transfer_tag,comm_r,                &
                     &         self%s_request(irank),ierr)
@@ -1142,7 +1153,7 @@ contains
             end if
          end do
          i=1
-         do irank=1,n_procs_r-1
+         do irank=1,n_ranks_r-1
             self%final_wait_array(i)=self%s_request(irank)
             self%final_wait_array(i+1)=self%r_request(irank)
             i = i + 2
@@ -1153,7 +1164,7 @@ contains
       !write(*,"(A)") "----------- end   r2lm_redist -------------"
 #else
       do i=1,self%count
-         arr_LMLoc(llm:ulm,nRstart:nRstop,i)=arr_Rloc(llm:ulm,nRstart:nRstop,i)
+         arr_LMLoc(llm:ulm,l_r:u_r,i)=arr_Rloc(llm:ulm,l_r:u_r,i)
       end do
 #endif
 
@@ -1164,13 +1175,13 @@ contains
       type(r2lm_type) :: self
 #ifdef WITH_MPI
       integer :: ierr
-      integer :: array_of_statuses(MPI_STATUS_SIZE,2*n_procs_r)
+      integer :: array_of_statuses(MPI_STATUS_SIZE,2*n_ranks_r)
 
       !PERFON('lm2r_wt')
-      !write(*,"(A,I3)") "n_procs_r = ",n_procs_r
-      !write(*,"(2(A,I3))") "Waiting for ",2*(n_procs_r-1)," requests,", &
+      !write(*,"(A,I3)") "n_ranks_r = ",n_ranks_r
+      !write(*,"(2(A,I3))") "Waiting for ",2*(n_ranks_r-1)," requests,", &
       !   &             size(self%final_wait_array)
-      call MPI_Waitall(2*(n_procs_r-1),self%final_wait_array,array_of_statuses,ierr)
+      call MPI_Waitall(2*(n_ranks_r-1),self%final_wait_array,array_of_statuses,ierr)
       !PERFOFF
 #endif
 
@@ -1179,19 +1190,19 @@ contains
    subroutine r2lo_redist_start(self,arr_Rloc,arr_lo)
 
       type(r2lm_type) :: self
-      complex(cp), intent(in) :: arr_Rloc(1:lm_max,nRstart:nRstop,*)
+      complex(cp), intent(in) :: arr_Rloc(1:lm_max,l_r:u_r,*)
       complex(cp), intent(out) :: arr_lo(llm:ulm,1:n_r_max,*)
   
       ! Local variables
       integer :: nR,l,m,i
 
-      self%temp_Rloc(1:,nRstart:,1:) = arr_Rloc(1:lm_max,nRstart:nRstop,1:self%count)
+      self%temp_Rloc(1:,l_r:,1:) = arr_Rloc(1:lm_max,l_r:u_r,1:self%count)
   
       ! Just copy the array with permutation
       !PERFON('r2lo_dst')
       if ( .not. l_axi ) then
          do i=1,self%count
-            do nR=nRstart,nRstop
+            do nR=l_r,u_r
                do l=0,l_max
                   do m=0,l,minc
                      self%temp_Rloc(lo_map%lm2(l,m),nR,i) = & 
@@ -1202,7 +1213,7 @@ contains
          end do
       else
          do i=1,self%count
-            do nR=nRstart,nRstop
+            do nR=l_r,u_r
                do l=0,l_max
                   self%temp_Rloc(lo_map%lm2(l,0),nR,i) = & 
                                    arr_Rloc(st_map%lm2(l,0),nR,i)
@@ -1223,7 +1234,7 @@ contains
       ! 
 
       type(r2lm_type) :: self
-      complex(cp), intent(in) :: arr_dist(1:lm_loc,nRstart:nRstop,*)
+      complex(cp), intent(in) :: arr_dist(1:lm_loc,l_r:u_r,*)
       complex(cp), intent(out) :: arr_lo(llm:ulm,1:n_r_max,*)
   
       ! Local variables
@@ -1231,13 +1242,13 @@ contains
       complex(cp) :: tmp_glb(1:lm_max)
       
 
-!       self%temp_Rloc(1:,nRstart:,1:) = arr_Rloc(1:lm_max,nRstart:nRstop,1:self%count)
+!       self%temp_Rloc(1:,l_r:,1:) = arr_Rloc(1:lm_max,l_r:u_r,1:self%count)
   
       ! Just copy the array with permutation
       !PERFON('r2lo_dst')
       if ( .not. l_axi ) then
          do i=1,self%count
-            do nR=nRstart,nRstop
+            do nR=l_r,u_r
                call gather_Flm(arr_dist(1:lm_loc,nR,i), tmp_glb(1:lm_max))
                self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
                do l=0,l_max
@@ -1250,7 +1261,7 @@ contains
 !          stop
       else
          do i=1,self%count
-            do nR=nRstart,nRstop
+            do nR=l_r,u_r
                call gather_Flm(arr_dist(1:lm_loc,nR,i), tmp_glb(1:lm_max))
                self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
                do l=0,l_max
@@ -1283,7 +1294,7 @@ contains
       ! Local variables
       integer :: nR,l,m
   
-      if (n_procs_r > 1) then
+      if (n_ranks_r > 1) then
          call abortRun('lm2lo not yet parallelized')
       end if
   
@@ -1313,7 +1324,7 @@ contains
       ! Local variables
       integer :: nR,l,m
   
-      if (n_procs_r > 1) then
+      if (n_ranks_r > 1) then
          call abortRun('lo2lm not yet parallelized')
       end if
   
@@ -1354,7 +1365,7 @@ contains
       complex(cp), intent(inout) :: arr(dim1,dim2)
   
       integer :: lmStart_on_rank,lmStop_on_rank
-      integer :: sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
       integer :: irank,nR
       !double precision :: local_sum, global_sum, recvd_sum
   
@@ -1363,11 +1374,11 @@ contains
       lmStart_on_rank = lmStartB(1+coord_r*nLMBs_per_rank)
       lmStop_on_rank  = lmStopB(min((coord_r+1)*nLMBs_per_rank,nLMBs)) 
       sendcount  = lmStop_on_rank-lmStart_on_rank+1
-      do irank=0,n_procs_r-1
+      do irank=0,n_ranks_r-1
          recvcounts(irank) = lmStopB ( min((irank+1)*nLMBs_per_rank,nLMBs) ) &
                            - lmStartB( 1+irank*nLMBs_per_rank ) + 1
       end do
-      do irank=0,n_procs_r-1
+      do irank=0,n_ranks_r-1
          !displs(irank) = (nR-1)*dim1 + sum(recvcounts(0:irank-1))
          displs(irank) = sum(recvcounts(0:irank-1))
       end do
@@ -1410,7 +1421,7 @@ contains
       integer :: sendcount,recvcount
       integer :: irank,nR
 
-      recvcount = edim1/n_procs_r
+      recvcount = edim1/n_ranks_r
       do nR=1,dim2
          call MPI_AllGather(MPI_IN_PLACE,sendcount,MPI_DEF_COMPLEX,&
               &             arr(1,nR),recvcount,MPI_DEF_COMPLEX,   &
@@ -1432,7 +1443,7 @@ contains
       complex(cp), intent(inout) :: arr(dim1,dim2)
 
       integer :: lmStart_on_rank,lmStop_on_rank
-      integer :: sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
       integer :: irank,nR
       integer :: sendtype, new_sendtype
       integer(kind=MPI_ADDRESS_KIND) :: lb,extent,extent_dcmplx
@@ -1452,11 +1463,11 @@ contains
       lmStart_on_rank = lmStartB(1+coord_r*nLMBs_per_rank)
       lmStop_on_rank  = lmStopB(1+(coord_r+1)*nLMBs_per_rank-1) 
       sendcount  = lmStop_on_rank-lmStart_on_rank+1
-      do irank=0,n_procs_r-1
+      do irank=0,n_ranks_r-1
          recvcounts(irank) = lmStopB( (irank+1)*nLMBs_per_rank ) - &
                             lmStartB( 1+irank*nLMBs_per_rank ) + 1
       end do
-      do irank=0,n_procs_r-1
+      do irank=0,n_ranks_r-1
          !displs(irank) = (nR-1)*dim1 + sum(recvcounts(0:irank-1))
          displs(irank) = sum(recvcounts(0:irank-1))
       end do
@@ -1471,5 +1482,340 @@ contains
 !------------------------------------------------------------------------------
 #endif
 #endif
-!------------------------------------------------------------------------------
+
+!-------------------------------------------------------------------------------
+   subroutine slice_f(f_global, f_local)
+!@>details Copies the relevant part of f_global into f_local
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      real(cp),  intent(in)  :: f_global(n_phi_max, n_theta_max)
+      real(cp),  intent(out) :: f_local(n_phi_max, n_theta_loc)
+      
+      f_local = f_global(:,n_theta_beg:n_theta_end)
+   end subroutine slice_f
+   
+!-------------------------------------------------------------------------------
+   subroutine slice_Flm_cmplx(Flm_global, Flm_local)
+!@>details Copies the relevant part of Flm_global into Flm_local
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      complex(cp),  intent(in)  :: Flm_global(lm_max)
+      complex(cp),  intent(out) :: Flm_local(lm_loc)
+      
+      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
+      
+      do i = 1, n_m_loc
+        m_idx = lm_dist(coord_theta, i, 1)
+        lm_s  = lm_dist(coord_theta, i, 3)
+        lm_e  = lm_dist(coord_theta, i, 4)
+        lm_gs = lm2(m_idx, m_idx)
+        lm_ge = lm2(l_max, m_idx)
+        Flm_local(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
+      end do
+   end subroutine slice_Flm_cmplx
+   
+!-------------------------------------------------------------------------------
+   subroutine slice_Flm_real(Flm_global, Flm_local)
+!@>details Copies the relevant part of Flm_global into Flm_local
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      real(cp),  intent(in)  :: Flm_global(lm_max)
+      real(cp),  intent(out) :: Flm_local(lm_loc)
+      
+      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
+      
+      do i = 1, n_m_loc
+        m_idx = lm_dist(coord_theta, i, 1)
+        lm_s  = lm_dist(coord_theta, i, 3)
+        lm_e  = lm_dist(coord_theta, i, 4)
+        lm_gs = lm2(m_idx, m_idx)
+        lm_ge = lm2(l_max, m_idx)
+        Flm_local(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
+      end do
+   end subroutine slice_Flm_real
+
+!-------------------------------------------------------------------------------
+   subroutine slice_FlmP_cmplx(FlmP_global, FlmP_local)
+!@>details Copies the relevant part of FlmP_global into FlmP_local
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      complex(cp),  intent(in)  :: FlmP_global(lmP_max)
+      complex(cp),  intent(out) :: FlmP_local(lmP_loc)
+      
+      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
+      
+      call shtns_load_cfg(1) ! l_max + 1
+      
+      do i = 1, n_m_loc
+        m_idx = lmP_dist(coord_theta, i, 1)
+        lm_s  = lmP_dist(coord_theta, i, 3)
+        lm_e  = lmP_dist(coord_theta, i, 4)
+        lm_gs = lmP2(m_idx,   m_idx)
+        lm_ge = lmP2(l_max+1, m_idx)
+        FlmP_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
+      end do
+      
+      call shtns_load_cfg(0) ! l_max
+      
+   end subroutine slice_FlmP_cmplx
+   
+!-------------------------------------------------------------------------------
+   subroutine slice_FlmP_real(FlmP_global, FlmP_local)
+!@>details Copies the relevant part of FlmP_global into FlmP_local
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      real(cp),  intent(in)  :: FlmP_global(lmP_max)
+      real(cp),  intent(out) :: FlmP_local(lmP_loc)
+      
+      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
+      
+      call shtns_load_cfg(1) ! l_max + 1
+      
+      do i = 1, n_m_loc
+        m_idx = lm_dist(coord_theta, i, 1)
+        lm_s  = lm_dist(coord_theta, i, 3)
+        lm_e  = lm_dist(coord_theta, i, 4)
+        lm_gs = lmP2(m_idx,   m_idx)
+        lm_ge = lmP2(l_max+1, m_idx)
+        FlmP_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
+      end do
+      
+      call shtns_load_cfg(0) ! l_max
+      
+   end subroutine slice_FlmP_real
+
+!-------------------------------------------------------------------------------
+   subroutine gather_FlmP(FlmP_local, FlmP_global)
+!@>details Gathers the FlmP which was computed in a distributed fashion.
+!> Mostly used for debugging. This function may not be performant at all.
+!> 
+!@>TODO this with mpi_allgatherv
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      complex(cp),  intent(in)  :: FlmP_local(lmP_loc)
+      complex(cp),  intent(out) :: FlmP_global(lmP_max)
+      
+      complex(cp) ::  buffer(lmP_max)
+      integer :: i, j, m_idx, lm_s_local, lm_e_local, lm_s_global, lm_e_global
+      integer :: pos, ilen, Rq(n_ranks_theta), ierr
+      
+      ! buffer will receive all messages, but they are ordered by ranks,
+      ! not by m.
+      
+      pos = 1
+      do i=0,n_ranks_theta-1
+         ilen = sum(lmP_dist(i,:,2))
+         if (coord_theta == i) buffer(pos:pos+ilen-1) = FlmP_local(1:lmP_loc)
+         CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, i, &
+                         comm_m, Rq(i+1), ierr)
+         pos = pos + ilen
+      end do
+      
+      CALL MPI_WAITALL(n_ranks_theta, Rq, MPI_STATUSES_IGNORE, ierr)
+      
+      ! This basically re-orders the buffer 
+      pos = 0
+      do i=0,n_ranks_theta-1
+         do j = 1, n_m_ext
+            m_idx = lmP_dist(i, j, 1)
+            if (m_idx < 0) exit
+            lm_s_local  = pos + lmP_dist(i, j, 3)
+            lm_e_local  = pos + lmP_dist(i, j, 4)
+            lm_s_global = lmP2(m_idx  ,m_idx)
+            lm_e_global = lmP2(l_max+1,m_idx)
+            FlmP_global(lm_s_global:lm_e_global) = buffer(lm_s_local:lm_e_local)
+         end do
+         pos = pos + sum(lmP_dist(i,:,2))
+      end do
+      
+   end subroutine gather_FlmP
+   
+!-------------------------------------------------------------------------------
+   subroutine gather_Flm(Flm_local, Flm_global)
+!@>details Gathers the Flm which was computed in a distributed fashion.
+!> Mostly used for debugging. This function may not be performant at all.
+!> 
+!@>TODO this with mpi_allgatherv
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      complex(cp),  intent(in)  :: Flm_local(lm_loc)
+      complex(cp),  intent(out) :: Flm_global(lm_max)
+      
+      complex(cp) ::  buffer(lm_max)
+      integer :: i, j, m_idx, lm_s_local, lm_e_local, lm_s_global, lm_e_global
+      integer :: pos, ilen, Rq(n_ranks_theta), ierr
+      
+      ! buffer will receive all messages, but they are ordered by ranks,
+      ! not by m.
+      
+      pos = 1
+      do i=0,n_ranks_theta-1
+         ilen = sum(lm_dist(i,:,2))
+         if (coord_theta == i) buffer(pos:pos+ilen-1) = Flm_local(1:lm_loc)
+         CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, i, &
+                         comm_m, Rq(i+1), ierr)
+         pos = pos + ilen
+      end do
+      
+      CALL MPI_WAITALL(n_ranks_theta, Rq, MPI_STATUSES_IGNORE, ierr)
+      
+      pos = 0
+      do i=0,n_ranks_theta-1
+         do j = 1, n_m_ext
+            m_idx = lm_dist(i, j, 1)
+            if (m_idx < 0) exit
+            lm_s_local  = pos + lm_dist(i, j, 3)
+            lm_e_local  = pos + lm_dist(i, j, 4)
+            lm_s_global = lm2(m_idx , m_idx)
+            lm_e_global = lm2(l_max , m_idx)
+            Flm_global(lm_s_global:lm_e_global) = buffer(lm_s_local:lm_e_local)
+         end do
+         pos = pos + sum(lm_dist(i,:,2))
+      end do
+      
+   end subroutine gather_Flm
+   
+!-------------------------------------------------------------------------------
+   subroutine gather_f(f_local, f_global)
+!@>details Gathers the Flm which was computed in a distributed fashion.
+!> Mostly used for debugging. This function may not be performant at all.
+!
+!@>TODO this with mpi_allgatherv
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      real(cp),  intent(inout) :: f_local(n_phi_max, n_theta_loc)
+      real(cp),  intent(out)   :: f_global(n_phi_max, n_theta_max)
+      
+      integer :: i, nt, ierr
+      integer :: Rq(n_ranks_theta) 
+      
+      ! Copies local content to f_global
+      f_global = 0.0
+      f_global(:,n_theta_beg:n_theta_end) = f_local
+      
+      do i=0,n_ranks_theta-1
+         nt = n_theta_dist(i,2) - n_theta_dist(i,1) + 1
+         CALL MPI_IBCAST(f_global(:,n_theta_dist(i,1):n_theta_dist(i,2)),   &
+                         n_phi_max*nt, MPI_DOUBLE_PRECISION, i, comm_theta, &
+                         Rq(i+1), ierr)
+      end do
+      
+      CALL MPI_WAITALL(n_ranks_theta, Rq, MPI_STATUSES_IGNORE, ierr)
+      
+   end subroutine gather_f
+   
+!-------------------------------------------------------------------------------
+   subroutine transpose_m_theta(f_m_theta, f_theta_m)
+!@>details Does the transposition using alltoallv.
+!
+!@>TODO this with mpi_type to stride the data
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      complex(cp), intent(inout) :: f_m_theta(n_m_max,n_theta_loc)
+      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
+      
+      complex(cp) :: sendbuf(n_m_max*n_theta_loc)
+      complex(cp) :: recvbuf(n_m_loc, n_theta_max)
+      
+      integer :: sendcount(0:n_ranks_theta-1)
+      integer :: recvcount(0:n_ranks_theta-1)
+      integer :: senddispl(0:n_ranks_theta-1)
+      integer :: recvdispl(0:n_ranks_theta-1)
+      integer :: i, j, k, m_idx, pos, n_theta
+      
+      pos = 1
+      do i=0,n_ranks_theta-1
+         ! Copy each m which belongs to the i-th rank into the send buffer
+         ! column-wise. That will simplify a lot things later
+         !
+         !>@TODO check performance of this; implementing this with mpi_type
+         !> striding the data will probably be faster
+         senddispl(i) = pos-1
+         do k=1,n_theta_loc
+            do j=1,n_m_ext
+               if (lmP_dist(i,j,1) < 0) exit
+               m_idx = lmP_dist(i,j,1)/minc
+               sendbuf(pos) = f_m_theta(m_idx+1,k)
+               pos = pos + 1
+            end do
+         end do
+         sendcount(i) = pos - senddispl(i) - 1
+         n_theta = n_theta_dist(i,2) - n_theta_dist(i,1) + 1
+         recvdispl(i) = i*n_m_loc*n_theta
+         recvcount(i) = n_m_loc*n_theta
+      end do
+      
+      call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
+                         recvbuf, recvcount, recvdispl, MPI_DOUBLE_COMPLEX, &
+                         comm_theta, i)
+      f_theta_m = transpose(recvbuf)
+      
+   end subroutine transpose_m_theta
+   
+!-------------------------------------------------------------------------------
+   subroutine transpose_theta_m(f_theta_m, f_m_theta)
+!@>details Does the transposition using alltoallv.
+!
+!@>TODO this with mpi_type to stride the data
+!@>author Rafael Lago (MPCDF) August 2017
+!-------------------------------------------------------------------------------
+      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
+      complex(cp), intent(inout) :: f_m_theta(n_m_max,n_theta_loc)
+      
+      complex(cp) :: sendbuf(n_m_loc*n_theta_max)
+      complex(cp) :: recvbuf(n_theta_loc,n_m_max)
+      
+      integer :: sendcount(0:n_ranks_theta-1)
+      integer :: recvcount(0:n_ranks_theta-1)
+      integer :: senddispl(0:n_ranks_theta-1)
+      integer :: recvdispl(0:n_ranks_theta-1)
+      integer :: i, j, pos, n_theta, s_theta, e_theta
+      integer :: m_idx(n_ranks_theta*n_m_ext)
+      
+      recvcount = 0
+      pos = 1
+      do i=0,n_ranks_theta-1
+         ! Copy each theta chunk so that the send buffer is contiguous
+         !
+         !>@TODO check performance of this; implementing this with mpi_type
+         !> striding the data will probably be faster
+         senddispl(i) = pos-1
+         s_theta = n_theta_dist(i,1)
+         e_theta = n_theta_dist(i,2)
+         n_theta = e_theta - s_theta + 1
+         do j=1, n_m_loc
+            sendbuf(pos:pos + n_theta - 1) = f_theta_m(s_theta:e_theta,j)
+            pos = pos + n_theta
+         end do
+         sendcount(i) = pos - senddispl(i) - 1
+         
+         recvdispl(i) = sum(recvcount)
+         recvcount(i) = (n_m_ext-1) * n_theta
+         if (lmP_dist(i,n_m_ext,1) > -1) then
+            recvcount(i) = recvcount(i) + n_theta
+         end if
+      end do
+      
+      call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
+                         recvbuf, recvcount, recvdispl, MPI_DOUBLE_COMPLEX, &
+                         comm_theta, i)
+      
+      ! Now we reorder the receiver buffer. If the m distribution looks like:
+      ! rank 0: 0, 4,  8, 12, 16
+      ! rank 1: 1, 5,  9, 13
+      ! rank 2: 2, 6, 10, 14
+      ! rank 3: 3, 7, 11, 15
+      ! then the columns of recvbuf are ordered as 0,4,8,12,16,1,5,9,13(...)
+      ! and so forth. m_idx will contain this ordering (+1):
+      m_idx = reshape(transpose(lmP_dist(:,:,1)),(/n_ranks_theta*n_m_ext/))/minc + 1
+      j = 1
+      do i = 1, n_ranks_theta*n_m_ext
+         if (m_idx(i) < 1) cycle
+         f_m_theta(m_idx(i),:) = recvbuf(:,j)
+         j = j + 1
+      end do
+      
+   end subroutine transpose_theta_m
+!-------------------------------------------------------------------------------
+
 end module communications

@@ -14,15 +14,15 @@ module outPar_mod
        &            l_perpPar, l_save_out, l_temperature_diff,   &
        &            l_anelastic_liquid, l_TP_form
    use horizontal_data, only: gauss
-   use fields, only: s_dist, ds_dist, p_dist, dp_dist
+   use fields, only: s_Rdist, ds_Rdist, p_Rdist, dp_Rdist
    use physical_parameters, only: ek, prmag, OhmLossFac, ViscHeatFac, &
        &                          opr, kbots, ktops, ThExpNb
    use constants, only: pi, mass, osq4pi, sq4pi, half, two, four
    use radial_functions, only: r, or2, sigma, rho0, kappa, temp0, &
        &                       rscheme_oc, orho1, dLalpha0,       &
        &                       dLtemp0, beta, alpha0
-   use radial_data, only: n_r_icb, nRstart, nRstop, nRstartMag, &
-       &                  nRstopMag
+   use radial_data, only: n_r_icb, l_r, u_r, l_r_Mag, &
+       &                  u_r_Mag
    use num_param, only: tScale
    use output_data, only: tag
    use useful, only: cc2real
@@ -69,7 +69,7 @@ contains
       perpPar_file='perpPar.'//tag
 
       if ( l_viscBcCalc ) then
-         allocate( sMeanR(n_r_max),Svar(nRstart:nRstop),Mvar(nRstart:nRstop) )
+         allocate( sMeanR(n_r_max),Svar(l_r:u_r),Mvar(l_r:u_r) )
          allocate( uhMeanR(n_r_max),duhMeanR(n_r_max),gradT2MeanR(n_r_max) )
          bytes_allocated = bytes_allocated+6*n_r_max*SIZEOF_DEF_REAL
          Svar(:)         =0.0_cp
@@ -146,14 +146,14 @@ contains
       real(cp), intent(in) :: RolRu2(n_r_max),dlVRu2(n_r_max),dlVRu2c(n_r_max)
       real(cp), intent(in) :: dlVR(n_r_max),dlVRc(n_r_max)
       real(cp), intent(in) :: ekinR(n_r_max)     ! kinetic energy w radius
-      real(cp), intent(in) :: uhLMr(l_max+1,nRstart:nRstop)
-      real(cp), intent(in) :: duhLMr(l_max+1,nRstart:nRstop)
-      real(cp), intent(in) :: gradsLMr(l_max+1,nRstart:nRstop)
-      real(cp), intent(in) :: fkinLMr(l_max+1,nRstart:nRstop)
-      real(cp), intent(in) :: fconvLMr(l_max+1,nRstart:nRstop)
-      real(cp), intent(in) :: fviscLMr(l_max+1,nRstart:nRstop)
-      real(cp), intent(in) :: fpoynLMr(l_maxMag+1,nRstartMag:nRstopMag)
-      real(cp), intent(in) :: fresLMr(l_maxMag+1,nRstartMag:nRstopMag)
+      real(cp), intent(in) :: uhLMr(l_max+1,l_r:u_r)
+      real(cp), intent(in) :: duhLMr(l_max+1,l_r:u_r)
+      real(cp), intent(in) :: gradsLMr(l_max+1,l_r:u_r)
+      real(cp), intent(in) :: fkinLMr(l_max+1,l_r:u_r)
+      real(cp), intent(in) :: fconvLMr(l_max+1,l_r:u_r)
+      real(cp), intent(in) :: fviscLMr(l_max+1,l_r:u_r)
+      real(cp), intent(in) :: fpoynLMr(l_maxMag+1,l_r_Mag:u_r_Mag)
+      real(cp), intent(in) :: fresLMr(l_maxMag+1,l_r_Mag:u_r_Mag)
 
       !--- Output of variables
       real(cp), intent(out):: RmR(n_r_max)
@@ -163,11 +163,11 @@ contains
       real(cp) :: ReR(n_r_max), RoR(n_r_max), RolR(n_r_max)
       character(len=76) :: filename
       integer :: nTheta,nThetaStart,nThetaBlock,nThetaNHS
-      real(cp) :: duhR(nRstart:nRstop), uhR(nRstart:nRstop)
-      real(cp) :: gradT2R(nRstart:nRstop), sR(nRstart:nRstop), sR2(nRstart:nRstop)
-      real(cp) :: fkinR(nRstart:nRstop), fcR(nRstart:nRstop)
-      real(cp) :: fconvR(nRstart:nRstop), fviscR(nRstart:nRstop)
-      real(cp) :: fresR(nRstartMag:nRstopMag),fpoynR(nRstartMag:nRstopMag)
+      real(cp) :: duhR(l_r:u_r), uhR(l_r:u_r)
+      real(cp) :: gradT2R(l_r:u_r), sR(l_r:u_r), sR2(l_r:u_r)
+      real(cp) :: fkinR(l_r:u_r), fcR(l_r:u_r)
+      real(cp) :: fconvR(l_r:u_r), fviscR(l_r:u_r)
+      real(cp) :: fresR(l_r_Mag:u_r_Mag),fpoynR(l_r_Mag:u_r_Mag)
       real(cp) :: duhR_global(n_r_max), uhR_global(n_r_max)
       real(cp) :: gradT2R_global(n_r_max), sR_global(n_r_max)
       real(cp) :: Svar_global(n_r_max)
@@ -178,17 +178,17 @@ contains
       real(cp) :: fkin(nfs), fconv(nfs), fvisc(nfs), fres(nfs), fpoyn(nfs)
 
       integer :: fileHandle
-      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: i,sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
 
 
       if ( l_viscBcCalc ) then
-         do nR=nRstart,nRstop
-            sR(nR) = real(s_dist(1,nR))
+         do nR=l_r,u_r
+            sR(nR) = real(s_Rdist(1,nR))
             ! calculate entropy/temperature variance:
             sR2(nR)=0.0_cp
             do lm=1,lm_max
               m=lm2m(lm)
-              sR2(nR)=sR2(nR)+cc2real(s_dist(lm,nR),m)
+              sR2(nR)=sR2(nR)+cc2real(s_Rdist(lm,nR),m)
             end do
             if ( nLogs  <=  1) then
                Mvar(nR)=sR(nR)
@@ -199,7 +199,7 @@ contains
             end if
          end do
 
-         do nR=nRstart,nRstop
+         do nR=l_r,u_r
             uhR(nR)    =0.0_cp
             gradT2R(nR)=0.0_cp
             duhR(nR)   =0.0_cp
@@ -222,10 +222,10 @@ contains
          uhR =half* uhR ! Normalisation for the theta integration
          gradT2R =half*gradT2R ! Normalisation for the theta integration
 
-         sendcount  = (nRstop-nRstart+1)
+         sendcount  = (u_r-l_r+1)
          recvcounts = nR_per_rank
-         recvcounts(n_procs_r-1) = nR_on_last_rank
-         do i=0,n_procs_r-1
+         recvcounts(n_ranks_r-1) = nR_on_last_rank
+         do i=0,n_ranks_r-1
             displs(i) = i*nR_per_rank
          end do
 #ifdef WITH_MPI
@@ -256,39 +256,39 @@ contains
       if ( l_fluxProfs ) then
          if ( l_TP_form .or. l_anelastic_liquid ) then
             if ( l_temperature_diff ) then
-               do nR=nRstart,nRstop
-                  fcR(nR)=-real(ds_dist(1,nR))*kappa(nR)*rho0(nR)* &
+               do nR=l_r,u_r
+                  fcR(nR)=-real(ds_Rdist(1,nR))*kappa(nR)*rho0(nR)* &
                   &        r(nR)*r(nR)*sq4pi
                end do
             else
-               do nR=nRstart,nRstop
+               do nR=l_r,u_r
                   fcR(nR)=-kappa(nR)*r(nR)*r(nR)*                 &
-                  &       sq4pi*( rho0(nR)*(real(ds_dist(1,nR))-  &
-                  &       dLtemp0(nR)*real(s_dist(1,nR)))-ThExpNb*&
+                  &       sq4pi*( rho0(nR)*(real(ds_Rdist(1,nR))-  &
+                  &       dLtemp0(nR)*real(s_Rdist(1,nR)))-ThExpNb*&
                   &       ViscHeatFac*alpha0(nR)*temp0(nR)*(      &
-                  &       real(dp_dist(1,nR))+(dLalpha0(nR)-      &
-                  &       beta(nR))*real(p_dist(1,nR))) )
+                  &       real(dp_Rdist(1,nR))+(dLalpha0(nR)-      &
+                  &       beta(nR))*real(p_Rdist(1,nR))) )
                end do
             end if
          else
             if  ( l_temperature_diff ) then
-               do nR=nRstart,nRstop
+               do nR=l_r,u_r
                   fcR(nR)=-sq4pi*r(nR)*r(nR)*kappa(nR)*rho0(nR)*temp0(nR)*&
-                  &        (dLtemp0(nR)*real(s_dist(1,nR)) +   &
-                  &                     real(ds_dist(1,nR))+   &
+                  &        (dLtemp0(nR)*real(s_Rdist(1,nR)) +   &
+                  &                     real(ds_Rdist(1,nR))+   &
                   &        ViscHeatFac*ThExpNb*alpha0(nR)*     &
                   &        orho1(nR)*((dLalpha0(nR)+dLtemp0(nR)-beta(nR))*& 
-                  &                     real(p_dist(1,nR))+    &
-                  &                     real(dp_dist(1,nR))))
+                  &                     real(p_Rdist(1,nR))+    &
+                  &                     real(dp_Rdist(1,nR))))
                end do
             else
-               do nR=nRstart,nRstop
-                  fcR(nR)=-real(ds_dist(1,nR))*kappa(nR)*rho0(nR)* &
+               do nR=l_r,u_r
+                  fcR(nR)=-real(ds_Rdist(1,nR))*kappa(nR)*rho0(nR)* &
                   &        temp0(nR)*r(nR)*r(nR)*sq4pi
                end do
             end if
          end if
-         do nR=nRstart,nRstop
+         do nR=l_r,u_r
             fkinR(nR) =0.0_cp
             fconvR(nR)=0.0_cp
             fviscR(nR)=0.0_cp
@@ -309,7 +309,7 @@ contains
          end do
 
          if ( l_mag_nl ) then
-            do nR=nRstart,nRstop
+            do nR=l_r,u_r
                fresR(nR) =0.0_cp
                fpoynR(nR)=0.0_cp
                do n=1,nThetaBs ! Loop over theta blocks
@@ -327,10 +327,10 @@ contains
             end do
          end if
 
-         sendcount  = (nRstop-nRstart+1)
+         sendcount  = (u_r-l_r+1)
          recvcounts = nR_per_rank
-         recvcounts(n_procs_r-1) = nR_on_last_rank
-         do i=0,n_procs_r-1
+         recvcounts(n_ranks_r-1) = nR_on_last_rank
+         do i=0,n_ranks_r-1
             displs(i) = i*nR_per_rank
          end do
 #ifdef WITH_MPI
@@ -510,26 +510,26 @@ contains
       !--- Input of variables
       real(cp), intent(in) :: time,timePassed,timeNorm
       logical,  intent(in) :: l_stop_time
-      real(cp), intent(in) :: EparLMr(l_max+1,nRstart:nRstop)
-      real(cp), intent(in) :: EperpLMr(l_max+1,nRstart:nRstop)
-      real(cp), intent(in) :: EparaxiLMr(l_max+1,nRstart:nRstop)
-      real(cp), intent(in) :: EperpaxiLMr(l_max+1,nRstart:nRstop)
+      real(cp), intent(in) :: EparLMr(l_max+1,l_r:u_r)
+      real(cp), intent(in) :: EperpLMr(l_max+1,l_r:u_r)
+      real(cp), intent(in) :: EparaxiLMr(l_max+1,l_r:u_r)
+      real(cp), intent(in) :: EperpaxiLMr(l_max+1,l_r:u_r)
 
       !--- Local variables
       integer :: nR,n,nTheta,nThetaStart,nThetaBlock,nThetaNHS
       character(len=76) :: filename
 
-      real(cp) ::EperpaxiR(nRstart:nRstop), EparaxiR(nRstart:nRstop)
-      real(cp) :: EperpR(nRstart:nRstop), EparR(nRstart:nRstop)
+      real(cp) ::EperpaxiR(l_r:u_r), EparaxiR(l_r:u_r)
+      real(cp) :: EperpR(l_r:u_r), EparR(l_r:u_r)
       real(cp) :: EperpR_global(n_r_max), EparR_global(n_r_max)
       real(cp) :: EperpaxiR_global(n_r_max), EparaxiR_global(n_r_max)
       real(cp) :: Eperp(nfs), Epar(nfs), Eperpaxi(nfs), Eparaxi(nfs)
       real(cp) :: EperpT,EparT,EperpaxT,EparaxT
 
-      integer :: i,sendcount,recvcounts(0:n_procs_r-1),displs(0:n_procs_r-1)
+      integer :: i,sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
       integer :: fileHandle
 
-      do nR=nRstart,nRstop
+      do nR=l_r,u_r
          EperpR(nR)   =0.0_cp
          EparR(nR)    =0.0_cp
          EparaxiR(nR) =0.0_cp
@@ -556,10 +556,10 @@ contains
       EperpaxiR=half*EperpaxiR ! Normalisation for the theta integration
       EparaxiR =half*EparaxiR  ! Normalisation for the theta integration
 
-      sendcount  = (nRstop-nRstart+1)
+      sendcount  = (u_r-l_r+1)
       recvcounts = nR_per_rank
-      recvcounts(n_procs_r-1) = nR_on_last_rank
-      do i=0,n_procs_r-1
+      recvcounts(n_ranks_r-1) = nR_on_last_rank
+      do i=0,n_ranks_r-1
          displs(i) = i*nR_per_rank
       end do
 

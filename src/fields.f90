@@ -9,8 +9,8 @@ module fields
        &                 n_r_ic_maxMag, lm_loc, lm_locMag
    use logic, only: l_chemical_conv
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag
-   use radial_data, only: nRstart, nRstop
-   use parallel_mod, only: coord_r, n_procs_theta
+   use radial_data, only: l_r, u_r
+   use parallel_mod, only: coord_r, n_ranks_theta
  
    implicit none
 
@@ -18,37 +18,37 @@ module fields
  
    !-- Velocity potentials:
    complex(cp), public, allocatable, target :: flow_LMloc_container(:,:,:)
-   complex(cp), public, allocatable, target :: flow_dist_container(:,:,:)
+   complex(cp), public, allocatable, target :: flow_Rdist_container(:,:,:)
    complex(cp), public, pointer :: w_LMloc(:,:),dw_LMloc(:,:),ddw_LMloc(:,:)
-   complex(cp), public, pointer :: w_dist(:,:), dw_dist(:,:), ddw_dist(:,:)
+   complex(cp), public, pointer :: w_Rdist(:,:), dw_Rdist(:,:), ddw_Rdist(:,:)
  
    complex(cp), public, pointer :: z_LMloc(:,:),dz_LMloc(:,:)
-   complex(cp), public, pointer :: z_dist(:,:), dz_dist(:,:)
+   complex(cp), public, pointer :: z_Rdist(:,:), dz_Rdist(:,:)
  
    !-- Entropy:
    complex(cp), public, allocatable, target :: s_LMloc_container(:,:,:)
-   complex(cp), public, allocatable, target :: s_dist_container(:,:,:)
+   complex(cp), public, allocatable, target :: s_Rdist_container(:,:,:)
    complex(cp), public, pointer :: s_LMloc(:,:), ds_LMloc(:,:)
-   complex(cp), public, pointer :: s_dist(:,:), ds_dist(:,:)
+   complex(cp), public, pointer :: s_Rdist(:,:), ds_Rdist(:,:)
  
    !-- Chemical composition:
    complex(cp), public, allocatable, target :: xi_LMloc_container(:,:,:)
-   complex(cp), public, allocatable, target :: xi_dist_container(:,:,:)
+   complex(cp), public, allocatable, target :: xi_Rdist_container(:,:,:)
    complex(cp), public, pointer :: xi_LMloc(:,:), dxi_LMloc(:,:)
-   complex(cp), public, pointer :: xi_dist(:,:), dxi_dist(:,:)
+   complex(cp), public, pointer :: xi_Rdist(:,:), dxi_Rdist(:,:)
 
    !-- Pressure:
    complex(cp), public, pointer :: p_LMloc(:,:), dp_LMloc(:,:)
-   complex(cp), public, pointer :: p_dist(:,:), dp_dist(:,:)
+   complex(cp), public, pointer :: p_Rdist(:,:), dp_Rdist(:,:)
  
    !-- Magnetic field potentials:
    complex(cp), public, allocatable :: b(:,:)
    complex(cp), public, allocatable, target :: field_LMloc_container(:,:,:)
-   complex(cp), public, allocatable, target :: field_dist_container(:,:,:)
+   complex(cp), public, allocatable, target :: field_Rdist_container(:,:,:)
    complex(cp), public, pointer :: b_LMloc(:,:), db_LMloc(:,:), ddb_LMloc(:,:)
-   complex(cp), public, pointer :: b_dist(:,:), db_dist(:,:), ddb_dist(:,:)
+   complex(cp), public, pointer :: b_Rdist(:,:), db_Rdist(:,:), ddb_Rdist(:,:)
    complex(cp), public, pointer :: aj_LMloc(:,:), dj_LMloc(:,:), ddj_LMloc(:,:)
-   complex(cp), public, pointer :: aj_dist(:,:), dj_dist(:,:)
+   complex(cp), public, pointer :: aj_Rdist(:,:), dj_Rdist(:,:)
  
    !-- Magnetic field potentials in inner core:
    !   NOTE: n_r-dimension may be smaller once CHEBFT is addopted
@@ -111,47 +111,47 @@ contains
       p_LMloc(llm:ulm,1:n_r_max)   => flow_LMloc_container(:,:,6)
       dp_LMloc(llm:ulm,1:n_r_max)  => flow_LMloc_container(:,:,7)
 
-      allocate( flow_dist_container(lm_loc,nRstart:nRstop,1:7) )
-      w_dist(1:lm_loc,nRstart:nRstop)   => flow_dist_container(:,:,1)
-      dw_dist(1:lm_loc,nRstart:nRstop)  => flow_dist_container(:,:,2)
-      ddw_dist(1:lm_loc,nRstart:nRstop) => flow_dist_container(:,:,3)
-      z_dist(1:lm_loc,nRstart:nRstop)   => flow_dist_container(:,:,4)
-      dz_dist(1:lm_loc,nRstart:nRstop)  => flow_dist_container(:,:,5)
-      p_dist(1:lm_loc,nRstart:nRstop)   => flow_dist_container(:,:,6)
-      dp_dist(1:lm_loc,nRstart:nRstop)  => flow_dist_container(:,:,7)
+      allocate( flow_Rdist_container(lm_loc,l_r:u_r,1:7) )
+      w_Rdist(1:lm_loc,l_r:u_r)   => flow_Rdist_container(:,:,1)
+      dw_Rdist(1:lm_loc,l_r:u_r)  => flow_Rdist_container(:,:,2)
+      ddw_Rdist(1:lm_loc,l_r:u_r) => flow_Rdist_container(:,:,3)
+      z_Rdist(1:lm_loc,l_r:u_r)   => flow_Rdist_container(:,:,4)
+      dz_Rdist(1:lm_loc,l_r:u_r)  => flow_Rdist_container(:,:,5)
+      p_Rdist(1:lm_loc,l_r:u_r)   => flow_Rdist_container(:,:,6)
+      dp_Rdist(1:lm_loc,l_r:u_r)  => flow_Rdist_container(:,:,7)
 
       !-- Entropy:
       allocate( s_LMloc_container(llm:ulm,n_r_max,1:2) )
       s_LMloc(llm:ulm,1:n_r_max)  => s_LMloc_container(:,:,1)
       ds_LMloc(llm:ulm,1:n_r_max) => s_LMloc_container(:,:,2)
-      allocate( s_dist_container(lm_loc,nRstart:nRstop,1:2) )
-      s_dist(1:lm_loc,nRstart:nRstop)   => s_dist_container(:,:,1)
-      ds_dist(1:lm_loc,nRstart:nRstop)  => s_dist_container(:,:,2)
+      allocate( s_Rdist_container(lm_loc,l_r:u_r,1:2) )
+      s_Rdist(1:lm_loc,l_r:u_r)   => s_Rdist_container(:,:,1)
+      ds_Rdist(1:lm_loc,l_r:u_r)  => s_Rdist_container(:,:,2)
 
       bytes_allocated = bytes_allocated + &
                         9*(ulm-llm+1)*n_r_max*SIZEOF_DEF_COMPLEX
       bytes_allocated = bytes_allocated + &
-                        9*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+                        9*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
 
       !-- Chemical composition:
       if ( l_chemical_conv ) then
          allocate( xi_LMloc_container(llm:ulm,n_r_max,1:2) )
          xi_LMloc(llm:ulm,1:n_r_max)  => xi_LMloc_container(:,:,1)
          dxi_LMloc(llm:ulm,1:n_r_max) => xi_LMloc_container(:,:,2)
-         allocate( xi_dist_container(lm_loc,nRstart:nRstop,1:2) )
-         xi_dist(1:lm_loc,nRstart:nRstop)   => xi_dist_container(:,:,1)
-         dxi_dist(1:lm_loc,nRstart:nRstop)  => xi_dist_container(:,:,2)
+         allocate( xi_Rdist_container(lm_loc,l_r:u_r,1:2) )
+         xi_Rdist(1:lm_loc,l_r:u_r)   => xi_Rdist_container(:,:,1)
+         dxi_Rdist(1:lm_loc,l_r:u_r)  => xi_Rdist_container(:,:,2)
          bytes_allocated = bytes_allocated + &
                            2*(ulm-llm+1)*n_r_max*SIZEOF_DEF_COMPLEX
          bytes_allocated = bytes_allocated + &
-                           2*lm_loc*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+                           2*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       else
          allocate( xi_LMloc_container(1,1,2) ) ! For debugging
          xi_LMloc(1:1,1:1)  => xi_LMloc_container(:,:,1)
          dxi_LMloc(1:1,1:1) => xi_LMloc_container(:,:,2)
-         allocate( xi_dist_container(1,1,2) )
-         xi_dist(1:1,1:1)   => xi_dist_container(:,:,1)
-         dxi_dist(1:1,1:1)  => xi_dist_container(:,:,2)
+         allocate( xi_Rdist_container(1,1,2) )
+         xi_Rdist(1:1,1:1)   => xi_Rdist_container(:,:,1)
+         dxi_Rdist(1:1,1:1)  => xi_Rdist_container(:,:,2)
       end if
 
       !-- Magnetic field potentials:
@@ -165,14 +165,14 @@ contains
       bytes_allocated = bytes_allocated + &
                         6*(ulmMag-llmMag+1)*n_r_maxMag*SIZEOF_DEF_COMPLEX
 
-      allocate( field_dist_container(lm_locMag,nRstart:nRstop,1:5) )
-      b_dist(1:lm_locMag,nRstart:nRstop)   => field_dist_container(:,:,1)
-      db_dist(1:lm_locMag,nRstart:nRstop)  => field_dist_container(:,:,2)
-      ddb_dist(1:lm_locMag,nRstart:nRstop) => field_dist_container(:,:,3)
-      aj_dist(1:lm_locMag,nRstart:nRstop)  => field_dist_container(:,:,4)
-      dj_dist(1:lm_locMag,nRstart:nRstop)  => field_dist_container(:,:,5)
+      allocate( field_Rdist_container(lm_locMag,l_r:u_r,1:5) )
+      b_Rdist(1:lm_locMag,l_r:u_r)   => field_Rdist_container(:,:,1)
+      db_Rdist(1:lm_locMag,l_r:u_r)  => field_Rdist_container(:,:,2)
+      ddb_Rdist(1:lm_locMag,l_r:u_r) => field_Rdist_container(:,:,3)
+      aj_Rdist(1:lm_locMag,l_r:u_r)  => field_Rdist_container(:,:,4)
+      dj_Rdist(1:lm_locMag,l_r:u_r)  => field_Rdist_container(:,:,5)
       bytes_allocated = bytes_allocated + &
-                        5*lm_locMag*(nRstop-nRstart+1)*SIZEOF_DEF_COMPLEX
+                        5*lm_locMag*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
 
       !-- Magnetic field potentials in inner core:
       !   NOTE: n_r-dimension may be smaller once CHEBFT is adopted
@@ -195,32 +195,32 @@ contains
 
       deallocate( b, b_ic, db_ic, ddb_ic )
       deallocate( aj_ic, dj_ic, ddj_ic, flow_LMloc_container )
-      deallocate( flow_dist_container, s_LMloc_container, s_dist_container )
-      deallocate( field_LMloc_container, field_dist_container )
+      deallocate( flow_Rdist_container, s_LMloc_container, s_Rdist_container )
+      deallocate( field_LMloc_container, field_Rdist_container )
       deallocate( b_ic_LMloc )
       deallocate( db_ic_LMloc )
       deallocate( ddb_ic_LMloc )
       deallocate( aj_ic_LMloc )
       deallocate( dj_ic_LMloc, ddj_ic_LMloc )
-      deallocate( xi_LMloc_container, xi_dist_container )
+      deallocate( xi_LMloc_container, xi_Rdist_container )
       deallocate( work_LMloc )
       
-      nullify( xi_dist )
-      nullify( dxi_dist)
-      nullify( s_dist  )
-      nullify( ds_dist )
-      nullify( z_dist  )
-      nullify( dz_dist )
-      nullify( p_dist  )
-      nullify( dp_dist )
-      nullify( b_dist  )
-      nullify( db_dist )
-      nullify( ddb_dist)
-      nullify( aj_dist )
-      nullify( dj_dist )
-      nullify( w_dist  )
-      nullify( dw_dist )
-      nullify( ddw_dist)
+      nullify( xi_Rdist )
+      nullify( dxi_Rdist)
+      nullify( s_Rdist  )
+      nullify( ds_Rdist )
+      nullify( z_Rdist  )
+      nullify( dz_Rdist )
+      nullify( p_Rdist  )
+      nullify( dp_Rdist )
+      nullify( b_Rdist  )
+      nullify( db_Rdist )
+      nullify( ddb_Rdist)
+      nullify( aj_Rdist )
+      nullify( dj_Rdist )
+      nullify( w_Rdist  )
+      nullify( dw_Rdist )
+      nullify( ddw_Rdist)
 
    end subroutine finalize_fields
 !----------------------------------------------------------------------------

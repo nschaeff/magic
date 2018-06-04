@@ -3,7 +3,7 @@ module courant_mod
    use parallel_mod
    use precision_mod
    use truncation, only: nrp, n_phi_max, n_theta_beg, n_theta_end, comm_theta
-   use radial_data, only: nRstart, nRstop
+   use radial_data, only: l_r, u_r
    use radial_functions, only: orho1, orho2, or4, or2
    use physical_parameters, only: LFfac, opm
    use num_param, only: courfac, delxr2, delxh2, alffac
@@ -153,7 +153,7 @@ contains
       !-- Input variables:
       real(cp), intent(in) :: dt
       real(cp), intent(in) :: dtMax
-      real(cp), intent(in) :: dtrkc(nRstart:nRstop),dthkc(nRstart:nRstop)
+      real(cp), intent(in) :: dtrkc(l_r:u_r),dthkc(l_r:u_r)
     
       !-- Output variables:
       logical,  intent(out) :: l_new_dt
@@ -171,14 +171,14 @@ contains
       dt_fac=two
       dt_r  =1000.0_cp*dtMax
       dt_h  =dt_r
-      do n_r=nRstart,nRstop
+      do n_r=l_r,u_r
          dt_r=min(dtrkc(n_r),dt_r)
          dt_h=min(dthkc(n_r),dt_h)
       end do
       
 #ifdef WITH_MPI
-      call MPI_Allreduce(MPI_IN_PLACE,dt_r,1,MPI_DEF_REAL,MPI_MIN,comm_cart,ierr)
-      call MPI_Allreduce(MPI_IN_PLACE,dt_h,1,MPI_DEF_REAL,MPI_MIN,comm_cart,ierr)
+      call MPI_Allreduce(MPI_IN_PLACE,dt_r,1,MPI_DEF_REAL,MPI_MIN,comm_gs,ierr)
+      call MPI_Allreduce(MPI_IN_PLACE,dt_h,1,MPI_DEF_REAL,MPI_MIN,comm_gs,ierr)
 #endif
     
       dt_rh=min(dt_r,dt_h)

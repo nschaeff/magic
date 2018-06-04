@@ -8,8 +8,8 @@ module nonlinear_lm_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use truncation, only: lm_max, l_max, lm_maxMag, lmP_max, lm_loc,         &
-       &             lm_locMag, lmP_loc, slice_FlmP, gather_FlmP, lm_locDC, &
-       &             lm_locChe, lm_locTP
+       &             lm_locMag, lmP_loc, lm_locDC, lm_locChe, lm_locTP
+   use communications, only: slice_FlmP, gather_FlmP
    use logic, only : l_anel, l_conv_nl, l_corr, l_heat, l_anelastic_liquid, &
        &             l_mag_nl, l_mag_kin, l_mag_LF, l_conv, l_mag, l_RMS,   &
        &             l_chemical_conv, l_TP_form, l_single_matrix, l_double_curl
@@ -28,7 +28,7 @@ module nonlinear_lm_mod
        &          CIA2hInt, Arc2hInt
    use leg_helper_mod, only: leg_helper_t
    use constants, only: zero, two
-   use fields, only: w_dist, dw_dist, ddw_dist, z_dist, dz_dist
+   use fields, only: w_Rdist, dw_Rdist, ddw_Rdist, z_Rdist, dz_Rdist
    use RMS_helpers, only: hIntRms
    use distributed_theta, only: dist_map
 
@@ -273,10 +273,10 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                   AdvTor_loc=zero
                end if
                if ( l_corr ) then
-                  CorPol_loc=two*CorFac*or1(nR) * dTheta2A_loc(lm)* z_dist(lmA,nR)
+                  CorPol_loc=two*CorFac*or1(nR) * dTheta2A_loc(lm)* z_Rdist(lmA,nR)
                   CorTor_loc= two*CorFac*or2(nR) * (                 &
-                  &                dTheta3A_loc(lm)*dw_dist(lmA,nR) +    &
-                  &        or1(nR)*dTheta4A_loc(lm)* w_dist(lmA,nR) )
+                  &                dTheta3A_loc(lm)*dw_Rdist(lmA,nR) +    &
+                  &        or1(nR)*dTheta4A_loc(lm)* w_Rdist(lmA,nR) )
                else
                   CorPol_loc=zero
                   CorTor_loc=zero
@@ -321,32 +321,32 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                      if ( l < l_max .and. l > m ) then
                         CorPol_loc =two*CorFac*or2(nR)*orho1(nR)*(               &
                         &                   dPhi0_loc(lm)*(                      &
-                        &         -ddw_dist(lm,nR)+beta(nR)*dw_dist(lm,nR)     + &
+                        &         -ddw_Rdist(lm,nR)+beta(nR)*dw_Rdist(lm,nR)     + &
                         &             ( beta(nR)*or1(nR)+or2(nR))*               &
                         &                         leg_helper%dLhw(lm) )    + &
-                        &             dTheta3A_loc(lm)*( dz_dist(lmA,nR)-        &
-                        &                            beta(nR)*z_dist(lmA,nR) ) + &
-                        &             dTheta3S_loc(lm)*( dz_dist(lmS,nR)-        &
-                        &                            beta(nR)*z_dist(lmS,nR) ) + &
+                        &             dTheta3A_loc(lm)*( dz_Rdist(lmA,nR)-        &
+                        &                            beta(nR)*z_Rdist(lmA,nR) ) + &
+                        &             dTheta3S_loc(lm)*( dz_Rdist(lmS,nR)-        &
+                        &                            beta(nR)*z_Rdist(lmS,nR) ) + &
                         &          or1(nR)* (                                    &
-                        &             dTheta4A_loc(lm)* z_dist(lmA,nR)           &
-                        &            -dTheta4S_loc(lm)* z_dist(lmS,nR) ) )
+                        &             dTheta4A_loc(lm)* z_Rdist(lmA,nR)           &
+                        &            -dTheta4S_loc(lm)* z_Rdist(lmS,nR) ) )
                      else if ( l == l_max ) then
                         CorPol_loc =two*CorFac*or2(nR)*orho1(nR)*(               &
                         &                   dPhi0_loc(lm)*(                      &
-                        &         -ddw_dist(lm,nR)+beta(nR)*dw_dist(lm,nR)     + &
+                        &         -ddw_Rdist(lm,nR)+beta(nR)*dw_Rdist(lm,nR)     + &
                         &             ( beta(nR)*or1(nR)+or2(nR))*               &
                         &                         leg_helper%dLhw(lm) ) )
                      else if ( l == m ) then
                         CorPol_loc =two*CorFac*or2(nR)*orho1(nR)*(               &
                         &                   dPhi0_loc(lm)*(                      &
-                        &         -ddw_dist(lm,nR)+beta(nR)*dw_dist(lm,nR)     + &
+                        &         -ddw_Rdist(lm,nR)+beta(nR)*dw_Rdist(lm,nR)     + &
                         &             ( beta(nR)*or1(nR)+or2(nR))*               &
                         &                         leg_helper%dLhw(lm) )    + &
-                        &             dTheta3A_loc(lm)*( dz_dist(lmA,nR)-        &
-                        &                            beta(nR)*z_dist(lmA,nR) ) + &
+                        &             dTheta3A_loc(lm)*( dz_Rdist(lmA,nR)-        &
+                        &                            beta(nR)*z_Rdist(lmA,nR) ) + &
                         &          or1(nR)* (                                    &
-                        &             dTheta4A_loc(lm)* z_dist(lmA,nR) ) )
+                        &             dTheta4A_loc(lm)* z_Rdist(lmA,nR) ) )
                      end if
                   else
                      CorPol_loc=zero
@@ -379,16 +379,16 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                   if ( l_corr .and. nBc /= 2 ) then
                      if ( l < l_max .and. l > m ) then
                         CorPol_loc =two*CorFac*or1(nR) * (      &
-                        &       dPhi0_loc(lm)*dw_dist(lm,nR) +  & ! phi-deriv of dw/dr
-                        &    dTheta2A_loc(lm)*z_dist(lmA,nR) -  & ! sin(theta) dtheta z
-                        &    dTheta2S_loc(lm)*z_dist(lmS,nR) )
+                        &       dPhi0_loc(lm)*dw_Rdist(lm,nR) +  & ! phi-deriv of dw/dr
+                        &    dTheta2A_loc(lm)*z_Rdist(lmA,nR) -  & ! sin(theta) dtheta z
+                        &    dTheta2S_loc(lm)*z_Rdist(lmS,nR) )
                      else if ( l == l_max ) then
                         CorPol_loc= two*CorFac*or1(nR) * (      &
-                        &            dPhi0_loc(lm)*dw_dist(lm,nR)  )
+                        &            dPhi0_loc(lm)*dw_Rdist(lm,nR)  )
                      else if ( l == m ) then
                         CorPol_loc = two*CorFac*or1(nR) * (      &
-                        &        dPhi0_loc(lm)*dw_dist(lm,nR)  + &
-                        &     dTheta2A_loc(lm)*z_dist(lmA,nR) )
+                        &        dPhi0_loc(lm)*dw_Rdist(lm,nR)  + &
+                        &     dTheta2A_loc(lm)*z_Rdist(lmA,nR) )
                      end if
                   else
                      CorPol_loc=zero
@@ -421,16 +421,16 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                      if ( l_corr .and. nBc /= 2 ) then
                         if ( l < l_max .and. l > m ) then
                            CorPol_loc =two*CorFac*or1(nR) * (      &
-                           &       dPhi0_loc(lm)*dw_dist(lm,nR) +  & ! phi-deriv of dw/dr
-                           &    dTheta2A_loc(lm)*z_dist(lmA,nR) -  & ! sin(theta) dtheta z
-                           &    dTheta2S_loc(lm)*z_dist(lmS,nR) )
+                           &       dPhi0_loc(lm)*dw_Rdist(lm,nR) +  & ! phi-deriv of dw/dr
+                           &    dTheta2A_loc(lm)*z_Rdist(lmA,nR) -  & ! sin(theta) dtheta z
+                           &    dTheta2S_loc(lm)*z_Rdist(lmS,nR) )
                         else if ( l == l_max ) then
                            CorPol_loc= two*CorFac*or1(nR) * ( &
-                           &            dPhi0_loc(lm)*dw_dist(lm,nR)  )
+                           &            dPhi0_loc(lm)*dw_Rdist(lm,nR)  )
                         else if ( l == m ) then
                            CorPol_loc = two*CorFac*or1(nR) * (      &
-                           &        dPhi0_loc(lm)*dw_dist(lm,nR)  + &
-                           &     dTheta2A_loc(lm)*z_dist(lmA,nR) )
+                           &        dPhi0_loc(lm)*dw_Rdist(lm,nR)  + &
+                           &     dTheta2A_loc(lm)*z_Rdist(lmA,nR) )
                         end if
                      else
                         CorPol_loc=zero
@@ -458,19 +458,19 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                if ( l_corr ) then
                   if ( l < l_max .and. l > m ) then
                      CorTor_loc=          two*CorFac*or2(nR) * (      &
-                     &                dPhi0_loc(lm)*z_dist(lm,nR)   + &
-                     &            dTheta3A_loc(lm)*dw_dist(lmA,nR)  + &
-                     &    or1(nR)*dTheta4A_loc(lm)* w_dist(lmA,nR)  + &
-                     &            dTheta3S_loc(lm)*dw_dist(lmS,nR)  - &
-                     &    or1(nR)*dTheta4S_loc(lm)* w_dist(lmS,nR)  )
+                     &                dPhi0_loc(lm)*z_Rdist(lm,nR)   + &
+                     &            dTheta3A_loc(lm)*dw_Rdist(lmA,nR)  + &
+                     &    or1(nR)*dTheta4A_loc(lm)* w_Rdist(lmA,nR)  + &
+                     &            dTheta3S_loc(lm)*dw_Rdist(lmS,nR)  - &
+                     &    or1(nR)*dTheta4S_loc(lm)* w_Rdist(lmS,nR)  )
                   else if ( l == l_max ) then
                      CorTor_loc=two*CorFac*or2(nR) * ( &
-                     &            dPhi0_loc(lm)*z_dist(lm,nR)   )
+                     &            dPhi0_loc(lm)*z_Rdist(lm,nR)   )
                   else if ( l == m ) then
                      CorTor_loc=  two*CorFac*or2(nR) * (  &
-                     &        dPhi0_loc(lm)*z_dist(lm,nR)   + &
-                     &    dTheta3A_loc(lm)*dw_dist(lmA,nR)  + &
-                     &    or1(nR)*dTheta4A_loc(lm)* w_dist(lmA,nR)  )
+                     &        dPhi0_loc(lm)*z_Rdist(lm,nR)   + &
+                     &    dTheta3A_loc(lm)*dw_Rdist(lmA,nR)  + &
+                     &    or1(nR)*dTheta4A_loc(lm)* w_Rdist(lmA,nR)  )
                   end if
                else
                   CorTor_loc=zero
@@ -692,23 +692,23 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                      !PERFON('td_cv2c')
                      if ( l < l_max .and. l > m ) then
                         CorPol_loc=                    two*CorFac*or2(nR) *      &
-                        &                    ( -dPhi0_loc(lm) * ( dw_dist(lm,nR) &
+                        &                    ( -dPhi0_loc(lm) * ( dw_Rdist(lm,nR) &
                         &                       +or1(nR)*leg_helper%dLhw(lm) &
                         &                                                  )     &
-                        &                       +dTheta3A_loc(lm)*z_dist(lmA,nR) &
-                        &                       +dTheta3S_loc(lm)*z_dist(lmS,nR) &
+                        &                       +dTheta3A_loc(lm)*z_Rdist(lmA,nR) &
+                        &                       +dTheta3S_loc(lm)*z_Rdist(lmS,nR) &
                         &                    )
        
                      else if ( l == l_max ) then
                         CorPol_loc=  two*CorFac*or2(nR) * ( -dPhi0_loc(lm) *  &
-                                    ( dw_dist(lm,nR) + or1(nR)*leg_helper%dLhw(lm) ) )
+                                    ( dw_Rdist(lm,nR) + or1(nR)*leg_helper%dLhw(lm) ) )
        
                      else if ( l == m ) then
                         CorPol_loc=                    two*CorFac*or2(nR) *      &
-                        &                    ( -dPhi0_loc(lm) * ( dw_dist(lm,nR) &
+                        &                    ( -dPhi0_loc(lm) * ( dw_Rdist(lm,nR) &
                         &                       +or1(nR)*leg_helper%dLhw(lm) &
                         &                                                   )    &
-                        &                      +dTheta3A_loc(lm)*z_dist(lmA,nR)  &
+                        &                      +dTheta3A_loc(lm)*z_Rdist(lmA,nR)  &
                         &                    )
        
                      end if

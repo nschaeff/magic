@@ -54,7 +54,9 @@ contains
       !-- Name lists:
       integer :: runHours,runMinutes,runSeconds
       
-      namelist/parallel/n_procs_r,n_procs_theta
+      namelist/parallel/n_ranks_r,n_ranks_theta,  &
+         & n_ranks_r, n_ranks_m, n_ranks_ml_l,        &
+         & n_ranks_ml_m
       
       namelist/grid/n_r_max,n_cheb_max,n_phi_tot,n_theta_axi, &
          &  n_r_ic_max,n_cheb_ic_max,minc,nalias,l_axi,       &
@@ -117,7 +119,7 @@ contains
          & t_TOZ_stop,dt_TOZ,n_TOmovie_step,n_TOmovie_frames, &
          & t_TOmovie,t_TOmovie_start,t_TOmovie_stop,          &
          & dt_TOmovie,l_movie,l_average,l_save_out,           &
-         & l_true_time,l_cmb_field,l_rMagSpec,l_DTrMagSpec,   &
+         & l_true_time,l_cmb_field,l_r_MagSpec,l_DTrMagSpec,   &
          & l_dt_cmb_field,l_max_cmb,l_r_field,l_r_fieldT,     &
          & n_r_step,l_max_r,n_r_array,l_TO,l_TOmovie,l_hel,   &
          & lVerbose,l_AM,l_power,l_drift,l_storeBpot,         &
@@ -520,13 +522,6 @@ contains
          l_mag_LF =.false.
       end if
       
-      !-- Check if parallelization is consistent
-      if (n_procs_r * n_procs_theta .NE. n_procs) then
-        call abortRun('! Invalid parallelization partition! Make sure that n_procs_r'//&
-                      '* n_procs_theta equals the number of available processes!')
-      end if
-      
-
       !-- If Poincaré number is not zero precession in turned on
       if ( po == 0.0_cp ) then
          l_precession = .false.
@@ -637,7 +632,7 @@ contains
       if ( .not. l_mag ) then
          l_cmb_field   =.false.
          l_dt_cmb_field=.false.
-         l_rMagSpec    =.false.
+         l_r_MagSpec    =.false.
          l_DTrMagSpec  =.false.
          l_storeBpot   =.false.
       end if
@@ -769,8 +764,8 @@ contains
       !-- Output of name lists:
       write(n_out,*) " "
       write(n_out,*) "&parallel"
-      write(n_out,'(''  n_procs_r        ='',i5,'','')') n_procs_r
-      write(n_out,'(''  n_procs_theta    ='',i5,'','')') n_procs_theta
+      write(n_out,'(''  n_ranks_r        ='',i5,'','')') n_ranks_r
+      write(n_out,'(''  n_ranks_theta    ='',i5,'','')') n_ranks_theta
 
       write(n_out,*) " "
       write(n_out,*) "&grid"
@@ -1057,7 +1052,7 @@ contains
       write(n_out,'(''  l_save_out      ='',l3,'','')') l_save_out
       write(n_out,'(''  l_true_time     ='',l3,'','')') l_true_time
       write(n_out,'(''  lVerbose        ='',l3,'','')') lVerbose
-      write(n_out,'(''  l_rMagSpec      ='',l3,'','')') l_rMagSpec
+      write(n_out,'(''  l_r_MagSpec      ='',l3,'','')') l_r_MagSpec
       write(n_out,'(''  l_DTrMagSpec    ='',l3,'','')') l_DTrMagSpec
       write(n_out,'(''  l_max_cmb       ='',i3,'','')') l_max_cmb
       write(n_out,'(''  l_r_field       ='',l3,'','')') l_r_field
@@ -1142,9 +1137,12 @@ contains
       integer :: n
       
       !----- Namelist parallel
-      n_procs_r     = n_procs
-      n_procs_theta = 1
-
+      n_ranks_r     = 0
+      n_ranks_theta = 0
+      n_ranks_m     = 0
+      n_ranks_ml_l  = 0
+      n_ranks_ml_m  = 0
+      
       !----- Namelist grid
       ! must be of form 4*integer+1
       ! Possible values for n_r_max:
@@ -1510,7 +1508,7 @@ contains
 
       !----- Magnetic spectra for different depths
       !      at times of log output or movie frames:
-      l_rMagSpec    =.false.
+      l_r_MagSpec    =.false.
       l_DTrMagSpec  =.false.
 
       !----- TO output, output times same as for log output:

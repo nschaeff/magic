@@ -1,37 +1,41 @@
 module truncation
    !
-   ! This module defines the grid points and the truncation 
+   !   This module defines how the points from Grid Space, LM-Space and ML-Space 
+   !   are divided amonst the MPI domains.
+   !   
+   !   This does *not* include mappings, only lower/upper bounds and dimensions.
+   ! 
+   !   PS: is "truncation" still a fitting name for this module?
    !
 
    use precision_mod, only: cp
-   use logic, only: l_finite_diff, lVerbose, l_chemical_conv, l_double_curl, &
-       &            l_TP_form
+   use logic
    use useful, only: abortRun
    use parallel_mod
    use mpi
    
    implicit none
 
+   !-- Global Dimensions:
+   !
+   !   minc here is sort of the inverse of mres in SHTns. In MagIC, the 
+   !   number of m modes stored is m_max/minc+1. In SHTns, it is simply m_max.
+   !   Conversely, there are m_max m modes in MagIC, though not all of them
+   !   are effectivelly stored/computed. In SHTns, the number of m modes
+   !   is m_max*minc+1 (therein called mres). This makes things very confusing
+   !   specially because lm2 and lmP2 arrays (and their relatives) store
+   !   m_max m points, and sets those which are not multiple of minc to 0.
+   !   
+   !   In other words, this:
+   !   call shtns_lmidx(lm_idx, l_idx, m_idx/minc)
+   !   returns the same as 
+   !   lm_idx = lm2(l_idx, m_idx)
+   !   
    integer :: n_r_max       ! number of radial grid points
    integer :: n_cheb_max    ! max degree-1 of cheb polynomia
    integer :: n_phi_tot     ! number of longitude grid points
    integer :: n_r_ic_max    ! number of grid points in inner core
    integer :: n_cheb_ic_max ! number of chebs in inner core
-   !----------------------------------------------------------------------------
-   ! Lago: This is important! minc here is sort of the opposite of 
-   ! mres in SHTns. In MagIC, the number of m modes stored is 
-   ! m_max/minc+1. In SHTns, it is simply m_max.
-   ! Conversely, there are m_max m modes in MagIC, though not all of them
-   ! are effectivelly stored/computed. In SHTns, the number of m modes
-   ! is m_max*minc+1 (therein called mres). This makes things very confusing
-   ! specially because lm2 and lmP2 arrays (and their relatives) store
-   ! m_max m points, and sets those which are not multiple of minc to 0.
-   !
-   ! In other words, this:
-   ! call shtns_lmidx(lm_idx, l_idx, m_idx/minc)
-   ! returns the same as 
-   ! lm_idx = lm2(l_idx, m_idx)
-   !----------------------------------------------------------------------------
    integer :: minc          ! basic wavenumber, longitude symmetry  
    integer :: nalias        ! controls dealiasing in latitude
    logical :: l_axi         ! logical for axisymmetric calculations
@@ -40,6 +44,9 @@ module truncation
    real(cp) :: fd_ratio      ! drMin over drMax (only when FD are used)
    integer :: fd_order       ! Finite difference order (for now only 2 and 4 are safe)
    integer :: fd_order_bound ! Finite difference order on the  boundaries
+   integer :: n_r_cmb        ! Used to belong to radial_data
+   integer :: n_r_icb        ! Used to belong to radial_data
+   integer :: n_r_on_last_rank ! Used to belong to radial_data
  
    !-- Derived quantities:
    integer :: n_phi_max   ! absolute number of phi grid-points
@@ -54,8 +61,8 @@ module truncation
    integer :: nrp,ncp     ! dimension of phi points in for real/complex arrays
    integer :: n_r_tot     ! total number of radial grid points
  
-   !--- Now quantities for magnetic fields:
-   !    Set lMag=0 if you want to save this memory (see c_fields)!
+   !-- Now quantities for magnetic fields:
+   !   Set lMag=0 if you want to save this memory (see c_fields)!
    integer :: lMagMem       ! Memory for magnetic field calculation
    integer :: n_r_maxMag    ! Number of radial points to calculate magnetic field
    integer :: n_r_ic_maxMag ! Number of radial points to calculate IC magnetic field
@@ -71,20 +78,64 @@ module truncation
    integer :: n_r_ic_max_dtB ! Number of IC radial points for movie output
    integer :: lmP_max_dtB    ! Number of l/m combinations for movie output if l runs to l_max+1
  
-   !--- Memory control for stress output:
+   !-- Memory control for stress output:
    integer :: lStressMem     ! Memory for stress output
    integer :: n_r_maxStr     ! Number of radial points for stress output
    integer :: n_theta_maxStr ! Number of theta points for stress output
    integer :: n_phi_maxStr   ! Number of phi points for stress output
    
-   !--- Distributed domain - for n_procs_theta > 1
+   !-- General Notation:
+   ! 
+   ! For continuous variables:
+   ! dist_V(i,1) = lower bound of direction V in rank i
+   ! dist_V(i,2) = lower bound of direction V in rank i
+   !
+   ! Because continuous variables are simple, we can define some shortcuts:
+   ! u_V: dist_V(this_rank,1)
+   ! l_V: dist_V(this_rank,1)
+   ! n_V: u_V - l_V + 1  (number of local points in V direction)
+   ! n_V_max: global dimensions of variable V. Basically,  MPI_ALLREDUCE(n_V,n_V_max,MPI_SUM)
+   ! 
+   ! For discontinuous variables:
+   ! dist_V(i,:) = an array containing all of the V points in rank i
+   ! 
+   
+   !-- Distributed Grid Space 
+   integer, allocatable, target :: dist_theta(:,:)
+   integer, allocatable, target :: dist_r(:,:)
+   integer :: n_theta, u_theta, l_theta
+   integer :: n_r,     l_r,     l_r
+   
+   ! Helpers
+   integer :: l_r_Mag
+   integer :: l_r_Che
+   integer :: l_r_TP 
+   integer :: l_r_DC 
+   integer :: l_r_Mag 
+   integer :: l_r_Che 
+   integer :: l_r_TP  
+   integer :: l_r_DC  
+   
+   !-- Distributed LM-Space
+   ! n_m:  total number of m's in this rank
+   ! n_lm: total number of l and m points in this rank
+   ! n_lm: total number of l and m points (for LM space with l_max+1) in this rank
+   integer, allocatable :: dist_m(:,:)
+   integer :: n_m, n_lm, n_lmP
+   integer :: n_m_array
+   
+   !-- Distributed ML-Space
+   
+   
+   
+   !--- Distributed domain - for n_ranks_theta > 1
    ! n_theta_dist(i,1): first theta point in the i-th rank
    ! n_theta_dist(i,2): last theta ppoint in the i-th rank
    ! n_theta_beg: shortcut to n_theta_dist(coord_theta,1)
    ! n_theta_end: shortcut to n_theta_dist(coord_theta,2)
    ! n_theta_loc: number of theta points in the local rank
    !-------------------------------------------------------------
-   ! lm_dist - (n_procs_theta, n_m_ext, 4)
+   ! lm_dist - (n_ranks_theta, n_m_ext, 4)
    ! lm_dist(i,j,1): value of the j-th "m" in the i-th rank
    ! lm_dist(i,j,2): length of the j-th row in Flm_loc
    ! lm_dist(i,j,3): where the j-th row begins in Flm_loc
@@ -112,62 +163,59 @@ module truncation
    integer :: lm_locDC
    integer, allocatable :: n_theta_dist(:,:), lmP_dist(:,:,:), lm_dist(:,:,:)
    
-   !@>TODO: 
-   ! lmP2_ptr is here because I cannot use blocking module here (it causes 
-   ! circular dependency). The lmP2 is required, at the moment, for 
-   ! gather_Flm only.  I can try to figure out a better way later, but as 
-   ! of now, I just copy the pointer during distribute_truncation(). 
-   ! - Lago 
-   integer, private, pointer :: lmP2_ptr(:,:) , lm2_ptr(:,:) 
-                              
- 
-   interface slice_Flm
-      module procedure slice_Flm_cmplx, slice_Flm_real
-   end interface slice_Flm
    
-   interface slice_FlmP
-      module procedure slice_FlmP_cmplx, slice_FlmP_real
-   end interface slice_FlmP
- 
+   
+   
+   
+   
+   
+   !-- Distribution of the points amonst the ranks
+   !   Contiguous directions are stored in a 2D array
+   !   Discontiguous directions are stored in a 3D array
+   integer, allocatable :: ml_m_dist(:,:)
+   integer, allocatable :: ml_l_dist(:,:,:)
+   
+   
+   
 contains
-
+   
    subroutine initialize_truncation
-
+      
       integer :: n_r_maxML,n_r_ic_maxML,n_r_totML,l_maxML,lm_maxML
       integer :: lm_max_dL,lmP_max_dL,n_r_max_dL,n_r_ic_max_dL
       integer :: n_r_maxSL,n_theta_maxSL,n_phi_maxSL
-
+      
       if ( .not. l_axi ) then
          ! absolute number of phi grid-points
-         n_phi_max=n_phi_tot/minc
+         n_phi_max = n_phi_tot/minc
 
          ! number of theta grid-points
-         n_theta_max=n_phi_tot/2
+         n_theta_max = n_phi_tot/2
 
          ! max degree and order of Plms
-         l_max=(nalias*n_theta_max)/30 
-         m_max=(l_max/minc)*minc
+         l_max = (nalias*n_theta_max)/30 
+         m_max = (l_max/minc)*minc
       else
-         n_theta_max=n_theta_axi
-         n_phi_max  =1
-         n_phi_tot  =1
-         minc       =1
-         l_max      =(nalias*n_theta_max)/30 
-         m_max      =0
+         n_theta_max = n_theta_axi
+         n_phi_max   = 1
+         n_phi_tot   = 1
+         minc        = 1
+         l_max       = (nalias*n_theta_max)/30 
+         m_max       = 0
       end if
-
+      
       ! max number of ms (different oders)
       n_m_max=m_max/minc+1
-
+      
       ! number of l/m combinations
       lm_max=m_max*(l_max+1)/minc - m_max*(m_max-minc)/(2*minc)+(l_max+1-m_max)
       ! number of l/m combination if l runs to l_max+1
       lmP_max=lm_max+n_m_max
-
+      
       ! number of l/m combination 
       ! for real representation (cos/sin)
       lm_max_real=2*lm_max
-
+      
 #if WITH_SHTNS
       nrp=n_phi_max
 #else
@@ -177,8 +225,8 @@ contains
 
       ! total number of radial grid points
       n_r_tot=n_r_max+n_r_ic_max
-
-      !--- Now quantities for magnetic fields:
+      
+      !-- Now quantities for magnetic fields:
       !    Set lMag=0 if you want to save this memory (see c_fields)!
       n_r_maxML     = lMagMem*n_r_max
       n_r_ic_maxML  = lMagMem*n_r_ic_max
@@ -190,7 +238,7 @@ contains
       n_r_totMag    = max(1,n_r_totML)
       l_maxMag      = max(1,l_maxML)
       lm_maxMag     = max(1,lm_maxML)
-
+      
       !-- Movie memory control:
       lm_max_dL    =ldtBMem*lm_max
       lmP_max_dL   =ldtBMem*lmP_max
@@ -200,40 +248,123 @@ contains
       lmP_max_dtB   =max(lmP_max_DL,1)
       n_r_max_dtB   =max(n_r_max_DL,1)
       n_r_ic_max_dtB=max(n_r_ic_max_DL,1)
-
-      !--- Memory control for stress output:
-      n_r_maxSL     =lStressMem*n_r_max
-      n_theta_maxSL =lStressMem*n_theta_max
-      n_phi_maxSL   =lStressMem*n_phi_max
-      n_r_maxStr    =max(n_r_maxSL,1)
-      n_theta_maxStr=max(n_theta_maxSL,1)
-      n_phi_maxStr  =max(n_phi_maxSL,1)
+      
+      !-- Memory control for stress output:
+      n_r_maxSL     = lStressMem*n_r_max
+      n_theta_maxSL = lStressMem*n_theta_max
+      n_phi_maxSL   = lStressMem*n_phi_max
+      n_r_maxStr    = max(n_r_maxSL,1)
+      n_theta_maxStr= max(n_theta_maxSL,1)
+      n_phi_maxStr  = max(n_phi_maxSL,1)
+      
+      !-- I don't know the purpose of these two variables, but they used to 
+      !   belong to radial_data. I'll keep them around. - Lago
+      
+      ! must be of form 4*integer+1
+      ! Possible values for n_r_max:
+      !  5,9,13,17,21,25,33,37,41,49,
+      !  61,65,73,81,97,101,121,129, ...
+      n_r_cmb = 1
+      n_r_icb = n_r_max
+      
    end subroutine initialize_truncation
+   
+   !------------------------------------------------------------------------------
+   subroutine distribute_gs
+      !   
+      !   Takes care of the distribution of the radial points and the θ
+      !   
+      !   Author: Rafael Lago, MPCDF, June 2018
+      !   
+      
+      !-- Distribute Grid Space θ
+      !
+      allocate(dist_theta(0:n_ranks_theta-1,2))
+      call distribute_contiguous_last(dist_theta,n_theta_max,n_ranks_theta)
+      l_theta = dist_theta(coord_theta,1)
+      u_theta = dist_theta(coord_theta,2)
+      n_theta = u_theta - l_theta + 1
+      
+      !-- Distribute Grid Space r
+      !   I'm not sure what happens if n_r_cmb/=1 and n_r_icb/=n_r_max
+      allocate(dist_r(0:n_ranks_r-1,2))
+      call distribute_contiguous_last(dist_r,n_r_max,n_ranks_r)
+      l_r = dist_r(coord_r,1)
+      l_r = dist_r(coord_r,2)
+      n_r = l_r - l_r + 1
+      
+      !-- Setup Helpers
+      !   
+      l_r_Mag = l_r
+      l_r_Che = l_r
+      l_r_TP  = l_r
+      l_r_DC  = l_r
+      l_r_Mag = l_r
+      l_r_Che = l_r
+      l_r_TP  = l_r
+      l_r_DC  = l_r
+      
+      if ( .not. l_mag           ) l_r_Mag = 1
+      if ( .not. l_chemical_conv ) l_r_Che = 1
+      if ( .not. l_TP_form       ) l_r_TP  = 1
+      if ( .not. l_double_curl   ) l_r_DC  = 1
+      if ( .not. l_mag           ) l_r_Mag = 1
+      if ( .not. l_chemical_conv ) l_r_Che = 1
+      if ( .not. l_TP_form       ) l_r_TP  = 1
+      if ( .not. l_double_curl   ) l_r_DC  = 1
+      
+      call print_contiguous_distribution(dist_theta, n_ranks_theta, 'θ')
+      call print_contiguous_distribution(dist_r, n_ranks_r, 'r')
+      
+   end subroutine distribute_gs
+   
+   !------------------------------------------------------------------------------
+   subroutine distribute_lm
+      !   
+      !   Takes care of the distribution of the m's from the LM-space
+      !   
+      !   Author: Rafael Lago, MPCDF, June 2018
+      !   
+      
+      !   R was already distributed in distribute_gs
+      !   Only m is left
+      
+      n_m_array = ceiling(real(n_m_max) / real(n_ranks_theta))
+      
+      allocate(dist_m( 0:n_ranks_theta-1, n_m_array))
+      
+      !-- We use m_max+1 here because it is from 0:m_max
+      call distribute_discontiguous_snake(dist_m,  n_m_array, m_max+1, n_ranks_theta)
+      
+      n_m = n_m_array - 1
+      if (dist_m(coord_theta,n_m_array) > -1) n_m = n_m_array
+      
+      call print_discontiguous_distribution(dist_m, n_m_array, n_ranks_theta, 'm')
+      
+   end subroutine distribute_lm   
 
 !------------------------------------------------------------------------------- 
-   subroutine distribute_truncation(lmP2, lm2)
-!@>details Divides the number of points in theta direction evenly amongst the 
-!> ranks; if the number of point is not round, the last first receive one extra 
-!> point. 
-!
-!@>TODO load imbalance; load imbalance everywhere. I won't mind that now, 
-!> because the ordering will be much more complicated anyway, I'll worry about 
-!> that later
-!
-!@>TODO deallocate the arrays allocated here
-!
-!@>author Rafael Lago, MPCDF, July 2017
-!-------------------------------------------------------------------------------
-      integer, target, intent(in) :: lmP2(0:l_max+1,0:l_max+1), lm2(0:l_max,0:l_max)
-      integer :: i, j, itmp, loc
+   subroutine distribute_truncation
+      !   Divides the number of points in theta direction evenly amongst the 
+      !   ranks; if the number of point is not round, the last first receive 
+      !   one extra point. 
+      !
+      !-- TODO load imbalance; load imbalance everywhere. I won't mind that 
+      !   now, because the ordering will be much more complicated anyway, I'll 
+      !   worry about that later
+      !
+      !-- TODO deallocate the arrays allocated here
+      !
+      !   Author: Rafael Lago, MPCDF, July 2017
+      !
+      integer :: i, j, itmp, loc, proc_idx
       
-      lmP2_ptr => lmP2
-      lm2_ptr => lm2
-      
-      loc = n_theta_max/n_procs_theta
-      itmp = n_theta_max - loc*n_procs_theta
-      allocate(n_theta_dist(0:n_procs_theta-1,2))
-      do i=0,n_procs_theta-1
+      ! Deals with n_theta_dist
+      !-------------------------------------------
+      loc = n_theta_max/n_ranks_theta
+      itmp = n_theta_max - loc*n_ranks_theta
+      allocate(n_theta_dist(0:n_ranks_theta-1,2))
+      do i=0,n_ranks_theta-1
          n_theta_dist(i,1) = loc*i + min(i,itmp) + 1
          n_theta_dist(i,2) = loc*(i+1) + min(i+1,itmp)
       end do
@@ -241,17 +372,63 @@ contains
       n_theta_end = n_theta_dist(coord_theta,2)
       n_theta_loc = n_theta_dist(coord_theta,2) - n_theta_dist(coord_theta,1)+1
       
-      n_m_ext = ceiling(real(m_max+1)/real(minc*n_procs_theta))
+      if (rank == 0) then
+         print "('θ partition in rank ', I3, ': ', I5, I5, I5, ' points')", &
+               0, n_theta_dist(0,1), n_theta_dist(0,2), n_theta_dist(0,2) - &
+               n_theta_dist(0,1) + 1
+         do i=1, n_ranks_theta-1
+            print "('               rank ', I3, ': ', I5, I5, I5, ' points')", &
+                  i, n_theta_dist(i,1), n_theta_dist(i,2), n_theta_dist(i,2) - &
+                  n_theta_dist(i,1) + 1
+         end do
+      end if
       
-      allocate(lmP_dist(0:n_procs_theta-1, n_m_ext, 4))
-      allocate(lm_dist(0:n_procs_theta-1, n_m_ext, 4))
+      ! Deals with lmP_dist and lm_dist (for radial loop)
+      !---------------------------------------------------
+      n_m_ext = ceiling(real(m_max+1)/real(minc*n_ranks_theta))
       
-      call distribute_snake(lmP_dist, l_max+1, m_max, minc)
-      call distribute_snake(lm_dist,  l_max  , m_max, minc)
+      allocate(lmP_dist(0:n_ranks_theta-1, n_m_ext, 4))
+      allocate(lm_dist(0:n_ranks_theta-1, n_m_ext, 4))
+      
+      call distribute_snake_old(lmP_dist, l_max+1, m_max, minc)
+      call distribute_snake_old(lm_dist,  l_max  , m_max, minc)
       
       n_m_loc = n_m_ext - 1
       if (lmP_dist(coord_theta,n_m_ext,1) > -1) n_m_loc = n_m_ext
       
+      if (rank == 0) then
+         do i=0, n_ranks_theta-1
+            do j=1, n_m_ext
+               print "('lmP partition in rank ', I3, ': ', I5, I5, I5, I5)", i,&
+               lmP_dist(i,j,1:4)
+            end do
+            print "('length in rank ', I3, ' is ', I5)", i, sum(lmP_dist(i,:,2))
+         end do
+      end if
+      
+      ! Deals with lo_dist (for MLLoop)
+      !---------------------------------------------------
+!       n_lo_ext = ceiling(real(l_max+1)/real(n_ranks_theta))
+!       
+!       allocate(lo_dist(0:n_ranks_theta, n_lo_ext, 0:n_m_max))
+!       
+!       call distribute_lo_simple(lo_dist,l_max, m_max, minc)
+!       
+!       if (rank ==0) then
+!          do proc_idx=0, n_ranks_theta-1
+!             print *, "=======================>", proc_idx
+!             do i=1, n_lo_ext
+!                print *, "---------------->", lo_dist(proc_idx, i, 0)
+!                print *, lo_dist(proc_idx, i, 1:n_m_max)
+!             end do
+!          end do
+!       end if
+!       
+!       stop
+      
+      
+      ! Sets some shortcuts
+      !---------------------------------------------------
       lmP_loc = sum(lmP_dist(coord_theta,:,2))
       lm_loc  = sum(lm_dist( coord_theta,:,2))
       lm_locMag = lm_loc
@@ -263,43 +440,25 @@ contains
       if ( .not. l_TP_form       ) lm_locTP  = 1
       if ( .not. l_double_curl   ) lm_locDC  = 1
       
-      if (rank == 0) then
-         print "('θ partition in rank ', I3, ': ', I5, I5, I5, ' points')", &
-               0, n_theta_dist(0,1), n_theta_dist(0,2), n_theta_dist(0,2) - &
-               n_theta_dist(0,1) + 1
-         do i=1, n_procs_theta-1
-            print "('               rank ', I3, ': ', I5, I5, I5, ' points')", &
-                  i, n_theta_dist(i,1), n_theta_dist(i,2), n_theta_dist(i,2) - &
-                  n_theta_dist(i,1) + 1
-         end do
-
-         do i=0, n_procs_theta-1
-            do j=1, n_m_ext
-               print "('lmP partition in rank ', I3, ': ', I5, I5, I5, I5)", i,&
-               lmP_dist(i,j,1:4)
-            end do
-            print "('length in rank ', I3, ' is ', I5)", i, sum(lmP_dist(i,:,2))
-         end do
-      end if
-      
    end subroutine distribute_truncation
    
-!-------------------------------------------------------------------------------   
+   !----------------------------------------------------------------------------   
    subroutine distribute_round_robin(idx_dist, l_max, m_max, minc)
-!@>details This will try to create a balanced workload, by assigning to each 
-!> rank  non-consecutive m points. For instance, if we have m_max=16, minc=1 and 
-!> n_procs_theta=4, we will have:
-!> 
-!> rank 0: 0, 4,  8, 12, 16
-!> rank 1: 1, 5,  9, 13
-!> rank 2: 2, 6, 10, 14
-!> rank 3: 3, 7, 11, 15
-!> 
-!> This is not optimal, but seem to be a decent compromise.
-! 
-!@>author Rafael Lago, MPCDF, December 2017
-!-------------------------------------------------------------------------------
-      integer, intent(inout) :: idx_dist(0:n_procs_theta-1, n_m_ext, 4)
+      !
+      !   This will try to create a balanced workload, by assigning to each 
+      !   rank  non-consecutive m points. For instance, if we have m_max=16, minc=1 and 
+      !   n_ranks_theta=4, we will have:
+      !   
+      !   rank 0: 0, 4,  8, 12, 16
+      !   rank 1: 1, 5,  9, 13
+      !   rank 2: 2, 6, 10, 14
+      !   rank 3: 3, 7, 11, 15
+      !   
+      !   This is not optimal, but seem to be a decent compromise.
+      ! 
+      !   Author: Rafael Lago, MPCDF, December 2017
+      !
+      integer, intent(inout) :: idx_dist(0:n_ranks_theta-1, n_m_ext, 4)
       integer, intent(in)    :: l_max, m_max, minc
       
       integer :: m_idx, proc_idx, row_idx
@@ -311,7 +470,7 @@ contains
       m_idx=0
       row_idx = 1
       do while (m_idx <= m_max)
-         do proc_idx=0, n_procs_theta-1
+         do proc_idx=0, n_ranks_theta-1
             idx_dist(proc_idx, row_idx, 1) = m_idx
             idx_dist(proc_idx, row_idx, 2) = l_max - m_idx + 1
             if (row_idx > 1) idx_dist(proc_idx, row_idx, 3) = &
@@ -327,12 +486,14 @@ contains
      
    end subroutine distribute_round_robin
    
-!-------------------------------------------------------------------------------   
-   subroutine distribute_snake(idx_dist, l_max, m_max, minc)
-!@>details Same as above but for Snake Ordering.
-!@>author Rafael Lago, MPCDF, December 2017
-!-------------------------------------------------------------------------------
-      integer, intent(inout) :: idx_dist(0:n_procs_theta-1, n_m_ext, 4)
+   !----------------------------------------------------------------------------   
+   subroutine distribute_snake_old(idx_dist, l_max, m_max, minc)
+      !   
+      !   Same as above but for Snake Ordering
+      !   
+      !   Author: Rafael Lago, MPCDF, December 2017
+      !
+      integer, intent(inout) :: idx_dist(0:n_ranks_theta-1, n_m_ext, 4)
       integer, intent(in)    :: l_max, m_max, minc
       
       integer :: m_idx, proc_idx, row_idx
@@ -344,7 +505,7 @@ contains
       m_idx=0
       row_idx = 1
       do while (m_idx <= m_max)
-         do proc_idx=0, n_procs_theta-1
+         do proc_idx=0, n_ranks_theta-1
             idx_dist(proc_idx, row_idx, 1) = m_idx
             idx_dist(proc_idx, row_idx, 2) = l_max - m_idx + 1
             if (row_idx > 1) idx_dist(proc_idx, row_idx, 3) = &
@@ -355,7 +516,7 @@ contains
             if (m_idx > m_max) exit
          end do
          row_idx = row_idx + 1
-         do proc_idx=n_procs_theta-1,0,-1
+         do proc_idx=n_ranks_theta-1,0,-1
             if (m_idx > m_max) exit
             idx_dist(proc_idx, row_idx, 1) = m_idx
             idx_dist(proc_idx, row_idx, 2) = l_max - m_idx + 1
@@ -370,13 +531,70 @@ contains
       end do
       
      
-   end subroutine distribute_snake
+   end subroutine distribute_snake_old
    
-!-------------------------------------------------------------------------------
+!    !----------------------------------------------------------------------------
+!    subroutine distribute_lo_simple(idx_dist, l_max, m_max, minc)
+!       !   This is a simplified version of the future lo distribution.
+!       !          
+!       !   At this point it will just use snake ordering to distribute the l's
+!       !   and then after it will assign all m's to that l. For many 
+!       !   configurations, this function won't work.
+!       !          
+!       !   Author: Rafael Lago, MPCDF, December 2017
+!       !
+!       integer, intent(inout) :: idx_dist(0:n_ranks_theta, n_lo_ext, 0:n_m_max)
+!       integer, intent(in)    :: l_max, m_max, minc
+!       
+!       integer :: proc_idx, i, j, l_idx, m_idx
+!       
+!       idx_dist = -1
+!       
+!       l_idx=0
+!       i = 1
+!       
+!       ! Distribute l's (snake ordering)
+!       !----------------------------------------
+!       do while (l_idx <= l_max)
+!          do proc_idx=0, n_ranks_theta-1
+!             idx_dist(proc_idx, i, 0) = l_idx
+!             l_idx = l_idx + 1
+!             if (l_idx > l_max) exit
+!          end do
+!          i = i + 1
+!          do proc_idx=n_ranks_theta-1,0,-1
+!             if (l_idx > l_max) exit
+!             idx_dist(proc_idx, i, 0) = l_idx
+!             l_idx = l_idx + 1
+!          end do
+!          i = i + 1
+!       end do
+!       
+!       ! Distribute m's for each l
+!       ! This is a naïve distribution; each l will be assigned 
+!       ! all of its  m's
+!       !---------------------------------------------------------------
+!       do proc_idx=0, n_ranks_theta-1
+!          do i=1, n_lo_ext
+!             l_idx = idx_dist(proc_idx, i, 0)
+!             if (l_idx < 0) exit
+!             j = 1
+!             do m_idx = 0, l_idx, minc
+!                idx_dist(proc_idx, i, j) = m_idx
+!                j = j + 1
+!             end do
+!          end do
+!       end do
+!       
+!    end subroutine distribute_lo_simple
+   
+   !----------------------------------------------------------------------------
    subroutine checkTruncation
+      !
       !  This function checks truncations and writes it
       !  into STDOUT and the log-file.                                 
       !  MPI: called only by the processor responsible for output !  
+      !  
 
       if ( minc < 1 ) then
          call abortRun('! Wave number minc should be > 0!')
@@ -418,339 +636,144 @@ contains
       end if
 
    end subroutine checkTruncation
+   !----------------------------------------------------------------------------   
+   subroutine distribute_discontiguous_snake(dist, max_len, N, p)
+      !  
+      !  Distributes N points amongst p ranks using snake ordering.
+      !  max_len is supposed to be the ceiling(N/p)
+      !  
+      integer, intent(in)    :: max_len, N, p
+      integer, intent(inout) :: dist(0:p-1, max_len)
+      
+      integer :: j, ipt, irow
+      
+      dist(:,:) =  -1
+      ipt  = 1
+      irow = 1
+      
+      do while (.TRUE.)
+         do j=0, p-1
+            dist(j, irow) = ipt
+            ipt = ipt + 1
+            if (ipt > N) return
+         end do
+         irow = irow + 1
+         do j=p-1,0,-1
+            dist(j, irow) = ipt
+            ipt = ipt + 1
+            if (ipt > N) return
+         end do
+         irow = irow + 1
+      end do
+   end subroutine distribute_discontiguous_snake
+   !----------------------------------------------------------------------------   
+   subroutine distribute_discontiguous_roundrobin(dist, max_len, N, p)
+      !  
+      !  Distributes N points amongst p ranks using round Robin ordering.
+      !  max_len is supposed to be the ceiling(N/p)
+      !  
+      integer, intent(in)    :: max_len, N, p
+      integer, intent(inout) :: dist(0:p-1, max_len)
+      
+      integer :: j, ipt, irow
+      
+      dist(:,:) =  -1
+      ipt  = 1
+      irow = 1
+      
+      do while (.TRUE.)
+         do j=0, p-1
+            dist(j, irow) = ipt
+            ipt = ipt + 1
+            if (ipt > N) return
+         end do
+         irow = irow + 1
+      end do
+   end subroutine distribute_discontiguous_roundrobin
+   
+   !-------------------------------------------------------------------------------
+   subroutine distribute_contiguous_first(dist,N,p)
+      !  
+      !  Distributes N points amongst p ranks. If N is not divisible by p, add
+      !  one extra point in the first ranks (thus, "front")
+      !  
+      integer, intent(in) :: p
+      integer, intent(in) :: N
+      integer, intent(out) :: dist(0:p-1,2)
+      
+      integer :: rem, loc, i
+      
+      loc = N/p
+      rem = N - loc*p
+      do i=0,p-1
+         dist(i,1) = loc*i + min(i,rem) + 1
+         dist(i,2) = loc*(i+1) + min(i+1,rem)
+      end do
+   end subroutine distribute_contiguous_first
+   !-------------------------------------------------------------------------------
+   subroutine distribute_contiguous_last(dist,N,p)
+      !  
+      !  Like above, but extra points go in the last ranks instead of 
+      !  the first ranks
+      !  
+      integer, intent(in) :: p
+      integer, intent(in) :: N
+      integer, intent(out) :: dist(0:p-1,2)
+      
+      integer :: rem, loc, i
+      
+      loc = N/p
+      rem = N - loc*p
+      do i=0,p-1
+         dist(i,1) = loc*i + max(i+rem-p,0) + 1
+         dist(i,2) = loc*(i+1) + max(i+rem+1-p,0)
+      end do
+   end subroutine distribute_contiguous_last
+   
+   !-------------------------------------------------------------------------------
+   subroutine print_contiguous_distribution(dist,p,name)
+      !  
+      !  Cosmetic function to display the distributio of the points
+      !  
+      integer, intent(in) :: p
+      integer, intent(in) :: dist(0:p-1,2)
+      character(*), intent(in) :: name
+      integer :: i
+      
+      if (rank /= 0) return
+      
+      print "(' ! ',A,' partition in rank ', I0, ': ', I0,'-',I0, '  (', I0, ' pts)')", name, &
+            0, dist(0,1), dist(0,2), dist(0,2) - dist(0,1) + 1
+            
+      do i=1, p-1
+         print "(' !                rank ', I0, ': ', I0,'-',I0, '  (', I0, ' pts)')", &
+               i, dist(i,1), dist(i,2), dist(i,2) - dist(i,1) + 1
+      end do
+   end subroutine print_contiguous_distribution
+   
+   !-------------------------------------------------------------------------------
+   subroutine print_discontiguous_distribution(dist,max_len,p,name)
+      !  
+      !  Cosmetic function to display the distributio of the points
+      !  
+      integer, intent(in) :: max_len, p
+      integer, intent(in) :: dist(0:p-1,max_len)
+      character(*), intent(in) :: name
+      
+      integer :: i, j, counter
+      
+      if (rank /= 0) return
+      
+      do i=0, n_ranks_theta-1
+         write (*,'(A,I0,A,I0)', ADVANCE='NO') ' ! '//name//' partition in rank ', i, ' :', dist(i,1)
+         counter = 1
+         do j=2, max_len
+            if (dist(i,j) < 0) cycle
+            write (*, '(A,I0)', ADVANCE='NO') ',', dist(i,j)
+            counter = counter + 1
+         end do
+         write (*, '(A,I0,A)') "  (",counter," pts)"
+      end do
+   end subroutine print_discontiguous_distribution
 
-!-------------------------------------------------------------------------------
-   subroutine slice_f(f_global, f_local)
-!@>details Copies the relevant part of f_global into f_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      real(cp),  intent(in)  :: f_global(n_phi_max, n_theta_max)
-      real(cp),  intent(out) :: f_local(n_phi_max, n_theta_loc)
-      
-      f_local = f_global(:,n_theta_beg:n_theta_end)
-   end subroutine slice_f
-   
-!-------------------------------------------------------------------------------
-   subroutine slice_Flm_cmplx(Flm_global, Flm_local)
-!@>details Copies the relevant part of Flm_global into Flm_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp),  intent(in)  :: Flm_global(lm_max)
-      complex(cp),  intent(out) :: Flm_local(lm_loc)
-      
-      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
-      
-      do i = 1, n_m_loc
-        m_idx = lm_dist(coord_theta, i, 1)
-        lm_s  = lm_dist(coord_theta, i, 3)
-        lm_e  = lm_dist(coord_theta, i, 4)
-        lm_gs = lm2_ptr(m_idx, m_idx)
-        lm_ge = lm2_ptr(l_max, m_idx)
-        Flm_local(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
-      end do
-   end subroutine slice_Flm_cmplx
-   
-!-------------------------------------------------------------------------------
-   subroutine slice_Flm_real(Flm_global, Flm_local)
-!@>details Copies the relevant part of Flm_global into Flm_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      real(cp),  intent(in)  :: Flm_global(lm_max)
-      real(cp),  intent(out) :: Flm_local(lm_loc)
-      
-      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
-      
-      do i = 1, n_m_loc
-        m_idx = lm_dist(coord_theta, i, 1)
-        lm_s  = lm_dist(coord_theta, i, 3)
-        lm_e  = lm_dist(coord_theta, i, 4)
-        lm_gs = lm2_ptr(m_idx, m_idx)
-        lm_ge = lm2_ptr(l_max, m_idx)
-        Flm_local(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
-      end do
-   end subroutine slice_Flm_real
-
-!-------------------------------------------------------------------------------
-   subroutine slice_FlmP_cmplx(FlmP_global, FlmP_local)
-!@>details Copies the relevant part of FlmP_global into FlmP_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp),  intent(in)  :: FlmP_global(lmP_max)
-      complex(cp),  intent(out) :: FlmP_local(lmP_loc)
-      
-      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
-      
-      call shtns_load_cfg(1) ! l_max + 1
-      
-      do i = 1, n_m_loc
-        m_idx = lmP_dist(coord_theta, i, 1)
-        lm_s  = lmP_dist(coord_theta, i, 3)
-        lm_e  = lmP_dist(coord_theta, i, 4)
-        lm_gs = lmP2_ptr(m_idx,   m_idx)
-        lm_ge = lmP2_ptr(l_max+1, m_idx)
-        FlmP_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
-      end do
-      
-      call shtns_load_cfg(0) ! l_max
-      
-   end subroutine slice_FlmP_cmplx
-   
-!-------------------------------------------------------------------------------
-   subroutine slice_FlmP_real(FlmP_global, FlmP_local)
-!@>details Copies the relevant part of FlmP_global into FlmP_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      real(cp),  intent(in)  :: FlmP_global(lmP_max)
-      real(cp),  intent(out) :: FlmP_local(lmP_loc)
-      
-      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
-      
-      call shtns_load_cfg(1) ! l_max + 1
-      
-      do i = 1, n_m_loc
-        m_idx = lm_dist(coord_theta, i, 1)
-        lm_s  = lm_dist(coord_theta, i, 3)
-        lm_e  = lm_dist(coord_theta, i, 4)
-        lm_gs = lmP2_ptr(m_idx,   m_idx)
-        lm_ge = lmP2_ptr(l_max+1, m_idx)
-        FlmP_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
-      end do
-      
-      call shtns_load_cfg(0) ! l_max
-      
-   end subroutine slice_FlmP_real
-
-!-------------------------------------------------------------------------------
-   subroutine gather_FlmP(FlmP_local, FlmP_global)
-!@>details Gathers the FlmP which was computed in a distributed fashion.
-!> Mostly used for debugging. This function may not be performant at all.
-!> 
-!@>TODO this with mpi_allgatherv
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp),  intent(in)  :: FlmP_local(lmP_loc)
-      complex(cp),  intent(out) :: FlmP_global(lmP_max)
-      
-      complex(cp) ::  buffer(lmP_max)
-      integer :: i, j, m_idx, lm_s_local, lm_e_local, lm_s_global, lm_e_global
-      integer :: pos, ilen, Rq(n_procs_theta), ierr
-      
-      ! buffer will receive all messages, but they are ordered by ranks,
-      ! not by m.
-      
-      pos = 1
-      do i=0,n_procs_theta-1
-         ilen = sum(lmP_dist(i,:,2))
-         if (coord_theta == i) buffer(pos:pos+ilen-1) = FlmP_local(1:lmP_loc)
-         CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, i, &
-                         comm_theta, Rq(i+1), ierr)
-         pos = pos + ilen
-      end do
-      
-      CALL MPI_WAITALL(n_procs_theta, Rq, MPI_STATUSES_IGNORE, ierr)
-      
-      ! This basically re-orders the buffer 
-      pos = 0
-      do i=0,n_procs_theta-1
-         do j = 1, n_m_ext
-            m_idx = lmP_dist(i, j, 1)
-            if (m_idx < 0) exit
-            lm_s_local  = pos + lmP_dist(i, j, 3)
-            lm_e_local  = pos + lmP_dist(i, j, 4)
-            lm_s_global = lmP2_ptr(m_idx  ,m_idx)
-            lm_e_global = lmP2_ptr(l_max+1,m_idx)
-            FlmP_global(lm_s_global:lm_e_global) = buffer(lm_s_local:lm_e_local)
-         end do
-         pos = pos + sum(lmP_dist(i,:,2))
-      end do
-      
-   end subroutine gather_FlmP
-   
-!-------------------------------------------------------------------------------
-   subroutine gather_Flm(Flm_local, Flm_global)
-!@>details Gathers the Flm which was computed in a distributed fashion.
-!> Mostly used for debugging. This function may not be performant at all.
-!> 
-!@>TODO this with mpi_allgatherv
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp),  intent(in)  :: Flm_local(lm_loc)
-      complex(cp),  intent(out) :: Flm_global(lm_max)
-      
-      complex(cp) ::  buffer(lm_max)
-      integer :: i, j, m_idx, lm_s_local, lm_e_local, lm_s_global, lm_e_global
-      integer :: pos, ilen, Rq(n_procs_theta), ierr
-      
-      ! buffer will receive all messages, but they are ordered by ranks,
-      ! not by m.
-      
-      pos = 1
-      do i=0,n_procs_theta-1
-         ilen = sum(lm_dist(i,:,2))
-         if (coord_theta == i) buffer(pos:pos+ilen-1) = Flm_local(1:lm_loc)
-         CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, i, &
-                         comm_theta, Rq(i+1), ierr)
-         pos = pos + ilen
-      end do
-      
-      CALL MPI_WAITALL(n_procs_theta, Rq, MPI_STATUSES_IGNORE, ierr)
-      
-      pos = 0
-      do i=0,n_procs_theta-1
-         do j = 1, n_m_ext
-            m_idx = lm_dist(i, j, 1)
-            if (m_idx < 0) exit
-            lm_s_local  = pos + lm_dist(i, j, 3)
-            lm_e_local  = pos + lm_dist(i, j, 4)
-            lm_s_global = lm2_ptr(m_idx , m_idx)
-            lm_e_global = lm2_ptr(l_max , m_idx)
-            Flm_global(lm_s_global:lm_e_global) = buffer(lm_s_local:lm_e_local)
-         end do
-         pos = pos + sum(lm_dist(i,:,2))
-      end do
-      
-   end subroutine gather_Flm
-   
-!-------------------------------------------------------------------------------
-   subroutine gather_f(f_local, f_global)
-!@>details Gathers the Flm which was computed in a distributed fashion.
-!> Mostly used for debugging. This function may not be performant at all.
-!
-!@>TODO this with mpi_allgatherv
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      real(cp),  intent(inout) :: f_local(n_phi_max, n_theta_loc)
-      real(cp),  intent(out)   :: f_global(n_phi_max, n_theta_max)
-      
-      integer :: i, nt, ierr
-      integer :: Rq(n_procs_theta) 
-      
-      ! Copies local content to f_global
-      f_global = 0.0
-      f_global(:,n_theta_beg:n_theta_end) = f_local
-      
-      do i=0,n_procs_theta-1
-         nt = n_theta_dist(i,2) - n_theta_dist(i,1) + 1
-         CALL MPI_IBCAST(f_global(:,n_theta_dist(i,1):n_theta_dist(i,2)),   &
-                         n_phi_max*nt, MPI_DOUBLE_PRECISION, i, comm_theta, &
-                         Rq(i+1), ierr)
-      end do
-      
-      CALL MPI_WAITALL(n_procs_theta, Rq, MPI_STATUSES_IGNORE, ierr)
-      
-   end subroutine gather_f
-   
-!-------------------------------------------------------------------------------
-   subroutine transpose_m_theta(f_m_theta, f_theta_m)
-!@>details Does the transposition using alltoallv.
-!
-!@>TODO this with mpi_type to stride the data
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp), intent(inout) :: f_m_theta(n_m_max,n_theta_loc)
-      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
-      
-      complex(cp) :: sendbuf(n_m_max*n_theta_loc)
-      complex(cp) :: recvbuf(n_m_loc, n_theta_max)
-      
-      integer :: sendcount(0:n_procs_theta-1)
-      integer :: recvcount(0:n_procs_theta-1)
-      integer :: senddispl(0:n_procs_theta-1)
-      integer :: recvdispl(0:n_procs_theta-1)
-      integer :: i, j, k, m_idx, pos, n_theta
-      
-      pos = 1
-      do i=0,n_procs_theta-1
-         ! Copy each m which belongs to the i-th rank into the send buffer
-         ! column-wise. That will simplify a lot things later
-         !
-         !>@TODO check performance of this; implementing this with mpi_type
-         !> striding the data will probably be faster
-         senddispl(i) = pos-1
-         do k=1,n_theta_loc
-            do j=1,n_m_ext
-               if (lmP_dist(i,j,1) < 0) exit
-               m_idx = lmP_dist(i,j,1)/minc
-               sendbuf(pos) = f_m_theta(m_idx+1,k)
-               pos = pos + 1
-            end do
-         end do
-         sendcount(i) = pos - senddispl(i) - 1
-         n_theta = n_theta_dist(i,2) - n_theta_dist(i,1) + 1
-         recvdispl(i) = i*n_m_loc*n_theta
-         recvcount(i) = n_m_loc*n_theta
-      end do
-      
-      call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
-                         recvbuf, recvcount, recvdispl, MPI_DOUBLE_COMPLEX, &
-                         comm_theta, i)
-      f_theta_m = transpose(recvbuf)
-      
-   end subroutine transpose_m_theta
-   
-!-------------------------------------------------------------------------------
-   subroutine transpose_theta_m(f_theta_m, f_m_theta)
-!@>details Does the transposition using alltoallv.
-!
-!@>TODO this with mpi_type to stride the data
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
-      complex(cp), intent(inout) :: f_m_theta(n_m_max,n_theta_loc)
-      
-      complex(cp) :: sendbuf(n_m_loc*n_theta_max)
-      complex(cp) :: recvbuf(n_theta_loc,n_m_max)
-      
-      integer :: sendcount(0:n_procs_theta-1)
-      integer :: recvcount(0:n_procs_theta-1)
-      integer :: senddispl(0:n_procs_theta-1)
-      integer :: recvdispl(0:n_procs_theta-1)
-      integer :: i, j, pos, n_theta, s_theta, e_theta
-      integer :: m_idx(n_procs_theta*n_m_ext)
-      
-      recvcount = 0
-      pos = 1
-      do i=0,n_procs_theta-1
-         ! Copy each theta chunk so that the send buffer is contiguous
-         !
-         !>@TODO check performance of this; implementing this with mpi_type
-         !> striding the data will probably be faster
-         senddispl(i) = pos-1
-         s_theta = n_theta_dist(i,1)
-         e_theta = n_theta_dist(i,2)
-         n_theta = e_theta - s_theta + 1
-         do j=1, n_m_loc
-            sendbuf(pos:pos + n_theta - 1) = f_theta_m(s_theta:e_theta,j)
-            pos = pos + n_theta
-         end do
-         sendcount(i) = pos - senddispl(i) - 1
-         
-         recvdispl(i) = sum(recvcount)
-         recvcount(i) = (n_m_ext-1) * n_theta
-         if (lmP_dist(i,n_m_ext,1) > -1) then
-            recvcount(i) = recvcount(i) + n_theta
-         end if
-      end do
-      
-      call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
-                         recvbuf, recvcount, recvdispl, MPI_DOUBLE_COMPLEX, &
-                         comm_theta, i)
-      
-      ! Now we reorder the receiver buffer. If the m distribution looks like:
-      ! rank 0: 0, 4,  8, 12, 16
-      ! rank 1: 1, 5,  9, 13
-      ! rank 2: 2, 6, 10, 14
-      ! rank 3: 3, 7, 11, 15
-      ! then the columns of recvbuf are ordered as 0,4,8,12,16,1,5,9,13(...)
-      ! and so forth. m_idx will contain this ordering (+1):
-      m_idx = reshape(transpose(lmP_dist(:,:,1)),(/n_procs_theta*n_m_ext/))/minc + 1
-      j = 1
-      do i = 1, n_procs_theta*n_m_ext
-         if (m_idx(i) < 1) cycle
-         f_m_theta(m_idx(i),:) = recvbuf(:,j)
-         j = j + 1
-      end do
-      
-   end subroutine transpose_theta_m
-!-------------------------------------------------------------------------------
 end module truncation

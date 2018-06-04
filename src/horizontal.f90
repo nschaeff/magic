@@ -5,8 +5,8 @@ module horizontal_data
    !
 
    use truncation, only: l_max, lmP_max, n_theta_max, n_phi_max, &
-       &                 lm_max, lm_loc, n_m_max, minc, m_max, l_axi, &
-       &                 slice_Flm
+       &                 lm_max, lm_loc, n_m_max, minc, m_max, l_axi
+   use communications, only: slice_Flm
    use radial_functions, only: r_cmb
    use physical_parameters, only: ek
    use num_param, only: difeta, difnu, difkap, ldif, ldifexp, difchem

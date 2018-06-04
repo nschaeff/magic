@@ -16,7 +16,7 @@ module dtB_mod
    use physical_parameters, only: opm,O_sr
    use radial_functions, only: O_r_ic, lambda, or2, dLlambda, rscheme_oc, &
        &                       or1, orho1
-   use radial_data,only: nRstart,nRstop
+   use radial_data,only: l_r,u_r
    use horizontal_data, only: dPhi, D_lP1, dLh, hdif_B, osn2, cosn2, osn1, &
        &                      dTheta1S, dTheta1A
    use logic, only: l_cond_ic, l_DTrMagSpec, l_dtBmovie
@@ -122,16 +122,16 @@ contains
       bytes_allocated = bytes_allocated+ &
       &                 4*(ulmMag-llmMag+1)*n_r_ic_max_dtB*SIZEOF_DEF_COMPLEX
 
-      allocate( dtB_Rloc_container(lm_max_dtB,nRstart:nRstop,8) )
-      TomeLM_Rloc(1:lm_max_dtB,nRstart:nRstop) => dtB_Rloc_container(:,:,1)
-      TomeRLM_Rloc(1:lm_max_dtB,nRstart:nRstop) => dtB_Rloc_container(:,:,2)
-      TstrLM_Rloc(1:lm_max_dtB,nRstart:nRstop) => dtB_Rloc_container(:,:,3)
-      TstrRLM_Rloc(1:lm_max_dtB,nRstart:nRstop) => dtB_Rloc_container(:,:,4)
-      TadvLM_Rloc(1:lm_max_dtB,nRstart:nRstop) => dtB_Rloc_container(:,:,5)
-      TadvRLM_Rloc(1:lm_max_dtB,nRstart:nRstop) => dtB_Rloc_container(:,:,6)
-      PstrLM_Rloc(1:lm_max_dtB,nRstart:nRstop) => dtB_Rloc_container(:,:,7)
-      PadvLM_Rloc(1:lm_max_dtB,nRstart:nRstop) => dtB_Rloc_container(:,:,8)
-      bytes_allocated = bytes_allocated+8*(nRstop-nRstart+1)*lm_max_dtB* &
+      allocate( dtB_Rloc_container(lm_max_dtB,l_r:u_r,8) )
+      TomeLM_Rloc(1:lm_max_dtB,l_r:u_r) => dtB_Rloc_container(:,:,1)
+      TomeRLM_Rloc(1:lm_max_dtB,l_r:u_r) => dtB_Rloc_container(:,:,2)
+      TstrLM_Rloc(1:lm_max_dtB,l_r:u_r) => dtB_Rloc_container(:,:,3)
+      TstrRLM_Rloc(1:lm_max_dtB,l_r:u_r) => dtB_Rloc_container(:,:,4)
+      TadvLM_Rloc(1:lm_max_dtB,l_r:u_r) => dtB_Rloc_container(:,:,5)
+      TadvRLM_Rloc(1:lm_max_dtB,l_r:u_r) => dtB_Rloc_container(:,:,6)
+      PstrLM_Rloc(1:lm_max_dtB,l_r:u_r) => dtB_Rloc_container(:,:,7)
+      PadvLM_Rloc(1:lm_max_dtB,l_r:u_r) => dtB_Rloc_container(:,:,8)
+      bytes_allocated = bytes_allocated+8*(u_r-l_r+1)*lm_max_dtB* &
       &                 SIZEOF_DEF_COMPLEX
 
       allocate( dtB_LMloc_container(llmMag:ulmMag,n_r_max_dtB,8) )
