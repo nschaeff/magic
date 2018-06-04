@@ -337,11 +337,6 @@ contains
                      lZ10mat=.true.
                   end if
 
-!                  open(unit=n_test,file='z10Mat.txt',status='new')
-!                  write(n_test,*) z10Mat
-!                  close(n_test)
-!                  stop
-
                   if ( l_SRMA ) then
                      tOmega_ma1=time+tShift_ma1
                      tOmega_ma2=time+tShift_ma2
@@ -399,6 +394,7 @@ contains
                      !end do
                   end if
                   call cgesl(z10Mat,n_r_max,n_r_max,z10Pivot,rhs)
+
                   if ( DEBUG_OUTPUT ) then
                      !do nR=1,n_r_max
                      !   write(*,"(3I4,A,2(I4,F20.16))")                        &
@@ -415,41 +411,41 @@ contains
     
                else if ( l_diff_prec .and. lm1 == l1m1 ) then
                   
-!                     if ( .not. lZ11mat ) then
+                  if ( .not. lZ11mat ) then
 #ifdef WITH_PRECOND_Z11
-                        call get_z11Mat(dt,l1,hdif_V(                          &
-                        &                 st_map%lm2(lm2l(lm1),lm2m(lm1))),    &
-                        &                 z11Mat,z11Pivot,z11Mat_fac)
+                     call get_z11Mat(dt,l1,hdif_V(                          &
+                     &                 st_map%lm2(lm2l(lm1),lm2m(lm1))),    &
+                     &                 z11Mat,z11Pivot,z11Mat_fac)
 #else
-                        call get_z11Mat(dt,l1,hdif_V(                          &
-                                  &          st_map%lm2(lm2l(lm1),lm2m(lm1))), &
-                                  &          z11Mat,z11Pivot)
+                     call get_z11Mat(dt,l1,hdif_V(                          &
+                     &                 st_map%lm2(lm2l(lm1),lm2m(lm1))), &
+                     &                 z11Mat,z11Pivot)
 
 #endif
-!                        lZ11mat=.true.
-!                     end if
+                        lZ11mat=.true.
+                  end if
                      
-                     rhs11(1) = diff_prec_fac*cmplx(cos(po_diff*oek*time),   &
-                     &                             -sin(po_diff*oek*time),kind=cp)
+                  rhs11(1) = diff_prec_fac*cmplx(cos(po_diff*oek*time),   &
+                  &                             -sin(po_diff*oek*time),kind=cp)
 
-                     rhs11(n_r_max)=diff_prec_fac*cmplx(cos(po_diff*oek*time),   &
-                     &                             -sin(po_diff*oek*time),kind=cp)
+                  rhs11(n_r_max)=diff_prec_fac*cmplx(cos(po_diff*oek*time),   &
+                  &                             -sin(po_diff*oek*time),kind=cp)
 
-                     !----- This is the normal RHS for the other radial grid points:
-                     do nR=2,n_r_max-1
-                        rhs(nR)=O_dt*dLh(st_map%lm2(lm2l(lm1),lm2m(lm1)))* &
-                        &       or2(nR)*z(lm1,nR)+ w1*dzdt(lm1,nR)+        &
-                        &       w2*dzdtLast(lm1,nR)
-                     end do
+                  !----- This is the normal RHS for the other radial grid points:
+                  do nR=2,n_r_max-1
+                     rhs11(nR)=O_dt*dLh(st_map%lm2(lm2l(lm1),lm2m(lm1)))* &
+                     &       or2(nR)*z(lm1,nR)+ w1*dzdt(lm1,nR)+        &
+                     &       w2*dzdtLast(lm1,nR)
+                  end do
 
-#ifdef WITH_PRECOND_Z10
+#ifdef WITH_PRECOND_Z11
                   do nR=1,n_r_max
-                     rhs11(nR) = z11Mat_fac(nR)*rhs(nR)
+                     rhs11(nR) = z11Mat_fac(nR)*rhs11(nR)
                   end do
 #endif
-                     call cgesl(z11Mat,n_r_max,n_r_max,z11Pivot,rhs11)
+                  call cgesl(z11Mat,n_r_max,n_r_max,z11Pivot,rhs11)
 
-               else if ( l1 /= 0 .and. l1 /= 1 ) then
+               else if ( l1 /= 0 ) then
                   !PERFON('upZ_ln0')
                   lmB=lmB+1
                   
@@ -495,10 +491,10 @@ contains
                   end if
 
 !                  if ( l_diff_prec .and. l1 == 1 .and. m1 == 1 ) then
-!                     rhs1(1,lmB,threadid)       =rhs1(1,lmB,threadid)+   &!diff_prec_fac* c_z11_omega_ma *  &
-!                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)/y11_norm
-!                     rhs1(n_r_max,lmB,threadid) =rhs1(n_r_max,lmB,threadid)+ &!diff_prec_fac* c_z11_omega_ic *&
-!                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)/y11_norm
+!                     rhs1(1,lmB,threadid)       =rhs1(1,lmB,threadid)+   diff_prec_fac *  &
+!                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)
+!                     rhs1(n_r_max,lmB,threadid) =rhs1(n_r_max,lmB,threadid)+ diff_prec_fac*&
+!                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)
 !                  end if
 
                   do nR=2,n_r_max-1
@@ -549,7 +545,7 @@ contains
                   do n_r_out=1,rscheme_oc%n_max
                      z(lm1,n_r_out)=rhs11(n_r_out)
                   end do
-               else if ( l1 /= 0 .and. l1 /= 1) then
+               else if ( l1 /= 0 ) then
                   lmB=lmB+1
                   if ( m1 > 0 ) then
                      do n_r_out=1,rscheme_oc%n_max
