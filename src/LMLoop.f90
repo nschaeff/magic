@@ -155,6 +155,7 @@ contains
       !     update is necessary. These logicals are THREADPRIVATE and
       !     stored in the module matrices in m_mat.F90:
          lZ10mat=.false.
+         lZ11mat=.false.
          do l=0,l_max
             if ( l_single_matrix ) then
                if ( l_TP_form .or. l_anelastic_liquid ) then
