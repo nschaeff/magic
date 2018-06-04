@@ -18,7 +18,7 @@ module updateZ_mod
    use horizontal_data, only: dLh, hdif_V
    use logic, only: l_rot_ma, l_rot_ic, l_SRMA, l_SRIC, l_z10mat, l_precession, &
        &            l_diff_prec, l_correct_AMe, l_correct_AMz, l_update_v, l_TO,&
-       &            l_RMS, l_diff_prec
+       &            l_RMS
    use RMS, only: DifTor2hInt, dtVTor2hInt
    use constants, only: c_lorentz_ma, c_lorentz_ic, c_dt_z10_ma, c_dt_z10_ic, &
        &                c_moi_ma, c_moi_ic, c_z10_omega_ma, c_z10_omega_ic,   &
@@ -46,12 +46,15 @@ module updateZ_mod
    complex(cp), allocatable :: Dif(:) 
    real(cp), allocatable :: zMat(:,:,:)
    real(cp), allocatable :: z10Mat(:,:) 
-   real(cp), allocatable :: z11Mat(:,:)
+   real(cp), allocatable :: z11Mat(:,:) 
 #ifdef WITH_PRECOND_Z
    real(cp), allocatable :: zMat_fac(:,:)
 #endif
 #ifdef WITH_PRECOND_Z10
    real(cp), allocatable :: z10Mat_fac(:)
+#endif
+#ifdef WITH_PRECOND_Z11
+   real(cp), allocatable :: z11Mat_fac(:)
 #endif
    integer, allocatable :: z10Pivot(:)
    integer, allocatable :: z11Pivot(:)
@@ -59,7 +62,7 @@ module updateZ_mod
    logical, public :: lZ10mat, lZ11mat
    logical, public, allocatable :: lZmat(:)
 
-   integer :: maxThreads
+   integer :: maxThreads, n_test
    
    public :: updateZ, initialize_updateZ, finalize_updateZ
 
@@ -78,12 +81,16 @@ contains
       &                 SIZEOF_INTEGER
 
       if (l_diff_prec) then
-         allocate( z11Mat(n_r_max,n_r_max) ) ! for l=1,m=1
+         allocate( z11Mat(n_r_max,n_r_max) )    ! for l=1,m=1 
          allocate( z11Pivot(n_r_max) )
-         bytes_allocated = bytes_allocated                     &
-         &                 + (n_r_max*n_r_max)*SIZEOF_DEF_REAL &
-         &                 + n_r_max * SIZEOF_INTEGER
+         bytes_allocated = bytes_allocated+(n_r_max*n_r_max)*SIZEOF_DEF_REAL &
+         &                                + n_r_max * SIZEOF_INTEGER
+#ifdef WITH_PRECOND_Z11
+         allocate(z11Mat_fac(n_r_max))
+         bytes_allocated = bytes_allocated+n_r_max*SIZEOF_DEF_REAL
+#endif
       end if
+
 
 #ifdef WITH_PRECOND_Z10
       allocate(z10Mat_fac(n_r_max))
@@ -132,7 +139,12 @@ contains
       deallocate( dtV, Dif )
 
       if ( l_RMS ) deallocate( workB )
-      if (l_diff_prec) deallocate(z11Mat, z11Pivot)
+      if ( l_diff_prec ) then
+         deallocate( z11Mat, z11Pivot )
+#ifdef WITH_PRECOND_Z11
+         deallocate( z11Mat_fac )
+#endif
+      end if
 
    end subroutine finalize_updateZ
 !-------------------------------------------------------------------------------
@@ -180,6 +192,7 @@ contains
       integer :: nR                 ! counts radial grid points
       integer :: n_r_out            ! counts cheb modes
       complex(cp) :: rhs(n_r_max)   ! RHS of matrix multiplication
+      complex(cp) :: rhs11(n_r_max)   ! RHS of matrix multiplication for l=1,m=1
       !complex(cp) :: rhs1(n_r_max,lo_sub_map%sizeLMB2max) ! RHS for other modes
       complex(cp) :: z10(n_r_max),z11(n_r_max) ! toroidal flow scalar components
       real(cp) :: angular_moment(3)   ! total angular momentum
@@ -220,7 +233,7 @@ contains
       end if
 
       if (l_diff_prec) then
-         diff_prec_fac=two*sqrt(8.0_cp*pi*third)*oek*sin(diff_prec_angle)
+         diff_prec_fac=oek*sin(diff_prec_angle)
       else
          diff_prec_fac = 0.0_cp
       end if
@@ -242,6 +255,7 @@ contains
       lmStop      =lmStopB(nLMB)
       lmStart_00  =max(2,lmStart)
       l1m0        =lm2(1,0)
+      l1m1        =lm2(1,1)
     
       w2  =one-w1
       O_dt=one/dt
@@ -323,6 +337,11 @@ contains
                      lZ10mat=.true.
                   end if
 
+!                  open(unit=n_test,file='z10Mat.txt',status='new')
+!                  write(n_test,*) z10Mat
+!                  close(n_test)
+!                  stop
+
                   if ( l_SRMA ) then
                      tOmega_ma1=time+tShift_ma1
                      tOmega_ma2=time+tShift_ma2
@@ -394,8 +413,43 @@ contains
                           & exponent(aimag(rhs_sum)),fraction(aimag(rhs_sum))
                   end if
     
-    
-               else if ( l1 /= 0 ) then
+               else if ( l_diff_prec .and. lm1 == l1m1 ) then
+                  
+!                     if ( .not. lZ11mat ) then
+#ifdef WITH_PRECOND_Z11
+                        call get_z11Mat(dt,l1,hdif_V(                          &
+                        &                 st_map%lm2(lm2l(lm1),lm2m(lm1))),    &
+                        &                 z11Mat,z11Pivot,z11Mat_fac)
+#else
+                        call get_z11Mat(dt,l1,hdif_V(                          &
+                                  &          st_map%lm2(lm2l(lm1),lm2m(lm1))), &
+                                  &          z11Mat,z11Pivot)
+
+#endif
+!                        lZ11mat=.true.
+!                     end if
+                     
+                     rhs11(1) = diff_prec_fac*cmplx(cos(po_diff*oek*time),   &
+                     &                             -sin(po_diff*oek*time),kind=cp)
+
+                     rhs11(n_r_max)=diff_prec_fac*cmplx(cos(po_diff*oek*time),   &
+                     &                             -sin(po_diff*oek*time),kind=cp)
+
+                     !----- This is the normal RHS for the other radial grid points:
+                     do nR=2,n_r_max-1
+                        rhs(nR)=O_dt*dLh(st_map%lm2(lm2l(lm1),lm2m(lm1)))* &
+                        &       or2(nR)*z(lm1,nR)+ w1*dzdt(lm1,nR)+        &
+                        &       w2*dzdtLast(lm1,nR)
+                     end do
+
+#ifdef WITH_PRECOND_Z10
+                  do nR=1,n_r_max
+                     rhs11(nR) = z11Mat_fac(nR)*rhs(nR)
+                  end do
+#endif
+                     call cgesl(z11Mat,n_r_max,n_r_max,z11Pivot,rhs11)
+
+               else if ( l1 /= 0 .and. l1 /= 1 ) then
                   !PERFON('upZ_ln0')
                   lmB=lmB+1
                   
@@ -440,12 +494,12 @@ contains
                      end if
                   end if
 
-                  if ( l_diff_prec .and. l1 == 1 .and. m1 == 1 ) then
-                     rhs1(1,lmB,threadid)       =rhs1(1,lmB,threadid)+diff_prec_fac* &
-                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)
-                     rhs1(n_r_max,lmB,threadid) =rhs1(n_r_max,lmB,threadid)+diff_prec_fac* &
-                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)
-                  end if
+!                  if ( l_diff_prec .and. l1 == 1 .and. m1 == 1 ) then
+!                     rhs1(1,lmB,threadid)       =rhs1(1,lmB,threadid)+   &!diff_prec_fac* c_z11_omega_ma *  &
+!                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)/y11_norm
+!                     rhs1(n_r_max,lmB,threadid) =rhs1(n_r_max,lmB,threadid)+ &!diff_prec_fac* c_z11_omega_ic *&
+!                     &    cmplx(cos(po_diff*oek*time),-sin(po_diff*oek*time),kind=cp)/y11_norm
+!                  end if
 
                   do nR=2,n_r_max-1
                      rhs1(nR,lmB,threadid)=O_dt*dLh(st_map%lm2(lm2l(lm1),  &
@@ -491,7 +545,11 @@ contains
                   do n_r_out=1,rscheme_oc%n_max
                      z(lm1,n_r_out)=real(rhs(n_r_out))
                   end do
-               else if ( l1 /= 0 ) then
+               else if ( l_diff_prec .and. lm1 == l1m1 ) then
+                  do n_r_out=1,rscheme_oc%n_max
+                     z(lm1,n_r_out)=rhs11(n_r_out)
+                  end do
+               else if ( l1 /= 0 .and. l1 /= 1) then
                   lmB=lmB+1
                   if ( m1 > 0 ) then
                      do n_r_out=1,rscheme_oc%n_max
@@ -762,7 +820,7 @@ contains
             d_omega_ma_dtLast=d_omega_ma_dt -            &
             &    coex * ( two*or1(1)*real(z(lm1,1))-real(dz(lm1,1)) )
          end if
-         if ( .not. l_SRIC .and. kbotv == 2 .and. l_rot_ic ) THEn
+         if ( .not. l_SRIC .and. kbotv == 2 .and. l_rot_ic ) then
             d_omega_ic_dtLast=d_omega_ic_dt +                    &
             &    coex * ( two*or1(n_r_max)*real(z(lm1,n_r_max))- &
             &    real(dz(lm1,n_r_max)) )
@@ -892,6 +950,112 @@ contains
       end if
 
    end subroutine get_z10Mat
+!-----------------------------------------------------------------------
+#ifdef WITH_PRECOND_Z11
+   subroutine get_z11Mat(dt,l,hdif,zMat,zPivot,zMat_fac)
+#else
+   subroutine get_z11Mat(dt,l,hdif,zMat,zPivot)
+#endif
+      !
+      !  Purpose of this subroutine is to construct and LU-decompose the  
+      !  inversion matrix z11mat for the implicit time step of the       
+      !  toroidal velocity potential z of degree l=1 and order m=1.       
+      !  This differs from the the normal zmat only if either the ICB or  
+      !  CMB have no-slip boundary condition and inner core or mantle are 
+      !  chosen to rotate freely (either kbotv=1 and/or ktopv=1).         
+      !
+      
+      real(cp), intent(in) :: dt      ! Time step internal
+      real(cp), intent(in) :: hdif    ! Value of hyperdiffusivity in zMat terms
+      integer,  intent(in) :: l       ! Variable to loop over l's
+
+      !-- Output: z11Mat and pivot_z11
+      real(cp), intent(out) :: zMat(n_r_max,n_r_max) ! LHS matrix to calculate z
+      integer,  intent(out) :: zPivot(n_r_max)       ! Pivot to invert zMat
+#ifdef WITH_PRECOND_Z11
+      real(cp), intent(out) :: zMat_fac(n_r_max)     ! Inverse of max(zMat) for inversion
+#endif
+
+      !-- local variables:
+      integer :: nR,nR_out,info
+      real(cp) :: O_dt,dLh
+
+      O_dt=one/dt
+      dLh=real(l*(l+1),kind=cp)
+      
+
+      !-- Boundary conditions:
+      do nR_out=1,rscheme_oc%n_max
+         !----- CMB condition:
+         !        Note opposite sign of viscous torques (-dz+2 z /r )
+         !        for CMB and ICB!
+
+         if ( ktopv == 1 ) then  ! free slip
+            zMat(1,nR_out)=                   rscheme_oc%rnorm *    &
+            &    ( (two*or1(1)+beta(1))*rscheme_oc%rMat(1,nR_out) - &
+            &                          rscheme_oc%drMat(1,nR_out) )
+         else if ( ktopv == 2 ) then ! no slip
+            zMat(1,nR_out)= rscheme_oc%rnorm * c_z11_omega_ma* &
+            &               rscheme_oc%rMat(1,nR_out)
+
+         end if
+
+     
+         !----- ICB condition:
+         if ( kbotv == 1 ) then  ! free slip
+            zMat(n_r_max,nR_out)=rscheme_oc%rnorm *               &
+            &            ( (two*or1(n_r_max)+beta(n_r_max))*      &
+            &                   rscheme_oc%rMat(n_r_max,nR_out) - &
+            &                  rscheme_oc%drMat(n_r_max,nR_out) )
+         else if ( kbotv == 2 ) then ! no slip
+            zMat(n_r_max,nR_out)= rscheme_oc%rnorm * &
+            &             c_z11_omega_ic*rscheme_oc%rMat(n_r_max,nR_out)
+         end if
+
+      end do
+
+      !----- Other points: (same as zMat)
+      do nR_out=1,n_r_max
+         do nR=2,n_r_max-1
+            zMat(nR,nR_out)=rscheme_oc%rnorm * (                        &
+            &             O_dt*dLh*or2(nR)*rscheme_oc%rMat(nR,nR_out) - &
+            &           alpha*hdif*dLh*visc(nR)*or2(nR) * (             &
+            &                            rscheme_oc%d2rMat(nR,nR_out) + &
+            &    (dLvisc(nR)- beta(nR))*  rscheme_oc%drMat(nR,nR_out) - &
+            &    ( dLvisc(nR)*beta(nR)+two*dLvisc(nR)*or1(nR)  +        &
+            &      dLh*or2(nR)+dbeta(nR)+two*beta(nR)*or1(nR) )*        &
+                                           rscheme_oc%rMat(nR,nR_out) ) )
+         end do
+      end do
+
+      !-- Normalisation
+      do nR=1,n_r_max
+         zMat(nR,1)      =rscheme_oc%boundary_fac*zMat(nR,1)
+         zMat(nR,n_r_max)=rscheme_oc%boundary_fac*zMat(nR,n_r_max)
+      end do
+
+      !-- Fill up with zeros:
+      do nR_out=rscheme_oc%n_max+1,n_r_max
+         zMat(1,nR_out)      =0.0_cp
+         zMat(n_r_max,nR_out)=0.0_cp
+      end do
+
+#ifdef WITH_PRECOND_Z11
+      ! compute the linesum of each line
+      do nR=1,n_r_max
+         zMat_fac(nR)=one/maxval(abs(zMat(nR,:)))
+         zMat(nR,:) = zMat(nR,:)*zMat_fac(nR)
+      end do
+#endif
+
+!-- LU-decomposition of z11mat:
+      call sgefa(zMat,n_r_max,n_r_max,zPivot,info)
+
+      if ( info /= 0 ) then
+         call abortRun('Error from get_z11Mat: singular matrix!')
+      end if
+
+   end subroutine get_z11Mat
 !-----------------------------------------------------------------------
 #ifdef WITH_PRECOND_Z
    subroutine get_zMat(dt,l,hdif,zMat,zPivot,zMat_fac)
