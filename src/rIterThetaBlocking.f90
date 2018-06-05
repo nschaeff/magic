@@ -10,13 +10,13 @@ module rIterThetaBlocking_mod
    use mem_alloc, only: bytes_allocated
    use truncation, only: lm_max,lmP_max,nrp,l_max,lmP_max_dtB,   &
        &                 n_phi_maxStr,n_theta_maxStr,n_r_maxStr, &
-       &                 lm_maxMag,l_axi, lm_loc, lm_locMag
+       &                 lm_maxMag,l_axi, lm_loc, lm_locMag,     &
+       &                 n_r_cmb, n_r_icb, l_r, u_r
    use blocking, only: nfs
    use logic, only: l_mag,l_conv,l_mag_kin,l_heat,l_HT,l_anel,l_mag_LF,    &
        &            l_conv_nl, l_mag_nl, l_b_nl_cmb, l_b_nl_icb, l_rot_ic, &
        &            l_cond_ic, l_rot_ma, l_cond_ma, l_dtB, l_store_frame,  &
        &            l_movie_oc, l_chemical_conv, l_TP_form, l_precession
-   use radial_data,only: n_r_cmb, n_r_icb, l_r, u_r
    use radial_functions, only: or2, orho1
    use fft
    use legendre_spec_to_grid, only: legTFG, legTFGnomag, leg_scal_to_grad_spat, &

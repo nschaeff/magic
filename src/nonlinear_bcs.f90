@@ -1,9 +1,10 @@
 module nonlinear_bcs
 
    use precision_mod
-   use truncation, only: nrp, lmP_max, n_phi_max, l_axi, &
-                         n_theta_beg, n_theta_end, lmP_loc, lm_loc
-   use radial_data, only: n_r_cmb, n_r_icb
+   use truncation, only: nrp, lmP_max, n_phi_max, l_axi,            &
+       &                 n_theta_beg, n_theta_end, lmP_loc, lm_loc, &
+       &                 n_r_cmb, n_r_icb
+   use radial_data, only: 
    use radial_functions, only: r_cmb, r_icb, rho0
    use blocking, only: lm2l, lm2m, lm2lmP, lmP2lmPS, lmP2lmPA, nfs, &
        &               sizeThetaB

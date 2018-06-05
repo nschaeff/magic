@@ -30,7 +30,9 @@ module truncation
    !   call shtns_lmidx(lm_idx, l_idx, m_idx/minc)
    !   returns the same as 
    !   lm_idx = lm2(l_idx, m_idx)
-   !   
+   !-----------------------------------------
+   
+   !-- Basic quantities:
    integer :: n_r_max       ! number of radial grid points
    integer :: n_cheb_max    ! max degree-1 of cheb polynomia
    integer :: n_phi_tot     ! number of longitude grid points
@@ -88,41 +90,46 @@ module truncation
    ! 
    ! For continuous variables:
    ! dist_V(i,1) = lower bound of direction V in rank i
-   ! dist_V(i,2) = lower bound of direction V in rank i
+   ! dist_V(i,2) = upper bound of direction V in rank i
+   ! dist_V(i,0) = shortcut to dist_V(i,2) - dist_V(i,1) + 1
    !
    ! Because continuous variables are simple, we can define some shortcuts:
-   ! u_V: dist_V(this_rank,1)
    ! l_V: dist_V(this_rank,1)
+   ! u_V: dist_V(this_rank,2)
    ! n_V: u_V - l_V + 1  (number of local points in V direction)
    ! n_V_max: global dimensions of variable V. Basically,  MPI_ALLREDUCE(n_V,n_V_max,MPI_SUM)
    ! 
    ! For discontinuous variables:
-   ! dist_V(i,:) = an array containing all of the V points in rank i
+   ! dist_V(i,0)  = how many V points are there for rank i
+   ! dist_V(i,1:) = an array containing all of the V points in rank i
    ! 
    
+   !-- Distributed Dimensions
+   !-----------------------------------------
+
    !-- Distributed Grid Space 
-   integer, allocatable, target :: dist_theta(:,:)
-   integer, allocatable, target :: dist_r(:,:)
-   integer :: n_theta, u_theta, l_theta
-   integer :: n_r,     l_r,     l_r
+   integer, allocatable, protected :: dist_theta(:,:)
+   integer, allocatable, protected :: dist_r(:,:)
+   integer, protected :: n_theta, l_theta, u_theta
+   integer, protected :: n_r,     l_r,     u_r
    
    ! Helpers
-   integer :: l_r_Mag
-   integer :: l_r_Che
-   integer :: l_r_TP 
-   integer :: l_r_DC 
-   integer :: l_r_Mag 
-   integer :: l_r_Che 
-   integer :: l_r_TP  
-   integer :: l_r_DC  
+   integer, protected :: l_r_Mag
+   integer, protected :: l_r_Che
+   integer, protected :: l_r_TP 
+   integer, protected :: l_r_DC 
+   integer, protected :: u_r_Mag 
+   integer, protected :: u_r_Che 
+   integer, protected :: u_r_TP  
+   integer, protected :: u_r_DC  
    
    !-- Distributed LM-Space
-   ! n_m:  total number of m's in this rank
-   ! n_lm: total number of l and m points in this rank
-   ! n_lm: total number of l and m points (for LM space with l_max+1) in this rank
-   integer, allocatable :: dist_m(:,:)
-   integer :: n_m, n_lm, n_lmP
-   integer :: n_m_array
+   ! n_m:   total number of m's in this rank. Shortcut to dist_m(i,0)
+   ! n_lm:  total number of l and m points in this rank
+   ! n_lmP: total number of l and m points (for LM space with l_max+1) in this rank
+   integer, allocatable, protected :: dist_m(:,:)
+   integer, protected :: n_m, n_lm, n_lmP
+   integer, protected :: n_m_array
    
    !-- Distributed ML-Space
    
@@ -279,19 +286,26 @@ contains
       
       !-- Distribute Grid Space θ
       !
-      allocate(dist_theta(0:n_ranks_theta-1,2))
+      allocate(dist_theta(0:n_ranks_theta-1,0:2))
       call distribute_contiguous_last(dist_theta,n_theta_max,n_ranks_theta)
+      dist_theta(:,0) = dist_theta(:,2) - dist_theta(:,1) + 1
       l_theta = dist_theta(coord_theta,1)
       u_theta = dist_theta(coord_theta,2)
       n_theta = u_theta - l_theta + 1
       
       !-- Distribute Grid Space r
       !   I'm not sure what happens if n_r_cmb/=1 and n_r_icb/=n_r_max
-      allocate(dist_r(0:n_ranks_r-1,2))
+      allocate(dist_r(0:n_ranks_r-1,0:2))
       call distribute_contiguous_last(dist_r,n_r_max,n_ranks_r)
+      
+      !-- Take n_r_cmb into account
+      !-- TODO check if this is correct
+      dist_r(:,1:2) = dist_r(:,1:2) + n_r_cmb - 1
+      
+      dist_r(:,0) = dist_r(:,2) - dist_r(:,1) + 1
+      n_r = dist_r(coord_r,0)
       l_r = dist_r(coord_r,1)
-      l_r = dist_r(coord_r,2)
-      n_r = l_r - l_r + 1
+      u_r = dist_r(coord_r,2)
       
       !-- Setup Helpers
       !   
@@ -299,19 +313,19 @@ contains
       l_r_Che = l_r
       l_r_TP  = l_r
       l_r_DC  = l_r
-      l_r_Mag = l_r
-      l_r_Che = l_r
-      l_r_TP  = l_r
-      l_r_DC  = l_r
+      u_r_Mag = u_r
+      u_r_Che = u_r
+      u_r_TP  = u_r
+      u_r_DC  = u_r
       
       if ( .not. l_mag           ) l_r_Mag = 1
       if ( .not. l_chemical_conv ) l_r_Che = 1
       if ( .not. l_TP_form       ) l_r_TP  = 1
       if ( .not. l_double_curl   ) l_r_DC  = 1
-      if ( .not. l_mag           ) l_r_Mag = 1
-      if ( .not. l_chemical_conv ) l_r_Che = 1
-      if ( .not. l_TP_form       ) l_r_TP  = 1
-      if ( .not. l_double_curl   ) l_r_DC  = 1
+      if ( .not. l_mag           ) u_r_Mag = 1
+      if ( .not. l_chemical_conv ) u_r_Che = 1
+      if ( .not. l_TP_form       ) u_r_TP  = 1
+      if ( .not. l_double_curl   ) u_r_DC  = 1
       
       call print_contiguous_distribution(dist_theta, n_ranks_theta, 'θ')
       call print_contiguous_distribution(dist_r, n_ranks_r, 'r')
@@ -329,16 +343,20 @@ contains
       !   R was already distributed in distribute_gs
       !   Only m is left
       
-      n_m_array = ceiling(real(n_m_max) / real(n_ranks_theta))
+      n_m_array = ceiling(real(n_m_max) / real(n_ranks_m))
       
-      allocate(dist_m( 0:n_ranks_theta-1, n_m_array))
+      allocate(dist_m( 0:n_ranks_theta-1, 0:n_m_array))
       
-      !-- We use m_max+1 here because it is from 0:m_max
-      call distribute_discontiguous_snake(dist_m,  n_m_array, m_max+1, n_ranks_theta)
+      call distribute_discontiguous_snake(dist_m, n_m_array, n_m_max, n_ranks_m)
       
-      n_m = n_m_array - 1
-      if (dist_m(coord_theta,n_m_array) > -1) n_m = n_m_array
+      !-- The function above distributes contiguous points. Nothing else.
+      !   Now we take care of minc:
+      dist_m(:,1:) = (dist_m(:,1:)-1)*minc
       
+      !-- Counts how many points were assigned to each rank
+      dist_m(:,0) = count(dist_m(:,1:) >= 0, 2)
+      
+      n_m = dist_m(coord_m,0)
       call print_discontiguous_distribution(dist_m, n_m_array, n_ranks_theta, 'm')
       
    end subroutine distribute_lm   
@@ -643,7 +661,7 @@ contains
       !  max_len is supposed to be the ceiling(N/p)
       !  
       integer, intent(in)    :: max_len, N, p
-      integer, intent(inout) :: dist(0:p-1, max_len)
+      integer, intent(inout) :: dist(0:p-1, 0:max_len)
       
       integer :: j, ipt, irow
       
@@ -673,7 +691,7 @@ contains
       !  max_len is supposed to be the ceiling(N/p)
       !  
       integer, intent(in)    :: max_len, N, p
-      integer, intent(inout) :: dist(0:p-1, max_len)
+      integer, intent(inout) :: dist(0:p-1, 0:max_len)
       
       integer :: j, ipt, irow
       
@@ -699,7 +717,7 @@ contains
       !  
       integer, intent(in) :: p
       integer, intent(in) :: N
-      integer, intent(out) :: dist(0:p-1,2)
+      integer, intent(out) :: dist(0:p-1,0:2)
       
       integer :: rem, loc, i
       
@@ -718,7 +736,7 @@ contains
       !  
       integer, intent(in) :: p
       integer, intent(in) :: N
-      integer, intent(out) :: dist(0:p-1,2)
+      integer, intent(out) :: dist(0:p-1,0:2)
       
       integer :: rem, loc, i
       
@@ -736,18 +754,18 @@ contains
       !  Cosmetic function to display the distributio of the points
       !  
       integer, intent(in) :: p
-      integer, intent(in) :: dist(0:p-1,2)
+      integer, intent(in) :: dist(0:p-1,0:2)
       character(*), intent(in) :: name
       integer :: i
       
       if (rank /= 0) return
       
       print "(' ! ',A,' partition in rank ', I0, ': ', I0,'-',I0, '  (', I0, ' pts)')", name, &
-            0, dist(0,1), dist(0,2), dist(0,2) - dist(0,1) + 1
+            0, dist(0,1), dist(0,2), dist(0,0)
             
       do i=1, p-1
          print "(' !                rank ', I0, ': ', I0,'-',I0, '  (', I0, ' pts)')", &
-               i, dist(i,1), dist(i,2), dist(i,2) - dist(i,1) + 1
+               i, dist(i,1), dist(i,2), dist(i,0)
       end do
    end subroutine print_contiguous_distribution
    
@@ -757,7 +775,7 @@ contains
       !  Cosmetic function to display the distributio of the points
       !  
       integer, intent(in) :: max_len, p
-      integer, intent(in) :: dist(0:p-1,max_len)
+      integer, intent(in) :: dist(0:p-1,0:max_len)
       character(*), intent(in) :: name
       
       integer :: i, j, counter
@@ -767,12 +785,10 @@ contains
       do i=0, n_ranks_theta-1
          write (*,'(A,I0,A,I0)', ADVANCE='NO') ' ! '//name//' partition in rank ', i, ' :', dist(i,1)
          counter = 1
-         do j=2, max_len
-            if (dist(i,j) < 0) cycle
+         do j=2, dist(i,0)
             write (*, '(A,I0)', ADVANCE='NO') ',', dist(i,j)
-            counter = counter + 1
          end do
-         write (*, '(A,I0,A)') "  (",counter," pts)"
+         write (*, '(A,I0,A)') "  (",dist(i,0)," pts)"
       end do
    end subroutine print_discontiguous_distribution
 

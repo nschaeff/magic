@@ -13,11 +13,10 @@ module step_time_mod
    use mem_alloc, only: bytes_allocated, memWrite
    use truncation, only: n_r_max, l_max, l_maxMag, n_r_maxMag, &
        &                 lm_max, lmP_max, lm_maxMag, lm_loc,   &
-       &                 lm_locMag, lmP_loc
+       &                 lm_locMag, lmP_loc, l_r, u_r, l_r_Mag,&
+       &                 u_r_Mag, n_r_icb, n_r_cmb
    use num_param, only: n_time_steps, runTimeLimit, tEnd, dtMax, &
        &                dtMin, tScale, alpha, runTime
-   use radial_data, only: l_r, u_r, l_r_Mag, u_r_Mag, &
-       &                  n_r_icb, n_r_cmb
    use blocking, only: nLMBs, lmStartB, lmStopB
    use logic, only: l_mag, l_mag_LF, l_dtB, l_RMS, l_hel, l_TO,        &
        &            l_TOmovie, l_r_field, l_cmb_field, l_storeTpot,    &
@@ -296,7 +295,7 @@ contains
       logical :: l_frame          ! Movie frame output
       logical :: lTOframe         ! TO movie frame output
       logical :: l_cmb            ! Store set of b at CMB
-      logical :: l_r              ! Store coeff at various depths
+      logical :: l_outr           ! Store coeff at various depths
       logical :: lHelCalc         ! Calculate helicity for output
       logical :: lPowerCalc       ! Calculate viscous heating in the physical space
       logical :: lviscBcCalc      ! Calculate horizontal velocity and (grad T)**2
@@ -742,7 +741,7 @@ contains
          l_cmb= l_cmb_field .and.                                                &
               &        l_correct_step(n_time_step-1,time,timeLast,n_time_steps,  &
               &                       n_cmb_step,n_cmbs,n_t_cmb,t_cmb,0)
-         l_r= l_r_field .and.                                                    &
+         l_outr = l_r_field .and.                                                &
               &        l_correct_step(n_time_step-1,time,timeLast,n_time_steps,  &
               &                       n_r_field_step,n_r_fields,n_t_r_field,     &
               &                       t_r_field,0)
@@ -1070,7 +1069,7 @@ contains
               &      l_Bpot,l_Vpot,l_Tpot,l_log,l_graph,lRmsCalc,          &
               &      l_store,l_new_rst_file,                               &
               &      l_spectrum,lTOCalc,lTOframe,lTOZwrite,                &
-              &      l_frame,n_frame,l_cmb,n_cmb_sets,l_r,                 &
+              &      l_frame,n_frame,l_cmb,n_cmb_sets,l_outr,              &
               &      lorentz_torque_ic,lorentz_torque_ma,dbdt_CMB_LMloc,   &
               &      HelLMr_Rloc,Hel2LMr_Rloc,HelnaLMr_Rloc,Helna2LMr_Rloc,&
               &      viscLMr_Rloc,uhLMr_Rloc,duhLMr_Rloc,gradsLMr_Rloc,    &

@@ -8,7 +8,8 @@ module outPar_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use truncation, only: n_r_max, n_r_maxMag, l_max, lm_max, &
-       &                 l_maxMag
+       &                 l_maxMag, n_r_icb, l_r, u_r, l_r_Mag, &
+       &                 u_r_Mag, n_r, dist_r
    use blocking, only: nfs, nThetaBs, sizeThetaB, lm2m
    use logic, only: l_viscBcCalc, l_anel, l_fluxProfs, l_mag_nl, &
        &            l_perpPar, l_save_out, l_temperature_diff,   &
@@ -21,8 +22,7 @@ module outPar_mod
    use radial_functions, only: r, or2, sigma, rho0, kappa, temp0, &
        &                       rscheme_oc, orho1, dLalpha0,       &
        &                       dLtemp0, beta, alpha0
-   use radial_data, only: n_r_icb, l_r, u_r, l_r_Mag, &
-       &                  u_r_Mag
+   use radial_data, only: 
    use num_param, only: tScale
    use output_data, only: tag
    use useful, only: cc2real
@@ -222,12 +222,9 @@ contains
          uhR =half* uhR ! Normalisation for the theta integration
          gradT2R =half*gradT2R ! Normalisation for the theta integration
 
-         sendcount  = (u_r-l_r+1)
-         recvcounts = nR_per_rank
-         recvcounts(n_ranks_r-1) = nR_on_last_rank
-         do i=0,n_ranks_r-1
-            displs(i) = i*nR_per_rank
-         end do
+         sendcount  = n_r
+         recvcounts = dist_r(:,0)
+         displs     = dist_r(:,1)-1
 #ifdef WITH_MPI
          call MPI_GatherV(duhR,sendcount,MPI_DEF_REAL,              &
              &           duhR_global,recvcounts,displs,MPI_DEF_REAL,&
@@ -327,12 +324,9 @@ contains
             end do
          end if
 
-         sendcount  = (u_r-l_r+1)
-         recvcounts = nR_per_rank
-         recvcounts(n_ranks_r-1) = nR_on_last_rank
-         do i=0,n_ranks_r-1
-            displs(i) = i*nR_per_rank
-         end do
+         sendcount  = n_r
+         displs     = dist_r(:,1)-1
+         recvcounts = dist_r(:,0)
 #ifdef WITH_MPI
          call MPI_GatherV(fkinR,sendcount,MPI_DEF_REAL,&
              &           fkinR_global,recvcounts,displs,MPI_DEF_REAL,&
@@ -556,12 +550,9 @@ contains
       EperpaxiR=half*EperpaxiR ! Normalisation for the theta integration
       EparaxiR =half*EparaxiR  ! Normalisation for the theta integration
 
-      sendcount  = (u_r-l_r+1)
-      recvcounts = nR_per_rank
-      recvcounts(n_ranks_r-1) = nR_on_last_rank
-      do i=0,n_ranks_r-1
-         displs(i) = i*nR_per_rank
-      end do
+      sendcount  = n_r
+      displs     = dist_r(:,1)-1
+      recvcounts = dist_r(:,0)
 
 #ifdef WITH_MPI
       call MPI_GatherV(EperpR,sendcount,MPI_DEF_REAL,&

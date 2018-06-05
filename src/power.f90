@@ -4,8 +4,8 @@ module power
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use truncation, only: n_r_ic_maxMag, n_r_max, n_r_ic_max, l_max, &
-       &                 n_r_maxMag
-   use radial_data, only: n_r_icb, n_r_cmb, l_r, u_r
+       &                 n_r_maxMag, n_r_icb, n_r_cmb, l_r, u_r,    &
+       &                 dist_r, n_r
    use radial_functions, only: r_cmb, r_icb, r, rscheme_oc, chebt_ic, &
        &                       or2, O_r_ic2, lambda, temp0,           &
        &                       O_r_ic, rgrav, r_ic, dr_fac_ic,        &
@@ -121,7 +121,7 @@ contains
       real(cp),    intent(out) :: viscDiss,ohmDiss
 
       !-- local:
-      integer :: n_r,lm,l,m,l1m0,n
+      integer :: ir,lm,l,m,l1m0,n
       integer :: nTheta,nThetaStart,nThetaBlock,nThetaNHS
 
       real(cp) :: r_ratio
@@ -157,80 +157,80 @@ contains
          eDiffInt =0.0_cp
       end if
 
-      do n_r=l_r,u_r
-         viscHeatR(n_r)=0.0_cp
+      do ir=l_r,u_r
+         viscHeatR(ir)=0.0_cp
          do n=1,nThetaBs ! Loop over theta blocks
             nTheta=(n-1)*sizeThetaB
             nThetaStart=nTheta+1
-            call lmAS2pt(viscLMr(1,n_r),visc,nThetaStart,sizeThetaB)
+            call lmAS2pt(viscLMr(1,ir),visc,nThetaStart,sizeThetaB)
             do nThetaBlock=1,sizeThetaB
                nTheta=nTheta+1
                nThetaNHS=(nTheta+1)/2
-               viscHeatR(n_r)=viscHeatR(n_r)+gauss(nThetaNHS)*visc(nThetaBlock)
+               viscHeatR(ir)=viscHeatR(ir)+gauss(nThetaNHS)*visc(nThetaBlock)
             end do
          end do
       end do
 
-      do n_r=1,n_r_max
+      do ir=1,n_r_max
 
          !if ( l_conv ) then
-         !   curlU2_r(n_r)=0.0_cp
+         !   curlU2_r(ir)=0.0_cp
          !   !do lm=2,lm_max
          !   do lm=max(2,llm),ulm
          !      l=lo_map%lm2l(lm)
          !      m=lo_map%lm2m(lm)
-         !      laplace=dLh(st_map%lm2(l,m))*or2(n_r)*w(lm,n_r)-ddw(lm,n_r)
-         !      curlU2_r(n_r)=     curlU2_r(n_r) + dLh(st_map%lm2(l,m)) * ( &
-         !           dLh(st_map%lm2(l,m))*or2(n_r)*cc2real(z(lm,n_r),m)  + &
-         !           cc2real(dz(lm,n_r),m) + &
+         !      laplace=dLh(st_map%lm2(l,m))*or2(ir)*w(lm,ir)-ddw(lm,ir)
+         !      curlU2_r(ir)=     curlU2_r(ir) + dLh(st_map%lm2(l,m)) * ( &
+         !           dLh(st_map%lm2(l,m))*or2(ir)*cc2real(z(lm,ir),m)  + &
+         !           cc2real(dz(lm,ir),m) + &
          !           cc2real(laplace,m)    )
          !   end do
          !end if
 
          if ( l_mag ) then
-            curlB2_r(n_r)=0.0_cp
+            curlB2_r(ir)=0.0_cp
             do lm=max(2,llm),ulm
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
-               laplace=dLh(st_map%lm2(l,m))*or2(n_r)*b(lm,n_r)-ddb(lm,n_r)
-               curlB2_r(n_r)=curlB2_r(n_r) +  &
-               &             dLh(st_map%lm2(l,m))*lambda(n_r)*(              &
-               &             dLh(st_map%lm2(l,m))*or2(n_r)*                  &
-               &             cc2real(aj(lm,n_r),m) + cc2real(dj(lm,n_r),m) + &
+               laplace=dLh(st_map%lm2(l,m))*or2(ir)*b(lm,ir)-ddb(lm,ir)
+               curlB2_r(ir)=curlB2_r(ir) +  &
+               &             dLh(st_map%lm2(l,m))*lambda(ir)*(              &
+               &             dLh(st_map%lm2(l,m))*or2(ir)*                  &
+               &             cc2real(aj(lm,ir),m) + cc2real(dj(lm,ir),m) + &
                &             cc2real(laplace,m)    )
             end do
          end if
 
          if ( l_heat ) then
-            buoy_r(n_r)=0.0_cp
+            buoy_r(ir)=0.0_cp
             if ( l_TP_form ) then
                do lm=max(2,llm),ulm
                   l=lo_map%lm2l(lm)
                   m=lo_map%lm2m(lm)
-                  buoy_r(n_r)=buoy_r(n_r) +                                 &
-                  &           dLh(st_map%lm2(l,m))*BuoFac*rgrav(n_r)*       &
-                  &           ( otemp1(n_r)*cc22real(w(lm,n_r),s(lm,n_r),m) &
-                  &           -ViscHeatFac*ThExpNb*alpha0(n_r)*orho1(n_r)*  &
-                  &            cc22real(w(lm,n_r),p(lm,n_r),m) )
+                  buoy_r(ir)=buoy_r(ir) +                                 &
+                  &           dLh(st_map%lm2(l,m))*BuoFac*rgrav(ir)*       &
+                  &           ( otemp1(ir)*cc22real(w(lm,ir),s(lm,ir),m) &
+                  &           -ViscHeatFac*ThExpNb*alpha0(ir)*orho1(ir)*  &
+                  &            cc22real(w(lm,ir),p(lm,ir),m) )
                end do
             else
                do lm=max(2,llm),ulm
                   l=lo_map%lm2l(lm)
                   m=lo_map%lm2m(lm)
-                  buoy_r(n_r)=buoy_r(n_r) +                         &
+                  buoy_r(ir)=buoy_r(ir) +                         &
                   &           dLh(st_map%lm2(l,m))*BuoFac*          &
-                  &           rgrav(n_r)*cc22real(w(lm,n_r),s(lm,n_r),m)
+                  &           rgrav(ir)*cc22real(w(lm,ir),s(lm,ir),m)
                end do
             end if
          end if
          if ( l_chemical_conv ) then
-            buoy_chem_r(n_r)=0.0_cp
+            buoy_chem_r(ir)=0.0_cp
             do lm=max(2,llm),ulm
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
-               buoy_chem_r(n_r)=buoy_chem_r(n_r) +                      &
+               buoy_chem_r(ir)=buoy_chem_r(ir) +                      &
                &                dLh(st_map%lm2(l,m))*ChemFac*           &
-               &                rgrav(n_r)*cc22real(w(lm,n_r),xi(lm,n_r),m)
+               &                rgrav(ir)*cc22real(w(lm,ir),xi(lm,ir),m)
             end do
          end if
 
@@ -250,16 +250,15 @@ contains
       !     & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 
       if ( l_conv ) then
-         sendcount  = (u_r-l_r+1)
-         recvcounts = nR_per_rank
-         recvcounts(n_ranks_r-1) = nR_on_last_rank
-         do i=0,n_ranks_r-1
-            displs(i) = i*nR_per_rank
-         end do
+         sendcount  = n_r
+         displs     = dist_r(:,1)-1
+         recvcounts = dist_r(:,0)
          call MPI_GatherV(viscHeatR, sendcount, MPI_DEF_REAL,                &
               &           viscHeatR_global, recvcounts,displs, MPI_DEF_REAL, &
               &           0, comm_r, ierr)
       end if
+      call mpi_barrier(mpi_comm_world, ierr)
+      
 
 #else
       !if ( l_conv ) curlU2_r_global=curlU2_r
@@ -308,18 +307,18 @@ contains
 
       if ( l_cond_ic .and. l_mag ) then
 
-         do n_r=1,n_r_ic_max
-            r_ratio=r_ic(n_r)/r_ic(1)
-            curlB2_rIC(n_r)=0.0_cp
+         do ir=1,n_r_ic_max
+            r_ratio=r_ic(ir)/r_ic(1)
+            curlB2_rIC(ir)=0.0_cp
             do lm=max(2,llm),ulm
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
-               Bh=(l+one)*O_r_ic(n_r)*aj_ic(lm,n_r)+dj_ic(lm,n_r)
-               laplace=-ddb_ic(lm,n_r) - two*(l+one)*O_r_ic(n_r)*db_ic(lm,n_r)
-               curlB2_rIC(n_r)=curlB2_rIC(n_r) +                          &
+               Bh=(l+one)*O_r_ic(ir)*aj_ic(lm,ir)+dj_ic(lm,ir)
+               laplace=-ddb_ic(lm,ir) - two*(l+one)*O_r_ic(ir)*db_ic(lm,ir)
+               curlB2_rIC(ir)=curlB2_rIC(ir) +                            &
                &               dLh(st_map%lm2(l,m))*r_ratio**(2*l+2) *  ( &
-               &               dLh(st_map%lm2(l,m))*O_r_ic2(n_r)*         &
-               &               cc2real(aj_ic(lm,n_r),m) +                 &
+               &               dLh(st_map%lm2(l,m))*O_r_ic2(ir)*          &
+               &               cc2real(aj_ic(lm,ir),m) +                  &
                &               cc2real(Bh,m) + cc2real(laplace,m)       )
             end do
          end do    ! radial grid points
@@ -483,13 +482,13 @@ contains
             viscHeatMeanR(:)=viscHeatMeanR(:)/timeNorm
             fileName='powerR.'//tag
             open(newunit=fileHandle, file=fileName, status='unknown')
-            do n_r=1,n_r_max
+            do ir=1,n_r_max
                if (rank == 0) write(fileHandle,'(ES20.10,4ES15.7)')  &
-                    &   r(n_r),               & ! 1) radius
-                    &   buoMeanR(n_r),        & ! 2) Buo power
-                    &   buo_chem_MeanR(n_r),  & ! 3) Chem power
-                    &   viscHeatMeanR(n_r),   & ! 4) Viscous heating
-                    &   ohmDissR(n_r)           ! 5) Ohmic dissipation
+                    &   r(ir),               & ! 1) radius
+                    &   buoMeanR(ir),        & ! 2) Buo power
+                    &   buo_chem_MeanR(ir),  & ! 3) Chem power
+                    &   viscHeatMeanR(ir),   & ! 4) Viscous heating
+                    &   ohmDissR(ir)           ! 5) Ohmic dissipation
             end do
             close(fileHandle)
          end if

@@ -4,12 +4,11 @@ module output_mod
    use precision_mod
    use parallel_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: n_r_max, n_r_ic_max, minc, l_max, l_maxMag, &
-       &                 n_r_maxMag, lm_max
+   use truncation, only: n_r_max, n_r_ic_max, minc, l_max, l_maxMag,     &
+       &                 n_r_maxMag, lm_max, l_r, u_r, l_r_Mag, u_r_Mag, &
+       &                 n_r_cmb, n_r_icb
    use radial_functions, only: or1, or2, r, rscheme_oc, r_cmb, r_icb,  &
        &                       orho1, sigma
-   use radial_data, only: l_r, u_r, l_r_Mag, u_r_Mag,    &
-       &                  n_r_cmb, n_r_icb
    use physical_parameters, only: opm,ek,ktopv,prmag,nVarCond,LFfac
    use num_param, only: tScale
    use blocking, only: st_map, lm2, lo_map
@@ -307,7 +306,7 @@ contains
         &            l_Bpot,l_Vpot,l_Tpot,l_log,l_graph,lRmsCalc,         &
         &            l_store,l_new_rst_file,                              &
         &            l_spectrum,lTOCalc,lTOframe,lTOZwrite,               &
-        &            l_frame,n_frame,l_cmb,n_cmb_sets,l_r,                &
+        &            l_frame,n_frame,l_cmb,n_cmb_sets,l_outr,                &
         &            lorentz_torque_ic,lorentz_torque_ma,dbdt_CMB_LMloc,  &
         &            HelLMr,Hel2LMr,HelnaLMr,Helna2LMr,viscLMr,uhLMr,     &
         &            duhLMr,gradsLMr,fconvLMr,fkinLMr,fviscLMr,fpoynLMr,  &
@@ -324,7 +323,7 @@ contains
       logical,     intent(in) :: l_log, l_graph, lRmsCalc, l_store
       logical,     intent(in) :: l_new_rst_file, l_spectrum
       logical,     intent(in) :: lTOCalc,lTOframe
-      logical,     intent(in) :: l_frame, l_cmb, l_r
+      logical,     intent(in) :: l_frame, l_cmb, l_outr
       logical,     intent(inout) :: lTOZwrite
       integer,     intent(inout) :: n_frame
       integer,     intent(inout) :: n_cmb_sets
@@ -674,7 +673,7 @@ contains
       end if
       
       !--- Store potential coeffs for velocity fields and magnetic fields
-      if ( l_r ) then
+      if ( l_outr ) then
          PERFON('out_r')
          do n=1,n_coeff_r_max
             nR=n_coeff_r(n)

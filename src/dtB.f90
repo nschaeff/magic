@@ -9,14 +9,13 @@ module dtB_mod
    use mem_alloc, only: bytes_allocated
    use truncation, only: nrp, n_r_maxMag, n_r_ic_maxMag, n_r_max, lm_max_dtB, &
        &                 n_r_max_dtB, n_r_ic_max_dtB, lm_max, n_cheb_max,     &
-       &                 n_r_ic_max, l_max, n_phi_max, ldtBmem, l_axi
+       &                 n_r_ic_max, l_max, n_phi_max, ldtBmem, l_axi, l_r,u_r
    use communications, only: gather_all_from_lo_to_rank0, gt_OC, gt_IC, &
        &                     r2lm_type, create_r2lm_type, destroy_r2lm_type, &
        &                     r2lo_redist_start, r2lo_redist_wait
    use physical_parameters, only: opm,O_sr
    use radial_functions, only: O_r_ic, lambda, or2, dLlambda, rscheme_oc, &
        &                       or1, orho1
-   use radial_data,only: l_r,u_r
    use horizontal_data, only: dPhi, D_lP1, dLh, hdif_B, osn2, cosn2, osn1, &
        &                      dTheta1S, dTheta1A
    use logic, only: l_cond_ic, l_DTrMagSpec, l_dtBmovie

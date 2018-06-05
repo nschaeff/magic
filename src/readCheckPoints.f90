@@ -10,7 +10,7 @@ module readCheckPoints
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag
    use truncation, only: n_r_max,lm_max,n_r_maxMag,lm_maxMag,n_r_ic_max, &
        &                 n_r_ic_maxMag,nalias,n_phi_tot,l_max,m_max,     &
-       &                 minc,lMagMem
+       &                 minc,lMagMem, n_r_icb, n_r_cmb
    use logic, only: l_rot_ma,l_rot_ic,l_SRIC,l_SRMA,l_cond_ic,l_heat,l_mag, &
        &            l_mag_LF, l_chemical_conv, l_AB1
    use blocking, only: lo_map,lmStartB,lmStopB,nLMBs,lm2l,lm2m
@@ -21,7 +21,6 @@ module readCheckPoints
        &                  tShift_ma1,tShift_ma2,tipdipole, scale_b, scale_v,   &
        &                  scale_s,scale_xi
    use radial_functions, only: rscheme_oc, chebt_ic, cheb_norm_ic, r
-   use radial_data, only: n_r_icb, n_r_cmb
    use physical_parameters, only: ra, ek, pr, prmag, radratio, sigma_ratio, &
        &                          kbotv, ktopv, sc, raxi
    use constants, only: c_z10_omega_ic, c_z10_omega_ma, pi, zero, two

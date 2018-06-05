@@ -7,14 +7,14 @@ module distributed_theta
 !-------------------------------------------------------------------------------
 
    use precision_mod
-   use parallel_mod, only: coord_theta, rank, n_ranks, n_ranks_r, rank2theta, rank2r, nR_per_rank
-   use truncation, only: lm_dist, lmP_dist, n_m_loc, lmP_max, lm_max, l_max, lm_loc, lmP_loc, n_r_max, n_theta_dist
+   use parallel_mod, only: coord_theta, rank, n_ranks, n_ranks_r, rank2theta, rank2r
+   use truncation, only: lm_dist, lmP_dist, n_m_loc, lmP_max, lm_max, l_max, &
+       &                 lm_loc, lmP_loc, n_r_max, n_theta_dist, n_r_cmb, dist_r
    use mem_alloc, only: memWrite, bytes_allocated
    use logic, only: l_save_out, l_finite_diff
    use output_data, only: n_log_file, log_file
    use LMmapping, only: mappings, allocate_mappings, deallocate_mappings
    use useful, only: abortRun
-   use radial_data, only: n_r_cmb
    use mpi  
    
    implicit none
@@ -31,7 +31,7 @@ contains
 
    subroutine initialize_distributed_theta
       
-      integer :: i, iRstart, iRstop, iRremaining, iThetastart, iThetastop, ierr
+      integer :: i, iRstart, iRstop, iRremaining, iThetastart, iThetastop
       integer(lip) :: local_bytes_used
       
 
@@ -47,18 +47,17 @@ contains
             open(newunit=n_log_file, file=log_file, status='unknown', position='append')
          end if
 
-         iRremaining = n_r_max-(n_r_cmb + n_ranks_r*nR_per_rank - 1)
+         iRremaining = n_r_max-(n_r_cmb + n_ranks_r*dist_r(0,0) - 1)
          if ( .not. l_finite_diff ) iRremaining = 1
          write(*,*) '!-- Distributed (θ,r) per rank:'
          do i=0,n_ranks-1
-            iRstart = n_r_cmb + rank2r(i)*nR_per_rank
-            iRstop  = n_r_cmb + (rank2r(i)+1)*nR_per_rank - 1
+            iRstart = dist_r(rank2r(i),1)
+            iRstop  = dist_r(rank2r(i),2)
             iThetastart = n_theta_dist(rank2theta(i),1)
             iThetastop  = n_theta_dist(rank2theta(i),2)
-            if ( rank2r(i) == n_ranks_r-1 ) iRstop = iRstop + iRremaining
             write(*,'(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A)') ' ! ',i,' = (',iThetastart,':',&
                   iThetastop,',',iRstart,':', iRstop, &
-                  '), ',iThetastop-iThetastart+1,'x',iRstop-iRstart+1,' points'
+                  '), ',iThetastop-iThetastart+1,'x',dist_r(rank2r(i),0),' points'
          end do
          if ( l_save_out ) close(n_log_file)
       end if

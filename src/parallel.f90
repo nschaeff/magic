@@ -105,7 +105,7 @@ contains
    end subroutine initialize_mpi_world
    
    !------------------------------------------------------------------------------
-   subroutine initialize_domain_decomposition
+   subroutine initialize_mpi_decomposition
       !
       !-- Author: Rafael Lago (MPCDF) May 2018
       ! 
@@ -211,7 +211,7 @@ contains
          ml2rank(coords(2),coords(1)) = i
       end do
       
-   end subroutine initialize_domain_decomposition
+   end subroutine initialize_mpi_decomposition
    
    !------------------------------------------------------------------------------
    subroutine check_MPI_error(code)
@@ -229,7 +229,7 @@ contains
    end subroutine check_MPI_error
    
    !------------------------------------------------------------------------------
-   subroutine finalize_domain_decomposition
+   subroutine finalize_mpi_decomposition
 
       call MPI_Comm_Free(comm_gs,   ierr) 
       call MPI_Comm_Free(comm_r, ierr) 
@@ -242,7 +242,7 @@ contains
       deallocate(rank2theta, rank2r, gs2rank)
       deallocate(rank2m, lm2rank)
       deallocate(rank2ml_m, rank2ml_l, ml2rank)
-   end subroutine finalize_domain_decomposition
+   end subroutine finalize_mpi_decomposition
 
    !------------------------------------------------------------------------------
    subroutine optimize_decomposition_simple

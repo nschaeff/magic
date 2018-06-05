@@ -105,7 +105,6 @@ program magic
    use movie_data, only: initialize_movie_data, finalize_movie_data
    use RMS, only: initialize_RMS, finalize_RMS
    use dtB_mod, only: initialize_dtB_mod, finalize_dtB_mod
-   use radial_data, only: initialize_radial_data
    use radialLoop, only: initialize_radialLoop, finalize_radialLoop
    use lmLoop_data, only: initialize_LMLoop_data
    use LMLoop_mod,only: initialize_LMLoop, finalize_LMLoop
@@ -205,7 +204,7 @@ program magic
 
    !--- Creates all the MPI communicators for all the different
    !    cartesian grids
-   call initialize_domain_decomposition
+   call initialize_mpi_decomposition
    call initialize_output
 
    !--- Check parameters and write info to SDTOUT
@@ -259,7 +258,6 @@ program magic
    call distribute_lm
    
    local_bytes_used=bytes_allocated
-   call initialize_radial_data
    call initialize_distributed_theta
    
    call initialize_LMLoop_data ! needed before radial_functions
@@ -436,7 +434,7 @@ program magic
    call finalize_kinetic_energy
    if ( l_probe ) call finalize_probes
    call finalize_communications
-   call finalize_domain_decomposition
+   call finalize_mpi_decomposition
    call finalize_step_time
    call finalize_fieldsLast
    call finalize_fields

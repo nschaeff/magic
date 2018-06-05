@@ -7,8 +7,8 @@ module outMisc_mod
    use parallel_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: l_max, n_r_max, lm_max
-   use radial_data, only: n_r_icb, n_r_cmb, l_r, u_r
+   use truncation, only: l_max, n_r_max, lm_max, n_r_icb, dist_r,&
+       &                 n_r_cmb, l_r, u_r
    use radial_functions, only: r_icb, rscheme_oc, kappa,         &
        &                       r_cmb,temp0, r, rho0, dLtemp0,    &
        &                       dLalpha0, beta, orho1, alpha0,    &
@@ -163,12 +163,9 @@ contains
       ! the arrays: Hel2Nr,Helna2Nr,HelEAr,HelNr,HelnaNr
       ! Hel2Sr,Helna2Sr,HelSr,HelnaSr
     
-      sendcount  = (u_r-l_r+1)
-      recvcounts = nR_per_rank
-      recvcounts(n_ranks_r-1) = nR_on_last_rank
-      do i=0,n_ranks_r-1
-         displs(i) = i*nR_per_rank
-      end do
+      sendcount  = n_r
+      recvcounts = dist_r(:,0)
+      displs     = dist_r(:,1)-1
 #ifdef WITH_MPI
       call MPI_GatherV(Hel2Nr,sendcount,MPI_DEF_REAL,&
            &           Hel2Nr_global,recvcounts,displs,MPI_DEF_REAL,&

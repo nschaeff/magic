@@ -12,7 +12,6 @@ module rIterThetaBlocking_shtns_mod
        &            l_cond_ma, l_dtB, l_store_frame, l_movie_oc,     &
        &            l_TO, l_chemical_conv, l_TP_form, l_probe,       &
        &            l_precession, l_double_curl
-   use radial_data, only: n_r_cmb, n_r_icb, l_r, u_r
    use radial_functions, only: or2, orho1
    use constants, only: zero
    use leg_helper_mod, only: leg_helper_t

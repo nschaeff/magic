@@ -1,3 +1,10 @@
+2018-06-05
+-------------------------------------------------------------------------------
+- [TODO] Checks if everything is correct for n_r_cmb/=1 and n_r_icb/=n_r_max
+  - dist_r is taking n_r_cmb into account! See distribute_gs function for more
+    details
+
+
 2018-05-29
 -------------------------------------------------------------------------------
 - A large restructuring is incoming!
@@ -6,9 +13,11 @@
   
          subroutine foo
             !
-            !-- This subroutine does X
+            !   This subroutine does X
             !
-            !-- Author: Rafael Lago
+            !-- TODO blablabal
+            !
+            !   Author: Rafael Lago
             !
          end subroutine
          
@@ -18,9 +27,9 @@
    - Big header explaining some of the changes.
    - [renamed] n_procs_* -> n_ranks_*
    - [renamed] comm_*. Several modifications. Read comments.
-   - [renamed] initialize_cartesian -> initialize_domain_decomposition 
+   - [renamed] initialize_cartesian -> initialize_mpi_decomposition 
    - [renamed] parallel -> initialize_mpi_world
-   - [renamed] finalize_cartesian -> finalize_domain_decomposition
+   - [renamed] finalize_cartesian -> finalize_mpi_decomposition
 
 - communications.f90 
   - [moved] slice_* and gather_* from truncation.f90

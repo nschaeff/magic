@@ -10,8 +10,8 @@ module graphOut_mod
    use precision_mod
    use truncation, only: lm_maxMag, n_r_maxMag, n_r_ic_maxMag, lm_max, &
        &                 n_theta_max, n_phi_tot, n_r_max, l_max, minc, &
-       &                 n_phi_max, nrp, n_r_ic_max, l_axi
-   use radial_data, only: n_r_icb
+       &                 n_phi_max, nrp, n_r_ic_max, l_axi, n_r_icb,   &
+       &                 dist_r
    use radial_functions, only: r_cmb, orho1, or1, or2, r, r_icb, r_ic, &
        &                       O_r_ic, O_r_ic2
    use physical_parameters, only: ra, ek, pr, prmag, radratio, sigma_ratio
@@ -689,7 +689,11 @@ contains
                                            3*(8+n_phi_max*SIZEOF_OUT_REAL)*n_theta_block_size
 #endif
       size_of_data_per_r = size_of_data_per_thetaB * nThetaBs
-      size_of_data_per_rank = size_of_data_per_r * nR_per_rank
+      !-- TODO:
+      !   This variable does not return the correct size.
+      !   Needs to be reviewed in the future
+      ! size_of_data_per_rank = size_of_data_per_r * nR_per_rank
+      size_of_data_per_rank = size_of_data_per_r * dist_r(0,0)
 
       if ( rank == 0 ) then
          ! coord_r zero writes the Header

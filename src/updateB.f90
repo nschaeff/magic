@@ -10,11 +10,10 @@ module updateB_mod
    use mem_alloc, only: bytes_allocated
    use truncation, only: n_r_max, n_r_tot, n_r_ic_max, &
        &                 n_cheb_ic_max, n_r_ic_maxMag, n_r_maxMag, &
-       &                 n_r_totMag, lm_max, l_maxMag
+       &                 n_r_totMag, lm_max, l_maxMag, n_r_cmb,n_r_icb
    use radial_functions, only: chebt_ic,or2,r_cmb,chebt_ic_even, d2cheb_ic, &
        &                       cheb_norm_ic,dr_fac_ic,lambda,dLlambda,o_r_ic,r,&
        &                       or1, cheb_ic, dcheb_ic,rscheme_oc
-   use radial_data, only: n_r_cmb,n_r_icb
    use physical_parameters, only: n_r_LCR,opm,O_sr,kbotb, imagcon, tmagcon, &
                                  sigma_ratio, conductance_ma, ktopb, kbotb
    use init_fields, only: bpeaktop, bpeakbot

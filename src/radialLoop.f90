@@ -12,7 +12,6 @@ module radialLoop
        &            l_b_nl_icb, l_b_nl_cmb, l_TP_form
    use constants, only: zero
    use parallel_mod, only: coord_r, n_ranks_r, rank
-   use radial_data
 #ifdef WITH_LIKWID
 #include "likwid_f90.h"
 #endif

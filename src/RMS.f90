@@ -14,9 +14,9 @@ module RMS
    use radial_scheme, only: type_rscheme
    use truncation, only: n_r_max, n_cheb_max, n_r_maxMag, lm_max, lm_maxMag, &
        &                 l_max, n_phi_max, n_theta_max, minc, n_r_max_dtB,   &
-       &                 lm_max_dtB, fd_ratio, fd_stretch
+       &                 lm_max_dtB, fd_ratio, fd_stretch, u_r, l_r, dist_r, &
+       &                 n_r
    use physical_parameters, only: ra, ek, pr, prmag, radratio
-   use radial_data, only: u_r, l_r
    use radial_functions, only: rscheme_oc, r, r_cmb, r_icb, alph1, alph2
    use logic, only: l_save_out, l_heat, l_conv_nl, l_mag_LF, l_conv, &
        &            l_corr, l_mag, l_finite_diff, l_newmap
@@ -476,12 +476,9 @@ contains
 #ifdef WITH_MPI
     
       ! The following fields are only 1D and R distributed.
-      sendcount  = (u_r-l_r+1)*(l_max+1)
-      recvcounts = nR_per_rank*(l_max+1)
-      recvcounts(n_ranks_r-1) = nR_on_last_rank*(l_max+1)
-      do irank=0,n_ranks_r-1
-         displs(irank) = irank*nR_per_rank*(l_max+1)
-      end do
+      sendcount  = n_r*(l_max+1)
+      displs     = (dist_r(:,1)-1)*(l_max+1)
+      recvcounts = dist_r(:,0)*(l_max+1)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
            & Cor2hInt,recvcounts,displs,MPI_DEF_REAL,comm_r,ierr)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&
