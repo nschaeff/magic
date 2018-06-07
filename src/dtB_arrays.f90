@@ -1,6 +1,6 @@
 module dtB_arrays_mod
 
-   use truncation, only: lmP_max_dtB
+   use geometry, only: lmP_max_dtB
    use mem_alloc, only: bytes_allocated
    use precision_mod
    use constants, only: zero

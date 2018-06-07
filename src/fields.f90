@@ -5,7 +5,7 @@ module fields
    !
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: lm_max, n_r_max, lm_maxMag, n_r_maxMag, &
+   use geometry, only: lm_max, n_r_max, lm_maxMag, n_r_maxMag, &
        &                 n_r_ic_maxMag, lm_loc, lm_locMag, l_r, u_r
    use logic, only: l_chemical_conv
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag

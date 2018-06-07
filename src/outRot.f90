@@ -2,7 +2,7 @@ module outRot
 
    use parallel_mod
    use precision_mod
-   use truncation, only: n_r_max, n_r_maxMag, minc, nrp, n_phi_max, n_theta_beg, n_theta_end, &
+   use geometry, only: n_r_max, n_r_maxMag, minc, nrp, n_phi_max, n_theta_beg, n_theta_end, &
        &            comm_theta, n_r_CMB, n_r_ICB
    use radial_functions, only: r_icb, r_cmb, r, rscheme_oc
    use physical_parameters, only: kbotv, ktopv

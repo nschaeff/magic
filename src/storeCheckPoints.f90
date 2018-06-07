@@ -7,7 +7,7 @@ module storeCheckPoints
    use precision_mod
    use parallel_mod, only: rank, coord_r
    use communications, only: gt_OC, gt_IC, gather_all_from_lo_to_rank0
-   use truncation, only: n_r_max,n_r_ic_max,minc,nalias,n_theta_max,n_phi_tot, &
+   use geometry, only: n_r_max,n_r_ic_max,minc,nalias,n_theta_max,n_phi_tot, &
        &                 lm_max,lm_maxMag,n_r_maxMag,n_r_ic_maxMag,l_max,      &
        &                 fd_stretch, fd_ratio
    use radial_functions, only: rscheme_oc, alph1, alph2

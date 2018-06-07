@@ -4,7 +4,7 @@ module num_param
    !
 
    use mem_alloc, only: bytes_allocated
-   use truncation, only: n_r_max
+   use geometry, only: n_r_max, l_max
    use precision_mod
 
    implicit none
@@ -67,6 +67,10 @@ module num_param
 contains
 
    subroutine initialize_num_param
+      
+      !-- ldif determins at which l hyperdiffusivity starts:
+      ldif=max(1,ldif)
+      ldif=min(l_max,ldif)
 
       allocate( delxr2(n_r_max),delxh2(n_r_max) )
       bytes_allocated = bytes_allocated+2*n_r_max*SIZEOF_DEF_REAL

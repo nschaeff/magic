@@ -4,7 +4,7 @@ module radial_functions
    !  temperature, cheb transforms, etc.)
    !
 
-   use truncation, only: n_r_max, n_cheb_max, n_r_ic_max, fd_ratio, &
+   use geometry, only: n_r_max, n_cheb_max, n_r_ic_max, fd_ratio, &
        &                 fd_stretch, fd_order, fd_order_bound
    use algebra, only: sgesl,sgefa
    use constants, only: sq4pi, one, two, three, four, half

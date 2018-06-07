@@ -2,7 +2,7 @@ module movie_data
 
    use parallel_mod
    use precision_mod
-   use truncation, only: n_r_max, n_theta_max, n_phi_max,      &
+   use geometry, only: n_r_max, n_theta_max, n_phi_max,      &
        &                 ldtBMem, minc, n_r_ic_max, lMovieMem, &
        &                 n_r_tot, l_r,u_r, n_r_icb, n_r_cmb,   &
        &                 n_r, dist_r

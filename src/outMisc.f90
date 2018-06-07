@@ -7,7 +7,7 @@ module outMisc_mod
    use parallel_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: l_max, n_r_max, lm_max, n_r_icb, dist_r,&
+   use geometry, only: l_max, n_r_max, lm_max, n_r_icb, dist_r,&
        &                 n_r_cmb, l_r, u_r
    use radial_functions, only: r_icb, rscheme_oc, kappa,         &
        &                       r_cmb,temp0, r, rho0, dLtemp0,    &

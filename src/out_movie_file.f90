@@ -3,7 +3,7 @@ module out_movie
    use precision_mod
    use parallel_mod, only: coord_r, rank
    use communications, only: gt_OC, gather_all_from_lo_to_rank0
-   use truncation, only: n_phi_max, n_theta_max, minc, lm_max, nrp, l_max,  &
+   use geometry, only: n_phi_max, n_theta_max, minc, lm_max, nrp, l_max,  &
        &                 n_m_max, lm_maxMag, n_r_maxMag, n_r_ic_maxMag,     &
        &                 n_r_ic_max, n_r_max, l_axi, n_r_icb
    use movie_data, only: frames, n_movie_fields, n_movies, n_movie_surface, &

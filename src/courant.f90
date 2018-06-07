@@ -2,7 +2,7 @@ module courant_mod
  
    use parallel_mod
    use precision_mod
-   use truncation, only: nrp, n_phi_max, n_theta_beg, n_theta_end, &
+   use geometry, only: nrp, n_phi_max, n_theta_beg, n_theta_end, &
        &                 comm_theta, l_r, u_r
    use radial_functions, only: orho1, orho2, or4, or2
    use physical_parameters, only: LFfac, opm

@@ -3,7 +3,7 @@ module radialLoop
 
    use precision_mod
    use mem_alloc, only: memWrite, bytes_allocated
-   use truncation
+   use geometry
    use physical_parameters, only: ktopv, kbotv
    use blocking, only: nThetaBs, sizeThetaB
    use logic, only: l_dtB, l_mag, l_mag_LF, lVerbose, l_rot_ma, l_rot_ic,    &
@@ -17,20 +17,12 @@ module radialLoop
 #endif
    use rIteration_mod, only: rIteration_t
    use rIterThetaBlocking_mod, only: rIterThetaBlocking_t
-#ifdef WITH_SHTNS
    use rIterThetaBlocking_shtns_mod, only: rIterThetaBlocking_shtns_t
-#else
-#endif
+
 #ifdef WITH_MPI
    use graphOut_mod, only: graphOut_mpi_header
 #else
    use graphOut_mod, only: graphOut_header
-#endif
-
-#ifdef WITHOMP
-   use rIterThetaBlocking_OpenMP_mod, only: rIterThetaBlocking_OpenMP_t
-#else
-   use rIterThetaBlocking_seq_mod, only: rIterThetaBlocking_seq_t
 #endif
 
    implicit none
@@ -50,22 +42,7 @@ contains
 
       local_bytes_used = bytes_allocated
       
-      !>@TODO: This here is not right. If we ever need to use a combination of OpenMP 
-      !> and MPI, this will bring quite a lot of problems, because you need to disable 
-      !> WITHOMP flag to enable the ThetaParallel. I'd suggest to drop all of those 
-      !> ifdefs and have it decided either by parameter file, environment variables
-      !> or the structure of the parallelization itself. 
-      !>  - Lago 
-
-#ifdef WITH_SHTNS
       allocate( rIterThetaBlocking_shtns_t :: this_rIteration )
-#else
-#ifdef WITHOMP
-         allocate( rIterThetaBlocking_OpenMP_t :: this_rIteration )
-#else
-         allocate( rIterThetaBlocking_seq_t :: this_rIteration )
-#endif
-#endif
 
       this_type = this_rIteration%getType()
       if (rank == 0) write(*,"(2A)") "Using rIteration type: ",trim(this_type)

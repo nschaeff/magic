@@ -4,7 +4,7 @@ module updateWPS_mod
    use omp_lib
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: lm_max, n_r_max, l_max, n_r_cmb,n_r_icb
+   use geometry, only: lm_max, n_r_max, l_max, n_r_cmb,n_r_icb
    use radial_functions, only: or1, or2, rho0, rgrav, r, visc, dLvisc,    &
        &                       rscheme_oc, beta, dbeta, dLkappa, dLtemp0, &
        &                       ddLtemp0, alpha0, dLalpha0, ddLalpha0,     &

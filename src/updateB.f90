@@ -8,7 +8,7 @@ module updateB_mod
    use omp_lib
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: n_r_max, n_r_tot, n_r_ic_max, &
+   use geometry, only: n_r_max, n_r_tot, n_r_ic_max, &
        &                 n_cheb_ic_max, n_r_ic_maxMag, n_r_maxMag, &
        &                 n_r_totMag, lm_max, l_maxMag, n_r_cmb,n_r_icb
    use radial_functions, only: chebt_ic,or2,r_cmb,chebt_ic_even, d2cheb_ic, &

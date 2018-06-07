@@ -6,7 +6,7 @@ module legendre_spec_to_grid
 #endif
 
    use precision_mod
-   use truncation, only: lm_max, n_m_max, nrp, l_max, l_axi
+   use geometry, only: lm_max, n_m_max, nrp, l_max, l_axi
    use blocking, only: nfs, sizeThetaB, lm2mc, lm2
    use horizontal_data, only: Plm, dPlm, lStart, lStop, lmOdd, D_mc2m, &
        &                      osn2

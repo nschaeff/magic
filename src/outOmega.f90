@@ -6,7 +6,7 @@ module omega
 
    use precision_mod
    use parallel_mod
-   use truncation, only: n_r_max, lm_max, l_max, minc
+   use geometry, only: n_r_max, lm_max, l_max, minc
    use radial_functions, only: r_CMB, r_ICB, rscheme_oc, orho1
    use LMLoop_data, only: llm,ulm
    use blocking, only: lo_map

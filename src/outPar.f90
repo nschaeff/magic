@@ -7,7 +7,7 @@ module outPar_mod
    use parallel_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: n_r_max, n_r_maxMag, l_max, lm_max, &
+   use geometry, only: n_r_max, n_r_maxMag, l_max, lm_max, &
        &                 l_maxMag, n_r_icb, l_r, u_r, l_r_Mag, &
        &                 u_r_Mag, n_r, dist_r
    use blocking, only: nfs, nThetaBs, sizeThetaB, lm2m

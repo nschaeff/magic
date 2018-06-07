@@ -2,7 +2,7 @@ module cosine_transform_odd
 
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: lm_max, lm_max_real
+   use geometry, only: lm_max, lm_max_real
    use fft_fac_mod, only: fft_fac_complex, fft_fac_real
    use constants, only: half, one, two, pi, sin36, cos36, sin60, sin72, cos72
    use useful, only: factorise, abortRun

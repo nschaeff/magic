@@ -1,7 +1,7 @@
 module LMmapping
 
    use precision_mod
-   use truncation, only: l_axi
+   use geometry, only: l_axi
    use mem_alloc, only: bytes_allocated
 
    implicit none

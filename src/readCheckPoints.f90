@@ -8,7 +8,7 @@ module readCheckPoints
    use parallel_mod
    use communications, only: scatter_from_rank0_to_lo
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag
-   use truncation, only: n_r_max,lm_max,n_r_maxMag,lm_maxMag,n_r_ic_max, &
+   use geometry, only: n_r_max,lm_max,n_r_maxMag,lm_maxMag,n_r_ic_max, &
        &                 n_r_ic_maxMag,nalias,n_phi_tot,l_max,m_max,     &
        &                 minc,lMagMem, n_r_icb, n_r_cmb
    use logic, only: l_rot_ma,l_rot_ic,l_SRIC,l_SRMA,l_cond_ic,l_heat,l_mag, &

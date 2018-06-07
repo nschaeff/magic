@@ -3,7 +3,7 @@ module kinetic_energy
    use parallel_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: n_r_max, l_max
+   use geometry, only: n_r_max, l_max
    use radial_functions, only: r, or1, rscheme_oc, or2, r_cmb, r_icb, &
        &                       orho1, orho2, sigma
    use physical_parameters, only: prmag, ek, nVarCond

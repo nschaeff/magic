@@ -10,7 +10,7 @@ module communications
                            comm_r, rank, comm_gs,   &
                            comm_m, n_ranks_theta
    use LMLoop_data, only: llm, ulm
-   use truncation 
+   use geometry 
    use blocking, only: st_map, lo_map, lmStartB, lmStopB, lm2, lmP2
    use logic, only: l_mag, l_conv, l_heat, l_chemical_conv, &
        &            l_mag_kin, l_TP_form, l_double_curl

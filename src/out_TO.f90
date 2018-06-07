@@ -3,7 +3,7 @@ module outTO_mod
    use parallel_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: n_r_max, n_r_maxStr, n_theta_maxStr, l_max, &
+   use geometry, only: n_r_max, n_r_maxStr, n_theta_maxStr, l_max, &
        &                 n_theta_max, n_phi_max, minc, lStressMem,   &
        &                 lm_max, l_r, u_r, n_r, dist_r
    use radial_functions, only: r_ICB, rscheme_oc, r, r_CMB, orho1, rscheme_oc

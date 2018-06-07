@@ -4,7 +4,7 @@ module TO_helpers
    !
 
    use precision_mod
-   use truncation, only: l_max
+   use geometry, only: l_max
    use blocking, only: lm2
    use horizontal_data, only: dPlm, osn1
    use constants, only: one, two, half

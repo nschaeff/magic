@@ -40,7 +40,7 @@ module parallel_mod
    ! 
    ! The duplications kinda make the code more readable, however.
    ! 
-   !-- Author: Rafael Lago (MPCDF) May 2018
+   !   Author: Rafael Lago (MPCDF) May 2018
    ! 
 
    use MPI
@@ -107,7 +107,7 @@ contains
    !------------------------------------------------------------------------------
    subroutine initialize_mpi_decomposition
       !
-      !-- Author: Rafael Lago (MPCDF) May 2018
+      !   Author: Rafael Lago (MPCDF) May 2018
       ! 
       integer :: dims(2), coords(2), i, irank
       logical :: periods(2)
@@ -251,7 +251,7 @@ contains
       !   grid. In the future we might want to make this function much more 
       !   sophisticated.
       !
-      !-- Author: Rafael Lago (MPCDF) May 2018
+      !   Author: Rafael Lago (MPCDF) May 2018
       ! 
       real     :: log2
       integer  :: nPow2

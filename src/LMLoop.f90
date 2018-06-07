@@ -11,7 +11,7 @@ module LMLoop_mod
    use precision_mod
    use parallel_mod
    use mem_alloc, only: memWrite, bytes_allocated
-   use truncation, only: l_max, lm_max, n_r_max, n_r_maxMag, n_r_icb,    &
+   use geometry, only: l_max, lm_max, n_r_max, n_r_maxMag, n_r_icb,    &
        &            n_r_cmb
    use blocking, only: lmStartB, lmStopB, lo_map
    use logic, only: l_mag, l_conv, l_anelastic_liquid, lVerbose, l_heat, &
@@ -237,8 +237,7 @@ contains
       end if
 
       if ( l_chemical_conv ) then ! dp,workA usead as work arrays
-         print *, "Not Parallelized!", __LINE__, __FILE__
-         stop
+         print *, "Not Parallelized, but continuing!!", __LINE__, __FILE__
          call updateXi(xi_LMloc,dxi_LMloc,dVXirLM,dxidt,dxidtLast_LMloc, &
               &        w1,coex,dt,nLMB)
 

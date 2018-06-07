@@ -7,7 +7,7 @@ module nonlinear_lm_mod
    use, intrinsic :: iso_c_binding
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: lm_max, l_max, lm_maxMag, lmP_max, lm_loc,         &
+   use geometry, only: lm_max, l_max, lm_maxMag, lmP_max, lm_loc,         &
        &             lm_locMag, lmP_loc, lm_locDC, lm_locChe, lm_locTP
    use communications, only: slice_FlmP, gather_FlmP
    use logic, only : l_anel, l_conv_nl, l_corr, l_heat, l_anelastic_liquid, &

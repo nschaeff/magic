@@ -14,7 +14,7 @@ module probe_mod
 
    use parallel_mod, only: coord_r, rank 
    use precision_mod
-   use truncation, only: n_r_max, n_phi_max, nrp, l_r, u_r
+   use geometry, only: n_r_max, n_phi_max, nrp, l_r, u_r
    use radial_functions, only: r_cmb, orho1, or1, or2, r, r_icb
    use num_param, only: vScale
    use blocking, only: nThetaBs, sizeThetaB, nfs

@@ -5,7 +5,7 @@ module Namelists
 
    use precision_mod
    use constants
-   use truncation
+   use geometry
    use radial_functions
    use physical_parameters
    use num_param
@@ -39,7 +39,6 @@ contains
 
       !-- Local stuff
       integer :: n
-      integer :: nCounts
       real(cp) :: xiCMB(4*n_impXi_max)
       real(cp) :: sCMB(4*n_impS_max),rad ! cmb heat boundary condition
       logical :: log_does_exist, nml_exist
@@ -707,33 +706,33 @@ contains
       end if
 
       ! Setting up truncation is required to set up ldif and l_max_r
-      call initialize_truncation
-
-      !-- Coeffs at radial levels:
-      if ( l_r_fieldT ) l_r_field=.true.
-
-      if ( l_r_field ) then
-         if ( n_r_step == 0 ) n_r_step=2
-         if ( l_max_r == 0 .or. l_max_r > l_max ) l_max_r=l_max
-         nCounts = count(n_r_array>0)
-
-         if ( nCounts > 0 ) then
-             n_coeff_r_max=nCounts
-         else
-             n_coeff_r_max=5
-         end if
-      end if
-
-      if ( l_energy_modes ) then
-         if ( m_max_modes==0 .or. m_max_modes>l_max ) m_max_modes=l_max
-      end if
-
-      !-- ldif determins at which l hyperdiffusivity starts:
-      ldif=max(1,ldif)
-      ldif=min(l_max,ldif)
-
-      !-- Coeffs at CMB:
-      l_max_cmb=min(l_max_cmb,l_max)
+!       call initialize_truncation
+! 
+!       !-- Coeffs at radial levels:
+!       if ( l_r_fieldT ) l_r_field=.true.
+! 
+!       if ( l_r_field ) then
+!          if ( n_r_step == 0 ) n_r_step=2
+!          if ( l_max_r == 0 .or. l_max_r > l_max ) l_max_r=l_max
+!          nCounts = count(n_r_array>0)
+! 
+!          if ( nCounts > 0 ) then
+!              n_coeff_r_max=nCounts
+!          else
+!              n_coeff_r_max=5
+!          end if
+!       end if
+! 
+!       if ( l_energy_modes ) then
+!          if ( m_max_modes==0 .or. m_max_modes>l_max ) m_max_modes=l_max
+!       end if
+! 
+!       !-- ldif determins at which l hyperdiffusivity starts:
+!       ldif=max(1,ldif)
+!       ldif=min(l_max,ldif)
+! 
+!       !-- Coeffs at CMB:
+!       l_max_cmb=min(l_max_cmb,l_max)
 
       !-- Maximum run time specified?
       runTimeLimit(1)=runHours

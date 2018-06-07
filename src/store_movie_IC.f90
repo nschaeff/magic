@@ -1,7 +1,7 @@
 module out_movie_IC
 
    use precision_mod
-   use truncation, only: minc, lm_maxMag, n_r_maxMag, n_r_ic_maxMag, &
+   use geometry, only: minc, lm_maxMag, n_r_maxMag, n_r_ic_maxMag, &
        &                 n_phi_max, lm_max, n_r_ic_max, nrp, l_max,  &
        &                 n_theta_max, l_axi, n_r_icb
    use radial_functions, only: r_ic, r_ICB, O_r_ic2, O_r_ic

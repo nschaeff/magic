@@ -3,7 +3,7 @@ module updateXi_mod
 
    use omp_lib
    use precision_mod
-   use truncation, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb
+   use geometry, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb
    use radial_functions, only: orho1, or1, or2, beta, rscheme_oc
    use physical_parameters, only: osc, kbotxi, ktopxi
    use num_param, only: alpha

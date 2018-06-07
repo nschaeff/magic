@@ -2,7 +2,7 @@ module cosine_transform_even
 
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: lm_max
+   use geometry, only: lm_max
    use fft_fac_mod, only: fft_fac_complex
    use constants, only: half, one, two, pi, sin36, cos36, sin60, sin72, cos72
    use useful, only: factorise, abortRun

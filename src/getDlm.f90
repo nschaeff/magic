@@ -5,7 +5,7 @@ module getDlm_mod
 
    use parallel_mod
    use precision_mod
-   use truncation, only: minc, m_max, l_max, n_r_max
+   use geometry, only: minc, m_max, l_max, n_r_max
    use radial_functions, only: or2, r, rscheme_oc, orho1
    use num_param, only: eScale
    use blocking, only: lo_map, st_map

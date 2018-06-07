@@ -4,7 +4,7 @@ module output_mod
    use precision_mod
    use parallel_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: n_r_max, n_r_ic_max, minc, l_max, l_maxMag,     &
+   use geometry, only: n_r_max, n_r_ic_max, minc, l_max, l_maxMag,     &
        &                 n_r_maxMag, lm_max, l_r, u_r, l_r_Mag, u_r_Mag, &
        &                 n_r_cmb, n_r_icb
    use radial_functions, only: or1, or2, r, rscheme_oc, r_cmb, r_icb,  &
@@ -35,7 +35,8 @@ module output_mod
        &              spectrum_temp_average, get_amplitude
    use outTO_mod, only: outTO
    use output_data, only: tag, l_max_cmb, n_coeff_r, l_max_r, n_coeff_r_max,&
-       &                  n_r_array, n_r_step,  n_log_file, log_file
+       &                  n_r_array, n_r_step,  n_log_file, log_file,       &
+       &                  m_max_modes
    use constants, only: vol_oc, vol_ic, mass, surf_cmb, two, three
    use outMisc_mod, only: outHelicity, outHeat
    use geos_mod, only: getEgeos, outPV
@@ -109,7 +110,27 @@ contains
    subroutine initialize_output
 
       integer :: n
+      integer :: nCounts
       character(len=72) :: string
+      
+      !-- Setup coeffs at radial levels:
+      if ( l_r_fieldT ) l_r_field=.true.
+
+      if ( l_r_field ) then
+         if ( n_r_step == 0 ) n_r_step=2
+         if ( l_max_r == 0 .or. l_max_r > l_max ) l_max_r=l_max
+         nCounts = count(n_r_array>0)
+
+         if ( nCounts > 0 ) then
+             n_coeff_r_max=nCounts
+         else
+             n_coeff_r_max=5
+         end if
+      end if
+
+      if ( l_energy_modes ) then
+         if ( m_max_modes==0 .or. m_max_modes>l_max ) m_max_modes=l_max
+      end if
 
       if ( l_mag ) then
          if ( coord_r == 0 ) then 
@@ -119,6 +140,9 @@ contains
             allocate( bICB(1) )
          end if
       end if
+      
+      !-- Coeffs at CMB:
+      l_max_cmb=min(l_max_cmb,l_max)
 
       if ( l_r_field .or. l_r_fieldT ) then
          allocate ( n_coeff_r(n_coeff_r_max))

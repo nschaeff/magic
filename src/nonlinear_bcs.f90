@@ -1,7 +1,7 @@
 module nonlinear_bcs
 
    use precision_mod
-   use truncation, only: nrp, lmP_max, n_phi_max, l_axi,            &
+   use geometry, only: nrp, lmP_max, n_phi_max, l_axi,            &
        &                 n_theta_beg, n_theta_end, lmP_loc, lm_loc, &
        &                 n_r_cmb, n_r_icb
    use radial_data, only: 

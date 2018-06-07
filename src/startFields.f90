@@ -4,7 +4,7 @@ module start_fields
 #ifdef WITH_MPI
    use mpi
 #endif
-   use truncation
+   use geometry
    use precision_mod
    use radial_functions, only: dr_fac_ic, chebt_ic, rscheme_oc,          &
        &                       chebt_ic_even, r, or1, alpha0, dLtemp0,   &

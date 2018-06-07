@@ -1,9 +1,38 @@
+2018-06-07
+-------------------------------------------------------------------------------
+- [removed] all rIterThetaBlocking_* excpet _sthns. The others were deprecated
+  and adding a lot of complexity in the refactoring.
+  In any case it doesn't fell like a good idea to have those options 
+  implemented if now MagIC is assumed to always run with SHtns.
+
+- [removed] radial_data
+
+- magic_wizard passes all (relevant) tests. 
+
+- [renamed] truncation.f90 -> geometry.f90
+   - [renamed] initialize_truncation -> initialize_global_geometry
+   - [created] initialize_distributed_geometry
+      - [calls] initialize_gs (grid space)
+      - [calls] initialize_lm
+      - [calls] initialize_ml
+- [reordered] several initialization calls in magic.f90
+   - initialize_memory_counter after readNamelists
+   - initialize_global_geometry (from readNamelists)
+   - initialize_num_param
+   - initialize_mpi_decomposition
+   - initialize_output
+   - several calls reorganized:
+     - ldif moved from readNamelists to num_param
+     - several initializations from readNamelist moved into initialize_output
+  
+  
+  
+    
 2018-06-05
 -------------------------------------------------------------------------------
 - [TODO] Checks if everything is correct for n_r_cmb/=1 and n_r_icb/=n_r_max
   - dist_r is taking n_r_cmb into account! See distribute_gs function for more
     details
-
 
 2018-05-29
 -------------------------------------------------------------------------------

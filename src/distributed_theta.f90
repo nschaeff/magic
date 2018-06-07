@@ -8,7 +8,7 @@ module distributed_theta
 
    use precision_mod
    use parallel_mod, only: coord_theta, rank, n_ranks, n_ranks_r, rank2theta, rank2r
-   use truncation, only: lm_dist, lmP_dist, n_m_loc, lmP_max, lm_max, l_max, &
+   use geometry, only: lm_dist, lmP_dist, n_m_loc, lmP_max, lm_max, l_max, &
        &                 lm_loc, lmP_loc, n_r_max, n_theta_dist, n_r_cmb, dist_r
    use mem_alloc, only: memWrite, bytes_allocated
    use logic, only: l_save_out, l_finite_diff

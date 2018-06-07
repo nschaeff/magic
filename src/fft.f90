@@ -9,7 +9,7 @@ module fft
    use useful, only: factorise, abortRun
    use constants, only: pi, sin36, sin60, sin72, cos36, cos72, &
        &                one, two, half
-   use truncation
+   use geometry
    use blocking
    use parallel_mod
  

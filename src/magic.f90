@@ -86,7 +86,7 @@ program magic
 !      if imagcon  <  0, imposed poloidal field via inner bc on B(l=1,m=0)
 !
 
-   use truncation
+   use geometry
    use precision_mod
    use physical_parameters
    use radial_der, only: initialize_der_arrays, finalize_der_arrays
@@ -199,11 +199,14 @@ program magic
       write(6, *) '!  Start time:  ', date
    end if
 
-   !--- Read input parameters:
-   call readNamelists  ! includes sent to other procs
-
-   !--- Creates all the MPI communicators for all the different
-   !    cartesian grids
+   
+   !-- This includes sent to other procs
+   call readNamelists  
+   call initialize_memory_counter
+   
+   call initialize_global_geometry
+   call initialize_num_param
+   
    call initialize_mpi_decomposition
    call initialize_output
 
@@ -211,52 +214,14 @@ program magic
    call checkTruncation
 
    log_file='log.'//tag
-
-   if ( rank == 0 ) then
-      open(newunit=n_log_file, file=log_file, status='new')
-
-      write(n_log_file,*) '!      __  __             _____ _____   _____   __       '
-      write(n_log_file,*) '!     |  \/  |           |_   _/ ____| | ____| / /       '
-      write(n_log_file,*) '!     | \  / | __ _  __ _  | || |      | |__  / /_       '
-      write(n_log_file,*) '!     | |\/| |/ _` |/ _` | | || |      |___ \| "_ \      '
-      write(n_log_file,*) '!     | |  | | (_| | (_| |_| || |____   ___) | (_) |     '
-      write(n_log_file,*) '!     |_|  |_|\__,_|\__, |_____\_____| |____(_)___/      '
-      write(n_log_file,*) '!                    __/ |                               '
-      write(n_log_file,*) '!                   |___/                                '
-      write(n_log_file,*) '!                                                        '
-      write(n_log_file,*) '!                                                        '
-      write(n_log_file,*) '!                          /^\     .                     '
-      write(n_log_file,*) '!                     /\   "V"                           '
-      write(n_log_file,*) '!                    /__\   I      O  o                  '
-      write(n_log_file,*) '!                   //..\\  I     .                      '
-      write(n_log_file,*) '!                   \].`[/  I                            '
-      write(n_log_file,*) '!                   /l\/j\  (]    .  O                   '
-      write(n_log_file,*) '!                  /. ~~ ,\/I          .                 '
-      write(n_log_file,*) '!                  \\L__j^\/I       o                    '
-      write(n_log_file,*) '!                   \/--v}  I     o   .                  '
-      write(n_log_file,*) '!                   |    |  I   _________                '
-      write(n_log_file,*) '!                   |    |  I c(`       ")o              '
-      write(n_log_file,*) '!                   |    l  I   \.     ,/                '
-      write(n_log_file,*) '!                 _/j  L l\_!  _//^---^\\_               '
-      write(n_log_file,*) '!              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~            '
-      write(n_log_file,*) '!                                                        '
-      write(n_log_file,*) '!                             beta lago-paral version    '
-
-
-
-      if ( l_save_out ) close(n_log_file)
-   end if
-
-   call initialize_memory_counter
+   call print_greeting
 
    !-- Blocking/radial/horizontal
    call initialize_blocking
    
    !>@TODO merge the two following calls
    call distribute_truncation
-   call distribute_gs
-   call distribute_lm
-   
+   call initialize_distributed_geometry
    local_bytes_used=bytes_allocated
    call initialize_distributed_theta
    
@@ -271,7 +236,6 @@ program magic
    !call initialize_rIterThetaBlocking
    call initialize_LMLoop
 
-   call initialize_num_param
    call initialize_init_fields
    call initialize_Grenoble
 
@@ -461,17 +425,17 @@ program magic
    
    PERFOFF
    
-! ! ! ! ! ! ! ! ! ! #ifdef WITHPERF
-! ! ! ! ! ! ! ! ! !    do n=0,n_ranks-1
-! ! ! ! ! ! ! ! ! !       if (rank == n) then
-! ! ! ! ! ! ! ! ! !          print *, "PerfOut for rank: ", rank
-! ! ! ! ! ! ! ! ! !          print *, "======================================================="
-! ! ! ! ! ! ! ! ! !          PERFOUT('main')
-! ! ! ! ! ! ! ! ! !       end if
-! ! ! ! ! ! ! ! ! !       flush(6)
-! ! ! ! ! ! ! ! ! !       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-! ! ! ! ! ! ! ! ! !    end do
-! ! ! ! ! ! ! ! ! ! #endif
+! #ifdef WITHPERF
+!    do n=0,n_ranks-1
+!       if (rank == n) then
+!          print *, "PerfOut for rank: ", rank
+!          print *, "======================================================="
+!          PERFOUT('main')
+!       end if
+!       flush(6)
+!       call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+!    end do
+! #endif
 
    !LIKWID_OFF('main')
    LIKWID_CLOSE
@@ -479,4 +443,44 @@ program magic
 #ifdef WITH_MPI
    call mpi_finalize(ierr)
 #endif
+
+   contains 
+
+   !------------------------------------------------------------------------------------------------
+   subroutine print_greeting
+      !  
+      !   Author: Rafael Lago (MPCDF) May 2018
+      !  
+      
+      if ( rank /= 0 ) return
+      open(newunit=n_log_file, file=log_file, status='new')
+      write(n_log_file,*) '!      __  __             _____ _____   _____   __       '
+      write(n_log_file,*) '!     |  \/  |           |_   _/ ____| | ____| / /       '
+      write(n_log_file,*) '!     | \  / | __ _  __ _  | || |      | |__  / /_       '
+      write(n_log_file,*) '!     | |\/| |/ _` |/ _` | | || |      |___ \| "_ \      '
+      write(n_log_file,*) '!     | |  | | (_| | (_| |_| || |____   ___) | (_) |     '
+      write(n_log_file,*) '!     |_|  |_|\__,_|\__, |_____\_____| |____(_)___/      '
+      write(n_log_file,*) '!                    __/ |                               '
+      write(n_log_file,*) '!                   |___/                                '
+      write(n_log_file,*) '!                                                        '
+      write(n_log_file,*) '!                                                        '
+      write(n_log_file,*) '!                          /^\     .                     '
+      write(n_log_file,*) '!                     /\   "V"                           '
+      write(n_log_file,*) '!                    /__\   I      O  o                  '
+      write(n_log_file,*) '!                   //..\\  I     .                      '
+      write(n_log_file,*) '!                   \].`[/  I                            '
+      write(n_log_file,*) '!                   /l\/j\  (]    .  O                   '
+      write(n_log_file,*) '!                  /. ~~ ,\/I          .                 '
+      write(n_log_file,*) '!                  \\L__j^\/I       o                    '
+      write(n_log_file,*) '!                   \/--v}  I     o   .                  '
+      write(n_log_file,*) '!                   |    |  I   _________                '
+      write(n_log_file,*) '!                   |    |  I c(`       ")o              '
+      write(n_log_file,*) '!                   |    l  I   \.     ,/                '
+      write(n_log_file,*) '!                 _/j  L l\_!  _//^---^\\_               '
+      write(n_log_file,*) '!              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~            '
+      write(n_log_file,*) '!                                                        '
+      write(n_log_file,*) '!                             beta lago-paral version    '
+      if ( l_save_out ) close(n_log_file)
+   end subroutine
+
 end program magic

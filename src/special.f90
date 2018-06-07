@@ -4,7 +4,7 @@ module special
    ! an imposed external magnetic field and a special boundary forcing to excite
    ! inertial modes
 
-   use truncation, only: n_r_maxMag
+   use geometry, only: n_r_maxMag
    use precision_mod
 
    implicit none

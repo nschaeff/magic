@@ -1,6 +1,6 @@
 module out_dtB_frame
 
-   use truncation
+   use geometry
    use precision_mod
    use radial_functions, only: r, or1, chebt_ic, r_ic, rscheme_oc, r_icb, &
                                dr_fac_ic, chebt_ic_even

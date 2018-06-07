@@ -6,7 +6,7 @@ module RMS_helpers
 
    use precision_mod
    use parallel_mod
-   use truncation, only: l_max, lm_max_dtB, n_r_max, lm_max
+   use geometry, only: l_max, lm_max_dtB, n_r_max, lm_max
    use blocking, only: lm2, st_map
    use radial_functions, only: or2, rscheme_oc, r
    use horizontal_data, only: osn1, Plm, dPlm, dLh

@@ -8,7 +8,7 @@ module rIterThetaBlocking_mod
    use rIteration_mod, only: rIteration_t
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: lm_max,lmP_max,nrp,l_max,lmP_max_dtB,   &
+   use geometry, only: lm_max,lmP_max,nrp,l_max,lmP_max_dtB,   &
        &                 n_phi_maxStr,n_theta_maxStr,n_r_maxStr, &
        &                 lm_maxMag,l_axi, lm_loc, lm_locMag,     &
        &                 n_r_cmb, n_r_icb, l_r, u_r

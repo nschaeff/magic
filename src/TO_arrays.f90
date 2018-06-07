@@ -1,6 +1,6 @@
 module TO_arrays_mod
 
-   use truncation, only: l_max
+   use geometry, only: l_max
    use mem_alloc, only: bytes_allocated
    use precision_mod
 

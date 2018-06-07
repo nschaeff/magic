@@ -11,7 +11,7 @@ module step_time_mod
    use precision_mod
    use constants, only: zero, one, half
    use mem_alloc, only: bytes_allocated, memWrite
-   use truncation, only: n_r_max, l_max, l_maxMag, n_r_maxMag, &
+   use geometry, only: n_r_max, l_max, l_maxMag, n_r_maxMag, &
        &                 lm_max, lmP_max, lm_maxMag, lm_loc,   &
        &                 lm_locMag, lmP_loc, l_r, u_r, l_r_Mag,&
        &                 u_r_Mag, n_r_icb, n_r_cmb

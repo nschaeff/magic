@@ -3,7 +3,7 @@ module fields_average_mod
    ! This module is used when one wants to store time-averaged quantities
    !
 
-   use truncation
+   use geometry
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use radial_functions, only: chebt_ic, chebt_ic_even, r, dr_fac_ic, &

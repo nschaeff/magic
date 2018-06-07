@@ -8,7 +8,7 @@ module graphOut_mod
 
    use parallel_mod
    use precision_mod
-   use truncation, only: lm_maxMag, n_r_maxMag, n_r_ic_maxMag, lm_max, &
+   use geometry, only: lm_maxMag, n_r_maxMag, n_r_ic_maxMag, lm_max, &
        &                 n_theta_max, n_phi_tot, n_r_max, l_max, minc, &
        &                 n_phi_max, nrp, n_r_ic_max, l_axi, n_r_icb,   &
        &                 dist_r

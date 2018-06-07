@@ -3,7 +3,7 @@ module power
    use parallel_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use truncation, only: n_r_ic_maxMag, n_r_max, n_r_ic_max, l_max, &
+   use geometry, only: n_r_ic_maxMag, n_r_max, n_r_ic_max, l_max, &
        &                 n_r_maxMag, n_r_icb, n_r_cmb, l_r, u_r,    &
        &                 dist_r, n_r
    use radial_functions, only: r_cmb, r_icb, r, rscheme_oc, chebt_ic, &

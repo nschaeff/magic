@@ -10,7 +10,7 @@ module init_fields
        &                     create_lm2r_type, destroy_lm2r_type,     &
        &                     lo2r_redist_start, lo2r_redist_wait,     &
        &                     destroy_r2lm_type
-   use truncation, only: n_r_max, nrp, n_r_maxMag,n_r_ic_max,lmP_max, &
+   use geometry, only: n_r_max, nrp, n_r_maxMag,n_r_ic_max,lmP_max, &
        &                 n_phi_max,n_theta_max,n_r_tot,l_max,m_max,   &
        &                 l_axi,minc,n_cheb_ic_max,lm_max, n_r_icb,    &
        &                 n_r_cmb, l_r, u_r

@@ -1,4 +1,4 @@
-module truncation
+module geometry
    !
    !   This module defines how the points from Grid Space, LM-Space and ML-Space 
    !   are divided amonst the MPI domains.
@@ -186,7 +186,7 @@ module truncation
    
 contains
    
-   subroutine initialize_truncation
+   subroutine initialize_global_geometry
       
       integer :: n_r_maxML,n_r_ic_maxML,n_r_totML,l_maxML,lm_maxML
       integer :: lm_max_dL,lmP_max_dL,n_r_max_dL,n_r_ic_max_dL
@@ -274,7 +274,24 @@ contains
       n_r_cmb = 1
       n_r_icb = n_r_max
       
-   end subroutine initialize_truncation
+   end subroutine initialize_global_geometry
+   
+   !------------------------------------------------------------------------------
+   subroutine initialize_distributed_geometry
+      !   
+      !   Author: Rafael Lago, MPCDF, June 2018
+      !   
+      
+      call distribute_gs
+      
+      call print_contiguous_distribution(dist_theta, n_ranks_theta, 'θ')
+      call print_contiguous_distribution(dist_r, n_ranks_r, 'r')
+      
+      call distribute_lm
+      
+      call print_discontiguous_distribution(dist_m, n_m_array, n_ranks_theta, 'm')
+      
+   end subroutine initialize_distributed_geometry
    
    !------------------------------------------------------------------------------
    subroutine distribute_gs
@@ -327,9 +344,6 @@ contains
       if ( .not. l_TP_form       ) u_r_TP  = 1
       if ( .not. l_double_curl   ) u_r_DC  = 1
       
-      call print_contiguous_distribution(dist_theta, n_ranks_theta, 'θ')
-      call print_contiguous_distribution(dist_r, n_ranks_r, 'r')
-      
    end subroutine distribute_gs
    
    !------------------------------------------------------------------------------
@@ -344,7 +358,6 @@ contains
       !   Only m is left
       
       n_m_array = ceiling(real(n_m_max) / real(n_ranks_m))
-      
       allocate(dist_m( 0:n_ranks_theta-1, 0:n_m_array))
       
       call distribute_discontiguous_snake(dist_m, n_m_array, n_m_max, n_ranks_m)
@@ -357,7 +370,6 @@ contains
       dist_m(:,0) = count(dist_m(:,1:) >= 0, 2)
       
       n_m = dist_m(coord_m,0)
-      call print_discontiguous_distribution(dist_m, n_m_array, n_ranks_theta, 'm')
       
    end subroutine distribute_lm   
 
@@ -792,4 +804,4 @@ contains
       end do
    end subroutine print_discontiguous_distribution
 
-end module truncation
+end module geometry
