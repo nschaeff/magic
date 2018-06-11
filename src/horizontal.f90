@@ -5,7 +5,7 @@ module horizontal_data
    !
 
    use geometry, only: l_max, lmP_max, n_theta_max, n_phi_max, &
-       &                 lm_max, lm_loc, n_m_max, minc, m_max, l_axi
+       &                 lm_max, n_lm, n_m_max, minc, m_max, l_axi
    use communications, only: slice_Flm
    use radial_functions, only: r_cmb
    use physical_parameters, only: ek
@@ -134,19 +134,19 @@ contains
       bytes_allocated = bytes_allocated+(19*lm_max+n_m_max)*SIZEOF_DEF_REAL
       
       !-- Distributed arrays depending on l and m:
-      allocate( dPhi_loc(lm_loc) )
-      allocate( dPhi0_loc(lm_loc) )
-!       allocate( dPhi02_loc(lm_loc) )
-      allocate( dLH_loc(lm_loc) )
-      allocate( dTheta1S_loc(lm_loc), dTheta1A_loc(lm_loc) )
-      allocate( dTheta2S_loc(lm_loc), dTheta2A_loc(lm_loc) )
-      allocate( dTheta3S_loc(lm_loc), dTheta3A_loc(lm_loc) )
-      allocate( dTheta4S_loc(lm_loc), dTheta4A_loc(lm_loc) )     
-!       allocate( D_l_loc(lm_loc),D_lP1_loc(lm_loc) )
+      allocate( dPhi_loc(n_lm) )
+      allocate( dPhi0_loc(n_lm) )
+!       allocate( dPhi02_loc(n_lm) )
+      allocate( dLH_loc(n_lm) )
+      allocate( dTheta1S_loc(n_lm), dTheta1A_loc(n_lm) )
+      allocate( dTheta2S_loc(n_lm), dTheta2A_loc(n_lm) )
+      allocate( dTheta3S_loc(n_lm), dTheta3A_loc(n_lm) )
+      allocate( dTheta4S_loc(n_lm), dTheta4A_loc(n_lm) )     
+!       allocate( D_l_loc(n_lm),D_lP1_loc(n_lm) )
 !       allocate( D_mc2m_loc(n_m_max) )
-      allocate( D_m_loc(lm_loc) )
-      allocate( hdif_B_loc(lm_loc),hdif_V_loc(lm_loc),hdif_S_loc(lm_loc) )
-      allocate( hdif_Xi_loc(lm_loc) )
+      allocate( D_m_loc(n_lm) )
+      allocate( hdif_B_loc(n_lm),hdif_V_loc(n_lm),hdif_S_loc(n_lm) )
+      allocate( hdif_Xi_loc(n_lm) )
 
       !-- Limiting l for a given m, used in legtf
       allocate( lStart(n_m_max),lStop(n_m_max) )

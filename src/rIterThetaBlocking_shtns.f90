@@ -83,11 +83,11 @@ contains
       if (n_ranks_theta < 2) stop
       
       call this%allocate_common_arrays()
-      call this%gsa%initialize(n_phi_max, n_theta_beg, n_theta_end)
+      call this%gsa%initialize(n_phi_max, l_theta, u_theta)
       if ( l_TO ) call this%TO_arrays%initialize()
       call this%dtB_arrays%initialize()
       
-      call this%nl_lm%initialize(lmP_loc)
+      call this%nl_lm%initialize(n_lmP)
       
 
    end subroutine initialize_rIterThetaBlocking_shtns
@@ -211,7 +211,7 @@ contains
          call this%transform_to_lm_space_shtns
       
       else if ( l_mag ) then
-         do lm=1,lmP_loc
+         do lm=1,n_lmP
             this%nl_lm%VxBtLM(lm)=0.0_cp
             this%nl_lm%VxBpLM(lm)=0.0_cp
          end do
@@ -594,7 +594,7 @@ contains
             .and. ( l_conv_nl .or. l_mag_LF ) ) then
          if ( l_conv_nl .and. l_mag_LF ) then
             if ( this%nR>n_r_LCR ) then
-               do nTheta=n_theta_beg,n_theta_end
+               do nTheta=l_theta,u_theta
                   do nPhi=1, n_phi_max
                      this%gsa%Advr(nPhi, nTheta)=this%gsa%Advr(nPhi, nTheta) + this%gsa%LFr(nPhi, nTheta)
                      this%gsa%Advt(nPhi, nTheta)=this%gsa%Advt(nPhi, nTheta) + this%gsa%LFt(nPhi, nTheta)
@@ -604,7 +604,7 @@ contains
             end if
          else if ( l_mag_LF ) then
             if ( this%nR > n_r_LCR ) then
-               do nTheta=n_theta_beg, n_theta_end
+               do nTheta=l_theta, u_theta
                   do nPhi=1, n_phi_max
                      this%gsa%Advr(nPhi, nTheta) = this%gsa%LFr(nPhi, nTheta)
                      this%gsa%Advt(nPhi, nTheta) = this%gsa%LFt(nPhi, nTheta)
@@ -612,7 +612,7 @@ contains
                   end do
                end do
             else
-               do nTheta=n_theta_beg, n_theta_end
+               do nTheta=l_theta, u_theta
                   do nPhi=1, n_phi_max
                      this%gsa%Advr(nPhi,nTheta)=0.0_cp
                      this%gsa%Advt(nPhi,nTheta)=0.0_cp
@@ -623,7 +623,7 @@ contains
          end if
 
          if ( l_precession ) then
-            do nTheta=n_theta_beg,n_theta_end
+            do nTheta=l_theta,u_theta
                do nPhi=1, n_phi_max
                   this%gsa%Advr(nPhi, nTheta)=this%gsa%Advr(nPhi, nTheta) + this%gsa%PCr(nPhi, nTheta)
                   this%gsa%Advt(nPhi, nTheta)=this%gsa%Advt(nPhi, nTheta) + this%gsa%PCt(nPhi, nTheta)

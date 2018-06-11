@@ -2,7 +2,7 @@ module outRot
 
    use parallel_mod
    use precision_mod
-   use geometry, only: n_r_max, n_r_maxMag, minc, nrp, n_phi_max, n_theta_beg, n_theta_end, &
+   use geometry, only: n_r_max, n_r_maxMag, minc, nrp, n_phi_max, l_theta, u_theta, &
        &            comm_theta, n_r_CMB, n_r_ICB
    use radial_functions, only: r_icb, r_cmb, r, rscheme_oc
    use physical_parameters, only: kbotv, ktopv
@@ -504,8 +504,8 @@ contains
       !
 
       !-- Input variables:
-      real(cp), intent(in) :: br(n_phi_max,n_theta_beg:n_theta_end)      ! array containing
-      real(cp), intent(in) :: bp(n_phi_max,n_theta_beg:n_theta_end)      ! array containing
+      real(cp), intent(in) :: br(n_phi_max,l_theta:u_theta)      ! array containing
+      real(cp), intent(in) :: bp(n_phi_max,l_theta:u_theta)      ! array containing
       integer,  intent(in) :: nR
 
       real(cp), intent(inout) :: lorentz_torque ! lorentz_torque for theta(1:n_theta)
@@ -518,7 +518,7 @@ contains
       lorentz_torque=0.0_cp
       fac=two*pi/real(n_phi_max,cp) ! 2 pi/n_phi_max
 
-      do nTheta=n_theta_beg,n_theta_end
+      do nTheta=l_theta,u_theta
          nThetaNHS=(nTheta+1)/2 ! northern hemisphere=odd n_theta
          if ( lGrenoble ) then
             if ( r(nR) == r_icb ) then

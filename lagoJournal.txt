@@ -1,3 +1,7 @@
+2018-06-11
+-------------------------------------------------------------------------------
+- Moved init_shtns and init_fft_phi to ????????
+
 2018-06-07
 -------------------------------------------------------------------------------
 - [removed] all rIterThetaBlocking_* excpet _sthns. The others were deprecated
@@ -44,9 +48,17 @@
             !
             !   This subroutine does X
             !
-            !-- TODO blablabal
-            !
+            !   This line
+            !   > call my_function
+            !   is more performant than this line
+            !   > call another_function.
+            !   
+            !   Comments are allowed to go as far as 80 characters width, with 
+            !   many exceptions
+            !   
             !   Author: Rafael Lago
+            !
+            !-- TODO blablabal
             !
          end subroutine
          

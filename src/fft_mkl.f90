@@ -5,7 +5,7 @@ module fft
 
    use precision_mod
    use constants, only: one
-   use geometry, only: nrp, ncp, n_phi_max, n_theta_max, m_max, n_theta_loc
+   use geometry, only: nrp, ncp, n_phi_max, n_theta_max, m_max, n_theta
    use blocking, only: nfs
    !use parallel_mod, only: nThreads
    use mkl_dfti
@@ -21,9 +21,8 @@ module fft
    !----------- END MKL specific variables
  
    public :: fft_thetab, init_fft, fft_to_real, finalize_fft
-#ifdef WITH_SHTNS
-   public :: init_fft_phi, finalize_fft_phi, fft_phi_loc, phi2m_dhandle, m2phi_dhandle
-#endif
+   public :: finalize_fft_phi, fft_phi_loc, phi2m_dhandle, m2phi_dhandle
+   public :: initialize_fft_phi
 
 contains
 
@@ -44,11 +43,7 @@ contains
       status = DftiSetValue( c2r_handle, DFTI_OUTPUT_DISTANCE, nrp )
       !status = DftiSetValue( c2r_handle, DFTI_CONJUGATE_EVEN_STORAGE, &
       !                       DFTI_COMPLEX_COMPLEX )
-#ifdef WITH_SHTNS
       status = DftiSetValue( c2r_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE )
-#else
-      status = DftiSetValue( c2r_handle, DFTI_PLACEMENT, DFTI_INPLACE )
-#endif
       ! This is supposed to fix the issue for ifort < 14 but it increases the
       ! walltime
       !status = DftiSetValue( c2r_handle, DFTI_NUMBER_OF_USER_THREADS, nThreads)
@@ -62,12 +57,8 @@ contains
       status = DftiSetValue( r2c_handle, DFTI_INPUT_DISTANCE, nrp )
       status = DftiSetValue( r2c_handle, DFTI_OUTPUT_DISTANCE, nrp )
       !status = DftiSetValue( r2c_handle, DFTI_CONJUGATE_EVEN_STORAGE, &
-      !                       DFTI_COMPLEX_COMPLEX )
-#ifdef WITH_SHTNS
+
       status = DftiSetValue( r2c_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE )
-#else
-      status = DftiSetValue( r2c_handle, DFTI_PLACEMENT, DFTI_INPLACE )
-#endif
       status = DftiSetValue( r2c_handle, DFTI_FORWARD_SCALE, &
                              one/real(number_of_points,cp) )
       !status = DftiSetValue( r2c_handle, DFTI_NUMBER_OF_USER_THREADS, nThreads)
@@ -75,9 +66,8 @@ contains
       
    end subroutine init_fft
 
-#ifdef WITH_SHTNS
 !------------------------------------------------------------------------------
-  subroutine init_fft_phi
+  subroutine initialize_fft_phi
 !>@details Initializer for the handler used in fft_phi
 !>@author Rafael Lago, MPCDF, July 2017
 !------------------------------------------------------------------------------
@@ -85,11 +75,11 @@ contains
     
     ! This is the handle for the real transform.
     ! It will store only Nφ/2+1 modes, because the others are the conjugate of these.
-    ! This is for the distributed case as well (and thus, will repeat n_theta_loc times)
+    ! This is for the distributed case as well (and thus, will repeat n_theta times)
     !-----------------------------------------------------------------------------------
     status = DftiCreateDescriptor( phi2m_dhandle, DFTI_DOUBLE, DFTI_REAL, 1, n_phi_max )
     status = DftiSetValue( phi2m_dhandle, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX)
-    status = DftiSetValue( phi2m_dhandle, DFTI_NUMBER_OF_TRANSFORMS, n_theta_loc)
+    status = DftiSetValue( phi2m_dhandle, DFTI_NUMBER_OF_TRANSFORMS, n_theta)
     status = DftiSetValue( phi2m_dhandle, DFTI_INPUT_DISTANCE, n_phi_max )
     status = DftiSetValue( phi2m_dhandle, DFTI_OUTPUT_DISTANCE, n_phi_max/2+1 )
     status = DftiSetValue( phi2m_dhandle, DFTI_PLACEMENT, DFTI_NOT_INPLACE )
@@ -98,14 +88,14 @@ contains
     
     status = DftiCreateDescriptor( m2phi_dhandle, DFTI_DOUBLE, DFTI_REAL, 1, n_phi_max )
     status = DftiSetValue( m2phi_dhandle, DFTI_CONJUGATE_EVEN_STORAGE, DFTI_COMPLEX_COMPLEX)
-    status = DftiSetValue( m2phi_dhandle, DFTI_NUMBER_OF_TRANSFORMS, n_theta_loc)
+    status = DftiSetValue( m2phi_dhandle, DFTI_NUMBER_OF_TRANSFORMS, n_theta)
     status = DftiSetValue( m2phi_dhandle, DFTI_INPUT_DISTANCE, n_phi_max/2+1 )
     status = DftiSetValue( m2phi_dhandle, DFTI_OUTPUT_DISTANCE, n_phi_max )
     status = DftiSetValue( m2phi_dhandle, DFTI_PLACEMENT, DFTI_NOT_INPLACE )
     status = DftiSetValue( m2phi_dhandle, DFTI_FORWARD_SCALE, 1.0_cp/real(n_phi_max,cp) )
     status = DftiCommitDescriptor( m2phi_dhandle )
     
-  end subroutine
+  end subroutine initialize_fft_phi
 
 !------------------------------------------------------------------------------
   subroutine finalize_fft_phi
@@ -127,13 +117,13 @@ contains
 !> Forward:  converts f(φ,θ_loc) to g(m,θ_loc) 
 !> Backward: converts g(m,θ_loc) to f(φ,θ_loc)
 !> 
-!>OBS: g has (n_phi_max/2+1)*n_theta_loc points, not m_max*n_theta_loc points.
+!>OBS: g has (n_phi_max/2+1)*n_theta points, not m_max*n_theta points.
 !>     Only the first m_max rows are required by MagIC.
 !>
 !>@author Rafael Lago, MPCDF, November 2017
 !------------------------------------------------------------------------------
-    real(cp),    intent(inout)  :: f(n_phi_max*n_theta_loc)
-    complex(cp), intent(inout)  :: g((n_phi_max/2+1)*n_theta_loc)
+    real(cp),    intent(inout)  :: f(n_phi_max*n_theta)
+    complex(cp), intent(inout)  :: g((n_phi_max/2+1)*n_theta)
     integer,     intent(in)     :: dir
     integer :: status
     
@@ -146,8 +136,8 @@ contains
     end if
     
   end subroutine fft_phi_loc
-#endif
-!------------------------------------------------------------------------------
+
+  !------------------------------------------------------------------------------
    subroutine finalize_fft
 
       status = DftiFreeDescriptor( c2r_handle )
@@ -185,10 +175,8 @@ contains
       real(cp), intent(inout) :: f(ld_f,nrep)
 
       type(DFTI_DESCRIPTOR), pointer :: local_c2r_handle
-#ifdef WITH_SHTNS
       real(cp), allocatable :: work_array(:, :)
       allocate(work_array(ld_f+2, nrep))
-#endif
 
       PERFON('fft2r')
       ! Fourier transformation complex->REAL with MKL DFTI interface
@@ -197,24 +185,15 @@ contains
                                      DFTI_REAL, 1, n_phi_max )
       status = DftiSetValue( local_c2r_handle, DFTI_NUMBER_OF_TRANSFORMS, nrep )
       status = DftiSetValue( local_c2r_handle, DFTI_OUTPUT_DISTANCE, ld_f )
-#ifdef WITH_SHTNS
       status = DftiSetValue( local_c2r_handle, DFTI_INPUT_DISTANCE, ld_f+2 )
       status = DftiSetValue( local_c2r_handle, DFTI_PLACEMENT, DFTI_NOT_INPLACE )
-#else
-      status = DftiSetValue( local_c2r_handle, DFTI_INPUT_DISTANCE, ld_f )
-      status = DftiSetValue( local_c2r_handle, DFTI_PLACEMENT, DFTI_INPLACE )
-#endif
       status = DftiCommitDescriptor( local_c2r_handle )
 
       ! run FFT
-#ifdef WITH_SHTNS
       work_array(1:n_phi_max, :) = f(1:n_phi_max, :)
       work_array(n_phi_max+1:n_phi_max+2, :) = 0.0_cp
       status = DftiComputeBackward( local_c2r_handle, work_array(:, 1), f(:,1) )
       deallocate(work_array)
-#else
-      status = DftiComputeBackward( local_c2r_handle, f(:,1) )
-#endif
 
       status = DftiFreeDescriptor( local_c2r_handle )
       PERFOFF

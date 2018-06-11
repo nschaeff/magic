@@ -50,7 +50,7 @@ module communications
  
    ! MPI datatypes for the redistribution of the d?dt arrays
    integer, save, allocatable :: s_transfer_type(:),s_transfer_type_nr_end(:)
-   integer, save, allocatable :: r_transfer_type(:), r_transfer_type_nr_end(:)
+   integer, save, allocatable :: r_transfer_type(:),r_transfer_type_nr_end(:)
    integer, save, allocatable :: s_transfer_type_cont(:,:)
    integer, save, allocatable :: s_transfer_type_nr_end_cont(:,:)
    integer, save, allocatable :: r_transfer_type_cont(:,:)
@@ -996,12 +996,12 @@ contains
 
       type(lm2r_type) :: self
       complex(cp), intent(in) :: arr_lo(llm:ulm,1:n_r_max,*)
-      complex(cp), target, intent(out) :: arr_dist(1:lm_loc,l_r:u_r,*)
+      complex(cp), target, intent(out) :: arr_dist(1:n_lm,l_r:u_r,*)
   
   
       PERFON('lo2r_st')
       !call lm2r_redist(arr_lo,temp_lo)
-      self%arr_Rloc(1:,l_r:,1:) => arr_dist(1:lm_loc,l_r:u_r,1:self%count)
+      self%arr_Rloc(1:,l_r:,1:) => arr_dist(1:n_lm,l_r:u_r,1:self%count)
       call lm2r_redist_start(self,arr_lo,self%temp_Rloc)
       PERFOFF
 
@@ -1057,7 +1057,7 @@ contains
       if ( .not. l_axi ) then
          do i=1,self%count
             do nR=l_r,u_r
-               do lm=1,lm_loc
+               do lm=1,n_lm
                   l = dist_map%lm2l(lm)
                   m = dist_map%lm2m(lm)
                   self%arr_Rloc(lm,nR,i) = self%temp_Rloc(lo_map%lm2(l,m),nR,i)
@@ -1256,7 +1256,7 @@ contains
       ! 
 
       type(r2lm_type) :: self
-      complex(cp), intent(in) :: arr_dist(1:lm_loc,l_r:u_r,*)
+      complex(cp), intent(in) :: arr_dist(1:n_lm,l_r:u_r,*)
       complex(cp), intent(out) :: arr_lo(llm:ulm,1:n_r_max,*)
   
       ! Local variables
@@ -1271,7 +1271,7 @@ contains
       if ( .not. l_axi ) then
          do i=1,self%count
             do nR=l_r,u_r
-               call gather_Flm(arr_dist(1:lm_loc,nR,i), tmp_glb(1:lm_max))
+               call gather_Flm(arr_dist(1:n_lm,nR,i), tmp_glb(1:lm_max))
                self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
                do l=0,l_max
                   do m=0,l,minc
@@ -1284,7 +1284,7 @@ contains
       else
          do i=1,self%count
             do nR=l_r,u_r
-               call gather_Flm(arr_dist(1:lm_loc,nR,i), tmp_glb(1:lm_max))
+               call gather_Flm(arr_dist(1:n_lm,nR,i), tmp_glb(1:lm_max))
                self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
                do l=0,l_max
                   self%temp_Rloc(lo_map%lm2(l,0),nR,i) = tmp_glb(st_map%lm2(l,0))
@@ -1505,129 +1505,115 @@ contains
 #endif
 #endif
 
-!-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine slice_f(f_global, f_local)
-!@>details Copies the relevant part of f_global into f_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
+      !
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
       real(cp),  intent(in)  :: f_global(n_phi_max, n_theta_max)
-      real(cp),  intent(out) :: f_local(n_phi_max, n_theta_loc)
+      real(cp),  intent(out) :: f_local(n_phi_max, n_theta)
       
-      f_local = f_global(:,n_theta_beg:n_theta_end)
+      f_local = f_global(:,l_theta:u_theta)
    end subroutine slice_f
    
-!-------------------------------------------------------------------------------
-   subroutine slice_Flm_cmplx(Flm_global, Flm_local)
-!@>details Copies the relevant part of Flm_global into Flm_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
+   subroutine slice_Flm_cmplx(Flm_global, Fn_lmal)
+      !
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
       complex(cp),  intent(in)  :: Flm_global(lm_max)
-      complex(cp),  intent(out) :: Flm_local(lm_loc)
+      complex(cp),  intent(out) :: Fn_lmal(n_lm)
       
       integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
       
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lm_dist(coord_theta, i, 1)
         lm_s  = lm_dist(coord_theta, i, 3)
         lm_e  = lm_dist(coord_theta, i, 4)
         lm_gs = lm2(m_idx, m_idx)
         lm_ge = lm2(l_max, m_idx)
-        Flm_local(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
+        Fn_lmal(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
       end do
    end subroutine slice_Flm_cmplx
    
-!-------------------------------------------------------------------------------
-   subroutine slice_Flm_real(Flm_global, Flm_local)
-!@>details Copies the relevant part of Flm_global into Flm_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
+   subroutine slice_Flm_real(Flm_global, Fn_lmal)
+      !
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
       real(cp),  intent(in)  :: Flm_global(lm_max)
-      real(cp),  intent(out) :: Flm_local(lm_loc)
+      real(cp),  intent(out) :: Fn_lmal(n_lm)
       
       integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
       
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lm_dist(coord_theta, i, 1)
         lm_s  = lm_dist(coord_theta, i, 3)
         lm_e  = lm_dist(coord_theta, i, 4)
         lm_gs = lm2(m_idx, m_idx)
         lm_ge = lm2(l_max, m_idx)
-        Flm_local(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
+        Fn_lmal(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
       end do
    end subroutine slice_Flm_real
 
-!-------------------------------------------------------------------------------
-   subroutine slice_FlmP_cmplx(FlmP_global, FlmP_local)
-!@>details Copies the relevant part of FlmP_global into FlmP_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
+   subroutine slice_FlmP_cmplx(FlmP_global, Flm_local)
+      !
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
       complex(cp),  intent(in)  :: FlmP_global(lmP_max)
-      complex(cp),  intent(out) :: FlmP_local(lmP_loc)
+      complex(cp),  intent(out) :: Flm_local(n_lmP)
       
       integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
       
-      call shtns_load_cfg(1) ! l_max + 1
-      
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lmP_dist(coord_theta, i, 1)
         lm_s  = lmP_dist(coord_theta, i, 3)
         lm_e  = lmP_dist(coord_theta, i, 4)
         lm_gs = lmP2(m_idx,   m_idx)
         lm_ge = lmP2(l_max+1, m_idx)
-        FlmP_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
+        Flm_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
       end do
-      
-      call shtns_load_cfg(0) ! l_max
-      
    end subroutine slice_FlmP_cmplx
    
-!-------------------------------------------------------------------------------
-   subroutine slice_FlmP_real(FlmP_global, FlmP_local)
-!@>details Copies the relevant part of FlmP_global into FlmP_local
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
+   subroutine slice_FlmP_real(FlmP_global, Flm_local)
+      !
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
       real(cp),  intent(in)  :: FlmP_global(lmP_max)
-      real(cp),  intent(out) :: FlmP_local(lmP_loc)
+      real(cp),  intent(out) :: Flm_local(n_lmP)
       
       integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
       
-      call shtns_load_cfg(1) ! l_max + 1
-      
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lm_dist(coord_theta, i, 1)
         lm_s  = lm_dist(coord_theta, i, 3)
         lm_e  = lm_dist(coord_theta, i, 4)
         lm_gs = lmP2(m_idx,   m_idx)
         lm_ge = lmP2(l_max+1, m_idx)
-        FlmP_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
+        Flm_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
       end do
-      
-      call shtns_load_cfg(0) ! l_max
-      
    end subroutine slice_FlmP_real
 
-!-------------------------------------------------------------------------------
-   subroutine gather_FlmP(FlmP_local, FlmP_global)
-!@>details Gathers the FlmP which was computed in a distributed fashion.
-!> Mostly used for debugging. This function may not be performant at all.
-!> 
-!@>TODO this with mpi_allgatherv
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp),  intent(in)  :: FlmP_local(lmP_loc)
+   !----------------------------------------------------------------------------
+   subroutine gather_FlmP(Flm_local, FlmP_global)
+      !
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
+      complex(cp),  intent(in)  :: Flm_local(n_lmP)
       complex(cp),  intent(out) :: FlmP_global(lmP_max)
       
       complex(cp) ::  buffer(lmP_max)
       integer :: i, j, m_idx, lm_s_local, lm_e_local, lm_s_global, lm_e_global
       integer :: pos, ilen, Rq(n_ranks_theta), ierr
       
-      ! buffer will receive all messages, but they are ordered by ranks,
-      ! not by m.
-      
+      !-- buffer will receive all messages, but they are ordered by ranks,
+      !   not by m.
       pos = 1
       do i=0,n_ranks_theta-1
          ilen = sum(lmP_dist(i,:,2))
-         if (coord_theta == i) buffer(pos:pos+ilen-1) = FlmP_local(1:lmP_loc)
+         if (coord_theta == i) buffer(pos:pos+ilen-1) = Flm_local(1:n_lmP)
          CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, i, &
                          comm_m, Rq(i+1), ierr)
          pos = pos + ilen
@@ -1635,10 +1621,10 @@ contains
       
       CALL MPI_WAITALL(n_ranks_theta, Rq, MPI_STATUSES_IGNORE, ierr)
       
-      ! This basically re-orders the buffer 
+      !-- This basically re-orders the buffer 
       pos = 0
       do i=0,n_ranks_theta-1
-         do j = 1, n_m_ext
+         do j = 1, n_m_array
             m_idx = lmP_dist(i, j, 1)
             if (m_idx < 0) exit
             lm_s_local  = pos + lmP_dist(i, j, 3)
@@ -1652,15 +1638,12 @@ contains
       
    end subroutine gather_FlmP
    
-!-------------------------------------------------------------------------------
-   subroutine gather_Flm(Flm_local, Flm_global)
-!@>details Gathers the Flm which was computed in a distributed fashion.
-!> Mostly used for debugging. This function may not be performant at all.
-!> 
-!@>TODO this with mpi_allgatherv
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp),  intent(in)  :: Flm_local(lm_loc)
+   !----------------------------------------------------------------------------
+   subroutine gather_Flm(Fn_lmal, Flm_global)
+      !
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
+      complex(cp),  intent(in)  :: Fn_lmal(n_lm)
       complex(cp),  intent(out) :: Flm_global(lm_max)
       
       complex(cp) ::  buffer(lm_max)
@@ -1673,7 +1656,7 @@ contains
       pos = 1
       do i=0,n_ranks_theta-1
          ilen = sum(lm_dist(i,:,2))
-         if (coord_theta == i) buffer(pos:pos+ilen-1) = Flm_local(1:lm_loc)
+         if (coord_theta == i) buffer(pos:pos+ilen-1) = Fn_lmal(1:n_lm)
          CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, i, &
                          comm_m, Rq(i+1), ierr)
          pos = pos + ilen
@@ -1683,7 +1666,7 @@ contains
       
       pos = 0
       do i=0,n_ranks_theta-1
-         do j = 1, n_m_ext
+         do j = 1, n_m_array
             m_idx = lm_dist(i, j, 1)
             if (m_idx < 0) exit
             lm_s_local  = pos + lm_dist(i, j, 3)
@@ -1697,146 +1680,143 @@ contains
       
    end subroutine gather_Flm
    
-!-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine gather_f(f_local, f_global)
-!@>details Gathers the Flm which was computed in a distributed fashion.
-!> Mostly used for debugging. This function may not be performant at all.
-!
-!@>TODO this with mpi_allgatherv
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      real(cp),  intent(inout) :: f_local(n_phi_max, n_theta_loc)
+      !
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
+      real(cp),  intent(inout) :: f_local( n_phi_max, l_theta:u_theta)
       real(cp),  intent(out)   :: f_global(n_phi_max, n_theta_max)
       
-      integer :: i, nt, ierr
+      integer :: i, ierr
       integer :: Rq(n_ranks_theta) 
       
-      ! Copies local content to f_global
+      !-- Copies local content to f_global
       f_global = 0.0
-      f_global(:,n_theta_beg:n_theta_end) = f_local
+      f_global(:,l_theta:u_theta) = f_local(:,l_theta:u_theta)
       
       do i=0,n_ranks_theta-1
-         nt = n_theta_dist(i,2) - n_theta_dist(i,1) + 1
-         CALL MPI_IBCAST(f_global(:,n_theta_dist(i,1):n_theta_dist(i,2)),   &
-                         n_phi_max*nt, MPI_DOUBLE_PRECISION, i, comm_theta, &
-                         Rq(i+1), ierr)
+         CALL MPI_IBCAST(f_global(:,dist_theta(i,1):dist_theta(i,2)),        &
+                         n_phi_max*dist_theta(i,0), MPI_DOUBLE_PRECISION, i, &
+                         comm_theta, Rq(i+1), ierr)
       end do
       
       CALL MPI_WAITALL(n_ranks_theta, Rq, MPI_STATUSES_IGNORE, ierr)
       
    end subroutine gather_f
    
-!-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine transpose_m_theta(f_m_theta, f_theta_m)
-!@>details Does the transposition using alltoallv.
-!
-!@>TODO this with mpi_type to stride the data
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp), intent(inout) :: f_m_theta(n_m_max,n_theta_loc)
-      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
+      !   
+      !   Transposition from (m_loc,θ_glb) to (θ_loc,m_glb)
+      !   
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
+      !-- TODO this with mpi_type to stride the data
+      !
+      complex(cp), intent(inout) :: f_m_theta(n_m_max, n_theta)
+      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m)
       
-      complex(cp) :: sendbuf(n_m_max*n_theta_loc)
-      complex(cp) :: recvbuf(n_m_loc, n_theta_max)
+      complex(cp) :: sendbuf(n_m_max * n_theta)
+      complex(cp) :: recvbuf(n_m, n_theta_max)
       
-      integer :: sendcount(0:n_ranks_theta-1)
-      integer :: recvcount(0:n_ranks_theta-1)
-      integer :: senddispl(0:n_ranks_theta-1)
-      integer :: recvdispl(0:n_ranks_theta-1)
-      integer :: i, j, k, m_idx, pos, n_theta
+      integer :: sendcount(0:n_ranks_m-1)
+      integer :: recvcount(0:n_ranks_m-1)
+      integer :: senddispl(0:n_ranks_m-1)
+      integer :: recvdispl(0:n_ranks_m-1)
+      integer :: irank, j, itheta, m_idx, pos
       
       pos = 1
-      do i=0,n_ranks_theta-1
-         ! Copy each m which belongs to the i-th rank into the send buffer
-         ! column-wise. That will simplify a lot things later
+      do irank=0,n_ranks_m-1
+         !-- Copy each m which belongs to the irank-th rank into the send buffer
+         !   column-wise. That will simplify a lot things later
          !
-         !>@TODO check performance of this; implementing this with mpi_type
-         !> striding the data will probably be faster
-         senddispl(i) = pos-1
-         do k=1,n_theta_loc
-            do j=1,n_m_ext
-               if (lmP_dist(i,j,1) < 0) exit
-               m_idx = lmP_dist(i,j,1)/minc
-               sendbuf(pos) = f_m_theta(m_idx+1,k)
+         !-- TODO check performance of this; implementing this with mpi_type
+         !   striding the data will probably be faster
+         senddispl(irank) = pos-1
+         do itheta=1,n_theta
+            do j=1,n_m_array
+               m_idx = dist_m(irank,j)
+               if (m_idx < 0) cycle
+               m_idx = m_idx/minc
+               sendbuf(pos) = f_m_theta(m_idx+1,itheta)
                pos = pos + 1
             end do
          end do
-         sendcount(i) = pos - senddispl(i) - 1
-         n_theta = n_theta_dist(i,2) - n_theta_dist(i,1) + 1
-         recvdispl(i) = i*n_m_loc*n_theta
-         recvcount(i) = n_m_loc*n_theta
+         
+         sendcount(irank) = pos - senddispl(irank) - 1
+         recvdispl(irank) = irank*n_m*dist_theta(irank,0)
+         recvcount(irank) =   n_m*dist_theta(irank,0)
       end do
       
       call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
                          recvbuf, recvcount, recvdispl, MPI_DOUBLE_COMPLEX, &
-                         comm_theta, i)
+                         comm_m, irank)
       f_theta_m = transpose(recvbuf)
       
    end subroutine transpose_m_theta
    
-!-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine transpose_theta_m(f_theta_m, f_m_theta)
-!@>details Does the transposition using alltoallv.
-!
-!@>TODO this with mpi_type to stride the data
-!@>author Rafael Lago (MPCDF) August 2017
-!-------------------------------------------------------------------------------
-      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
-      complex(cp), intent(inout) :: f_m_theta(n_m_max,n_theta_loc)
+      !   
+      !   Transposition from (θ_loc,m_glb) to (m_loc,θ_glb)
+      !   
+      !   Author: Rafael Lago (MPCDF) August 2017
+      !
+      !-- TODO this with mpi_type to stride the data
+      !
+      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m)
+      complex(cp), intent(inout) :: f_m_theta(n_m_max, n_theta)
       
-      complex(cp) :: sendbuf(n_m_loc*n_theta_max)
-      complex(cp) :: recvbuf(n_theta_loc,n_m_max)
+      complex(cp) :: sendbuf(n_m * n_theta_max)
+      complex(cp) :: recvbuf(n_theta,  n_m_max)
       
       integer :: sendcount(0:n_ranks_theta-1)
       integer :: recvcount(0:n_ranks_theta-1)
       integer :: senddispl(0:n_ranks_theta-1)
       integer :: recvdispl(0:n_ranks_theta-1)
-      integer :: i, j, pos, n_theta, s_theta, e_theta
-      integer :: m_idx(n_ranks_theta*n_m_ext)
+      integer :: irank, j, pos, nt, st, et
+      integer :: m_idx(n_ranks_theta*n_m_array)
       
       recvcount = 0
       pos = 1
-      do i=0,n_ranks_theta-1
-         ! Copy each theta chunk so that the send buffer is contiguous
-         !
-         !>@TODO check performance of this; implementing this with mpi_type
-         !> striding the data will probably be faster
-         senddispl(i) = pos-1
-         s_theta = n_theta_dist(i,1)
-         e_theta = n_theta_dist(i,2)
-         n_theta = e_theta - s_theta + 1
-         do j=1, n_m_loc
-            sendbuf(pos:pos + n_theta - 1) = f_theta_m(s_theta:e_theta,j)
-            pos = pos + n_theta
+      do irank=0,n_ranks_theta-1
+         !-- Copy each theta chunk so that the send buffer is contiguous
+         !-- TODO check performance of this; implementing this with mpi_type
+         !   striding the data will probably be faster
+         senddispl(irank) = pos-1
+         st = dist_theta(irank,1)
+         et = dist_theta(irank,2)
+         nt = dist_theta(irank,0)
+         do j=1, n_m
+            sendbuf(pos:pos + nt - 1) = f_theta_m(st:et,j)
+            pos = pos + nt
          end do
-         sendcount(i) = pos - senddispl(i) - 1
          
-         recvdispl(i) = sum(recvcount)
-         recvcount(i) = (n_m_ext-1) * n_theta
-         if (lmP_dist(i,n_m_ext,1) > -1) then
-            recvcount(i) = recvcount(i) + n_theta
-         end if
+         sendcount(irank) = pos - senddispl(irank) - 1
+         recvdispl(irank) = sum(recvcount)
+         recvcount(irank) = dist_m(irank,0) * nt
       end do
       
       call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
                          recvbuf, recvcount, recvdispl, MPI_DOUBLE_COMPLEX, &
-                         comm_theta, i)
+                         comm_theta, irank)
       
-      ! Now we reorder the receiver buffer. If the m distribution looks like:
-      ! rank 0: 0, 4,  8, 12, 16
-      ! rank 1: 1, 5,  9, 13
-      ! rank 2: 2, 6, 10, 14
-      ! rank 3: 3, 7, 11, 15
-      ! then the columns of recvbuf are ordered as 0,4,8,12,16,1,5,9,13(...)
-      ! and so forth. m_idx will contain this ordering (+1):
-      m_idx = reshape(transpose(lmP_dist(:,:,1)),(/n_ranks_theta*n_m_ext/))/minc + 1
+      !-- Now we reorder the receiver buffer. If the m distribution looks like:
+      !   rank 0: 0, 4,  8, 12, 16
+      !   rank 1: 1, 5,  9, 13
+      !   rank 2: 2, 6, 10, 14
+      !   rank 3: 3, 7, 11, 15
+      !   then the columns of recvbuf are ordered as 0,4,8,12,16,1,5,9,13(...)
+      !   and so forth. m_idx will contain this ordering (+1):
+      m_idx = reshape(transpose(dist_m(:,1:)), &
+                      (/n_ranks_m*n_m_array/))/minc + 1
       j = 1
-      do i = 1, n_ranks_theta*n_m_ext
-         if (m_idx(i) < 1) cycle
-         f_m_theta(m_idx(i),:) = recvbuf(:,j)
+      do pos = 1, n_ranks_theta*n_m_array
+         if (m_idx(pos) < 1) cycle
+         f_m_theta(m_idx(pos),:) = recvbuf(:,j)
          j = j + 1
       end do
-      
    end subroutine transpose_theta_m
 !-------------------------------------------------------------------------------
 

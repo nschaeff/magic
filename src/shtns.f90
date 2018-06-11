@@ -7,7 +7,7 @@ module shtns
    use horizontal_data, only: dLh, O_sin_theta_E2, dLh_loc, D_m_loc
    use radial_functions, only: or2
    use parallel_mod
-   use fft, only: init_fft_phi, finalize_fft_phi, fft_phi_loc
+   use fft, only: fft_phi_loc
 
    implicit none
 
@@ -15,7 +15,7 @@ module shtns
 
    private
 
-   public :: init_shtns, finalize_shtns,                                    &
+   public :: initialize_shtns, finalize_shtns,                                    &
    &         scal_to_spat, scal_to_grad_spat, pol_to_grad_spat,             &
    &         torpol_to_spat, pol_to_curlr_spat, torpol_to_curl_spat,        &
    &         torpol_to_dphspat, spat_to_SH, spat_to_sphertor,               &
@@ -28,7 +28,7 @@ module shtns
 contains
 
    !----------------------------------------------------------------------------
-   subroutine init_shtns()
+   subroutine initialize_shtns
    ! Lago: This is important! minc here is sort of the opposite of 
    ! mres in SHTns. In MagIC, the number of m modes stored is 
    ! n_m_max=m_max/minc+1. In SHTns, it is simply m_max.
@@ -68,12 +68,10 @@ contains
 
       call shtns_load_cfg(0)
       
-      call init_fft_phi
-
-   end subroutine
+   end subroutine initialize_shtns
 !-------------------------------------------------------------------------------
-   subroutine finalize_shtns()
-      call finalize_fft_phi
+   subroutine finalize_shtns
+      continue
    end subroutine finalize_shtns
 !------------------------------------------------------------------------------
    subroutine scal_to_spat(Slm, fieldc)
@@ -235,18 +233,18 @@ contains
 !-------------------------------------------------------------------------------
 
 !-------------------------------------------------------------------------------
-   subroutine spat_to_SH_dist(Vr_loc, QlmP_loc)
+   subroutine spat_to_SH_dist(Vr_loc, Qn_lmP)
 !@>details transform the spherical harmonic coefficients Qlm into its spatial 
 !>representation Vr.
 !> 
 !@>author Rafael Lago (MPCDF) July 2017
 !-------------------------------------------------------------------------------
-      real(cp),     intent(inout) :: Vr_loc(n_phi_max,n_theta_loc)
-      complex(cp),  intent(out)   :: QlmP_loc(lmP_loc)
+      real(cp),     intent(inout) :: Vr_loc(n_phi_max,n_theta)
+      complex(cp),  intent(out)   :: Qn_lmP(n_lmP)
       
-      complex(cp) ::  QlP_loc(n_theta_max,n_m_loc)
-      complex(cp) ::  transpose_loc(n_m_max,n_theta_loc)
-      complex(cp) ::  Fr_loc(n_phi_max/2+1,n_theta_loc)
+      complex(cp) ::  QlP_loc(n_theta_max,n_m)
+      complex(cp) ::  transpose_loc(n_m_max,n_theta)
+      complex(cp) ::  Fr_loc(n_phi_max/2+1,n_theta)
       
       integer :: m_idx, lm_s, lm_e, i
       
@@ -257,16 +255,16 @@ contains
       !> Is there any way to tell MKL to perform a "truncated" FFT?
       !@>TODO: Terrible performance here!
       call fft_phi_loc(Vr_loc, Fr_loc, 1)
-      transpose_loc(1:n_m_max,1:n_theta_loc) = Fr_loc(1:n_m_max,1:n_theta_loc)
+      transpose_loc(1:n_m_max,1:n_theta) = Fr_loc(1:n_m_max,1:n_theta)
       
       call transpose_m_theta(transpose_loc, QlP_loc)
       
       ! Now do the Legendre transform using the new function in a loop
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lmP_dist(coord_theta, i, 1)/minc
         lm_s  = lmP_dist(coord_theta, i, 3)
         lm_e  = lmP_dist(coord_theta, i, 4)
-        call shtns_spat_to_sh_ml(m_idx,QlP_loc(:,i),QlmP_loc(lm_s:lm_e),l_max+1)
+        call shtns_spat_to_sh_ml(m_idx,QlP_loc(:,i),Qn_lmP(lm_s:lm_e),l_max+1)
       end do
       
       call shtns_load_cfg(0) ! l_max
@@ -274,21 +272,21 @@ contains
    end subroutine spat_to_SH_dist
    
 !-------------------------------------------------------------------------------
-   subroutine spat_to_sphtor_dist(Vr_loc, Vt_loc, SlmP_loc, TlmP_loc)
+   subroutine spat_to_sphtor_dist(Vr_loc, Vt_loc, Sn_lmP, Tn_lmP)
 !@>details transform the spherical harmonic coefficients Qlm into its spatial 
 !>representation Vr.
 !> 
 !@>author Rafael Lago (MPCDF) July 2017
 !-------------------------------------------------------------------------------
-      real(cp),     intent(inout) :: Vr_loc(n_phi_max,n_theta_loc)
-      real(cp),     intent(inout) :: Vt_loc(n_phi_max,n_theta_loc)
-      complex(cp),  intent(out)   :: SlmP_loc(lmP_loc)
-      complex(cp),  intent(out)   :: TlmP_loc(lmP_loc)
+      real(cp),     intent(inout) :: Vr_loc(n_phi_max,n_theta)
+      real(cp),     intent(inout) :: Vt_loc(n_phi_max,n_theta)
+      complex(cp),  intent(out)   :: Sn_lmP(n_lmP)
+      complex(cp),  intent(out)   :: Tn_lmP(n_lmP)
       
-      complex(cp) ::  SlP_loc(n_theta_max,n_m_loc)
-      complex(cp) ::  TlP_loc(n_theta_max,n_m_loc)
-      complex(cp) ::  transpose_loc(n_m_max,n_theta_loc)
-      complex(cp) ::  F_loc(n_phi_max/2+1,n_theta_loc)
+      complex(cp) ::  SlP_loc(n_theta_max,n_m)
+      complex(cp) ::  TlP_loc(n_theta_max,n_m)
+      complex(cp) ::  transpose_loc(n_m_max,n_theta)
+      complex(cp) ::  F_loc(n_phi_max/2+1,n_theta)
       
       integer :: m_idx, lm_s, lm_e, i
       
@@ -299,20 +297,20 @@ contains
       !> Is there any way to tell MKL to perform a "truncated" FFT?
       !@>TODO: Terrible performance here!
       call fft_phi_loc(Vr_loc, F_loc, 1)
-      transpose_loc(1:n_m_max,1:n_theta_loc) = F_loc(1:n_m_max,1:n_theta_loc)
+      transpose_loc(1:n_m_max,1:n_theta) = F_loc(1:n_m_max,1:n_theta)
       call transpose_m_theta(transpose_loc, SlP_loc)
       
       call fft_phi_loc(Vt_loc, F_loc, 1)
-      transpose_loc(1:n_m_max,1:n_theta_loc) = F_loc(1:n_m_max,1:n_theta_loc)
+      transpose_loc(1:n_m_max,1:n_theta) = F_loc(1:n_m_max,1:n_theta)
       call transpose_m_theta(transpose_loc, TlP_loc)
       
       ! Now do the Legendre transform using the new function in a loop
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lmP_dist(coord_theta, i, 1)/minc
         lm_s  = lmP_dist(coord_theta, i, 3)
         lm_e  = lmP_dist(coord_theta, i, 4)
         call shtns_spat_to_sphtor_ml(m_idx,SlP_loc(:,i), TlP_loc(:,i),         &
-                                     SlmP_loc(lm_s:lm_e),TlmP_loc(lm_s:lm_e),  &
+                                     Sn_lmP(lm_s:lm_e),Tn_lmP(lm_s:lm_e),  &
                                      l_max+1)
       end do
       
@@ -321,26 +319,26 @@ contains
    end subroutine spat_to_sphtor_dist
 
 !-------------------------------------------------------------------------------
-   subroutine sh_to_spat_dist(Qlm_loc, Vr_loc)
+   subroutine sh_to_spat_dist(Qn_lm, Vr_loc)
 !@>details transform the spherical harmonic coefficients Qlm into its spatial 
 !> representation Vr
 !
 !@>author Rafael Lago (MPCDF) December 2017
 !-------------------------------------------------------------------------------
-      complex(cp),  intent(inout)   :: Qlm_loc(lm_loc)
-      real(cp),     intent(out)     :: Vr_loc(n_phi_max, n_theta_loc)
+      complex(cp),  intent(inout)   :: Qn_lm(n_lm)
+      real(cp),     intent(out)     :: Vr_loc(n_phi_max, n_theta)
       
-      complex(cp) :: Ql_loc(n_theta_max,n_m_loc)
-      complex(cp) :: transposed_loc(n_m_max,n_theta_loc)
-      complex(cp) :: F_loc(n_phi_max/2+1,n_theta_loc)
+      complex(cp) :: Ql_loc(n_theta_max,n_m)
+      complex(cp) :: transposed_loc(n_m_max,n_theta)
+      complex(cp) :: F_loc(n_phi_max/2+1,n_theta)
       
       integer :: i, lm_s, lm_e, m_idx
       
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lm_dist(coord_theta, i, 1)/minc
         lm_s  = lm_dist(coord_theta, i, 3)
         lm_e  = lm_dist(coord_theta, i, 4)
-        call shtns_sh_to_spat_ml(m_idx, Qlm_loc(lm_s:lm_e), Ql_loc(:,i), l_max)
+        call shtns_sh_to_spat_ml(m_idx, Qn_lm(lm_s:lm_e), Ql_loc(:,i), l_max)
       end do
       
       call transpose_theta_m(Ql_loc, transposed_loc)
@@ -350,35 +348,35 @@ contains
       !> Is there any way to tell MKL to perform a "truncated" FFT?
       !@>TODO: Terrible performance here!
       F_loc = 0.0
-      F_loc(1:n_m_max,1:n_theta_loc) = transposed_loc
+      F_loc(1:n_m_max,1:n_theta) = transposed_loc
       
       call fft_phi_loc(Vr_loc, F_loc, -1)
       
    end subroutine sh_to_spat_dist
 !-------------------------------------------------------------------------------
-   subroutine sph_to_spat_dist(Slm_loc, gVt_loc, gVp_loc)
+   subroutine sph_to_spat_dist(Sn_lm, gVt_loc, gVp_loc)
 !@>details transform spheroidal spherical harmonic coefficients Slm to the 
 !> spatial theta and phi components (Vt,Vp), effectively computing the 
 !> gradient of S. This is the distributed counterpart of [scal_to_grad_spat]
 !
 !@>author Rafael Lago (MPCDF) November 2017
 !-------------------------------------------------------------------------------
-      complex(cp),  intent(inout)   :: Slm_loc(lm_loc)
-      real(cp),     intent(out)     :: gVt_loc(n_phi_max, n_theta_loc)
-      real(cp),     intent(out)     :: gVp_loc(n_phi_max, n_theta_loc)
+      complex(cp),  intent(inout)   :: Sn_lm(n_lm)
+      real(cp),     intent(out)     :: gVt_loc(n_phi_max, n_theta)
+      real(cp),     intent(out)     :: gVp_loc(n_phi_max, n_theta)
       
-      complex(cp) :: Sl_t(n_theta_max,n_m_loc), Sl_p(n_theta_max,n_m_loc)
-      complex(cp) :: tranposed_loc(n_m_max,n_theta_loc)
-      complex(cp) :: F_loc(n_phi_max/2+1,n_theta_loc)
+      complex(cp) :: Sl_t(n_theta_max,n_m), Sl_p(n_theta_max,n_m)
+      complex(cp) :: tranposed_loc(n_m_max,n_theta)
+      complex(cp) :: F_loc(n_phi_max/2+1,n_theta)
       
       integer :: i, lm_s, lm_e, m_idx
       
       
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lm_dist(coord_theta, i, 1)/minc
         lm_s  = lm_dist(coord_theta, i, 3)
         lm_e  = lm_dist(coord_theta, i, 4)
-        call shtns_sph_to_spat_ml(m_idx, Slm_loc(lm_s:lm_e), &
+        call shtns_sph_to_spat_ml(m_idx, Sn_lm(lm_s:lm_e), &
                                          Sl_t(:,i), Sl_p(:,i), l_max)
       end do
       
@@ -386,44 +384,44 @@ contains
       !> the toroidal part can be transposed and Fourier-transformed simultanouesly
       call transpose_theta_m(Sl_t, tranposed_loc)
       F_loc = 0.0
-      F_loc(1:n_m_max,1:n_theta_loc) = tranposed_loc
+      F_loc(1:n_m_max,1:n_theta) = tranposed_loc
       call fft_phi_loc(gVt_loc, F_loc, -1)
       !--------
       call transpose_theta_m(Sl_p, tranposed_loc)
       F_loc = 0.0
-      F_loc(1:n_m_max,1:n_theta_loc) = tranposed_loc
+      F_loc(1:n_m_max,1:n_theta) = tranposed_loc
       call fft_phi_loc(gVp_loc, F_loc, -1)
             
    end subroutine
 !-------------------------------------------------------------------------------
-   subroutine qst_to_spat_dist(Qlm_loc, Slm_loc, Tlm_loc, &
+   subroutine qst_to_spat_dist(Qn_lm, Sn_lm, Tn_lm, &
                                   Vr_loc, Vt_loc, Vp_loc)
 !@>details 3D vector transform from spherical coordinates to radial-spheroidal-
 !> toroidal spectral components. 
 !
 !@>author Rafael Lago (MPCDF) December 2017
 !-------------------------------------------------------------------------------
-      complex(cp),  intent(inout) :: Qlm_loc(lm_loc)
-      complex(cp),  intent(inout) :: Slm_loc(lm_loc)
-      complex(cp),  intent(inout) :: Tlm_loc(lm_loc)
-      real(cp),     intent(out)   :: Vr_loc(n_phi_max, n_theta_loc)
-      real(cp),     intent(out)   :: Vt_loc(n_phi_max, n_theta_loc)
-      real(cp),     intent(out)   :: Vp_loc(n_phi_max, n_theta_loc)
+      complex(cp),  intent(inout) :: Qn_lm(n_lm)
+      complex(cp),  intent(inout) :: Sn_lm(n_lm)
+      complex(cp),  intent(inout) :: Tn_lm(n_lm)
+      real(cp),     intent(out)   :: Vr_loc(n_phi_max, n_theta)
+      real(cp),     intent(out)   :: Vt_loc(n_phi_max, n_theta)
+      real(cp),     intent(out)   :: Vp_loc(n_phi_max, n_theta)
       
-      complex(cp) :: Ql_loc(n_theta_max,n_m_loc)
-      complex(cp) :: Sl_loc(n_theta_max,n_m_loc)
-      complex(cp) :: Tl_loc(n_theta_max,n_m_loc)
-      complex(cp) :: transposed_loc(n_m_max,n_theta_loc)
-      complex(cp) :: F_loc(n_phi_max/2+1,n_theta_loc)
+      complex(cp) :: Ql_loc(n_theta_max,n_m)
+      complex(cp) :: Sl_loc(n_theta_max,n_m)
+      complex(cp) :: Tl_loc(n_theta_max,n_m)
+      complex(cp) :: transposed_loc(n_m_max,n_theta)
+      complex(cp) :: F_loc(n_phi_max/2+1,n_theta)
       
       integer :: i, lm_s, lm_e, m_idx
       
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lm_dist(coord_theta, i, 1)/minc
         lm_s  = lm_dist(coord_theta, i, 3)
         lm_e  = lm_dist(coord_theta, i, 4)
-        call shtns_qst_to_spat_ml(m_idx, Qlm_loc(lm_s:lm_e), Slm_loc(lm_s:lm_e), &
-                                  Tlm_loc(lm_s:lm_e), Ql_loc(:,i), &
+        call shtns_qst_to_spat_ml(m_idx, Qn_lm(lm_s:lm_e), Sn_lm(lm_s:lm_e), &
+                                  Tn_lm(lm_s:lm_e), Ql_loc(:,i), &
                                   Sl_loc(:,i), Tl_loc(:,i), l_max)
       end do
       
@@ -431,64 +429,64 @@ contains
       !> the toroidal part can be transposed and Fourier-transformed simultanouesly
       call transpose_theta_m(Ql_loc, transposed_loc)
       F_loc = 0.0
-      F_loc(1:n_m_max,1:n_theta_loc) = transposed_loc
+      F_loc(1:n_m_max,1:n_theta) = transposed_loc
       call fft_phi_loc(Vr_loc, F_loc, -1)
       !--------
       call transpose_theta_m(Sl_loc, transposed_loc)
       F_loc = 0.0
-      F_loc(1:n_m_max,1:n_theta_loc) = transposed_loc
+      F_loc(1:n_m_max,1:n_theta) = transposed_loc
       call fft_phi_loc(Vt_loc, F_loc, -1)
       !--------
       call transpose_theta_m(Tl_loc, transposed_loc)
       F_loc = 0.0
-      F_loc(1:n_m_max,1:n_theta_loc) = transposed_loc
+      F_loc(1:n_m_max,1:n_theta) = transposed_loc
       call fft_phi_loc(Vp_loc, F_loc, -1)
       
    end subroutine qst_to_spat_dist
 !-------------------------------------------------------------------------------
-   subroutine pol_to_curlr_spat_dist(Plm_loc, cVr_loc)
+   subroutine pol_to_curlr_spat_dist(Pn_lm, cVr_loc)
 !@>details computes the spherical harmonic coefficients Qlm throught the 
 !> poloidal scalar Plm, and then transforms it into the curl of its spatial 
 !> representation cVr
 !> 
 !@>author Rafael Lago (MPCDF) August 2017
 !-------------------------------------------------------------------------------
-      complex(cp),  intent(inout)   :: Plm_loc(lm_loc)
-      real(cp),     intent(out)     :: cVr_loc(n_phi_max, n_theta_loc)
+      complex(cp),  intent(inout)   :: Pn_lm(n_lm)
+      real(cp),     intent(out)     :: cVr_loc(n_phi_max, n_theta)
       
-      complex(cp) :: Qlm_loc(lm_loc)
-      complex(cp) :: Ql_loc(n_theta_max,n_m_loc)
-      complex(cp) :: transpose_loc(n_m_max,n_theta_loc)
-      complex(cp) :: F_loc(n_phi_max/2+1,n_theta_loc)
+      complex(cp) :: Qn_lm(n_lm)
+      complex(cp) :: Ql_loc(n_theta_max,n_m)
+      complex(cp) :: transpose_loc(n_m_max,n_theta)
+      complex(cp) :: F_loc(n_phi_max/2+1,n_theta)
       
       integer :: i, lm_s, lm_e, m_idx
       
-      Qlm_loc(1:lm_loc) = dLh_loc(1:lm_loc) * Plm_loc(1:lm_loc)
+      Qn_lm(1:n_lm) = dLh_loc(1:n_lm) * Pn_lm(1:n_lm)
       
-      call sh_to_spat_dist(Qlm_loc,cVr_loc)
+      call sh_to_spat_dist(Qn_lm,cVr_loc)
       
    end subroutine pol_to_curlr_spat_dist
 !-------------------------------------------------------------------------------
-   subroutine pol_to_grad_spat_dist(Plm_loc, gVt_loc, gVp_loc)
+   subroutine pol_to_grad_spat_dist(Pn_lm, gVt_loc, gVp_loc)
 !@>details Computes Qlm (spheroidal spherical harmonic coefficients) from Plm
 !> (poloidal scalar) and then transforms them into the spatial theta and phi 
 !> components (Vt,Vp), effectively computing the gradient of S
 !> 
 !@>author Rafael Lago (MPCDF) November 2017
 !-------------------------------------------------------------------------------
-      complex(cp),  intent(inout)   :: Plm_loc(lm_max)
+      complex(cp),  intent(inout)   :: Pn_lm(lm_max)
       real(cp),     intent(out)     :: gVt_loc(n_phi_max, n_theta_max)
       real(cp),     intent(out)     :: gVp_loc(n_phi_max, n_theta_max)
       
-      complex(cp) :: Qlm_loc(lm_loc)
+      complex(cp) :: Qn_lm(n_lm)
       
-      Qlm_loc(1:lm_loc) = dLh_loc(1:lm_loc) * Plm_loc(1:lm_loc)
+      Qn_lm(1:n_lm) = dLh_loc(1:n_lm) * Pn_lm(1:n_lm)
       
-      call sph_to_spat_dist(Qlm_loc, gVt_loc, gVp_loc)
+      call sph_to_spat_dist(Qn_lm, gVt_loc, gVp_loc)
             
    end subroutine pol_to_grad_spat_dist
 !-------------------------------------------------------------------------------
-   subroutine torpol_to_spat_dist(Plm_loc, Slm_loc, Tlm_loc, &
+   subroutine torpol_to_spat_dist(Pn_lm, Sn_lm, Tn_lm, &
                                   Vr_loc, Vt_loc, Vp_loc)
 !@>details computes the spherical harmonic coefficients Qlm throught the 
 !> poloidal scalar Plm, then transforms the 3D vector from spherical 
@@ -496,55 +494,55 @@ contains
 !
 !@>author Rafael Lago (MPCDF) December 2017
 !-------------------------------------------------------------------------------
-      complex(cp),  intent(inout) :: Plm_loc(lm_loc)
-      complex(cp),  intent(inout) :: Slm_loc(lm_loc)
-      complex(cp),  intent(inout) :: Tlm_loc(lm_loc)
-      real(cp),     intent(out)   :: Vr_loc(n_phi_max, n_theta_loc)
-      real(cp),     intent(out)   :: Vt_loc(n_phi_max, n_theta_loc)
-      real(cp),     intent(out)   :: Vp_loc(n_phi_max, n_theta_loc)
+      complex(cp),  intent(inout) :: Pn_lm(n_lm)
+      complex(cp),  intent(inout) :: Sn_lm(n_lm)
+      complex(cp),  intent(inout) :: Tn_lm(n_lm)
+      real(cp),     intent(out)   :: Vr_loc(n_phi_max, n_theta)
+      real(cp),     intent(out)   :: Vt_loc(n_phi_max, n_theta)
+      real(cp),     intent(out)   :: Vp_loc(n_phi_max, n_theta)
       
-      complex(cp) :: Qlm_loc(lm_loc)
+      complex(cp) :: Qn_lm(n_lm)
       
-      Qlm_loc(1:lm_loc) = dLH_loc(1:lm_loc)*Plm_loc(1:lm_loc)
+      Qn_lm(1:n_lm) = dLH_loc(1:n_lm)*Pn_lm(1:n_lm)
       
-      call qst_to_spat_dist(Qlm_loc,Slm_loc,Tlm_loc,Vr_loc,Vt_loc,Vp_loc)
+      call qst_to_spat_dist(Qn_lm,Sn_lm,Tn_lm,Vr_loc,Vt_loc,Vp_loc)
       
    end subroutine torpol_to_spat_dist
 !-------------------------------------------------------------------------------
-   subroutine torpol_to_dphspat_dist(dWlm_loc, Zlm_loc, dVt_loc, dVp_loc)
+   subroutine torpol_to_dphspat_dist(dWn_lm, Zn_lm, dVt_loc, dVp_loc)
 !@>details transform spheroidal-toroidal spherical harmonic coefficients &
 !> (Slm,Tlm) to the derivative of the spatial theta and phi components (Vt,Vp).
 !> 
 !@>author Rafael Lago (MPCDF) November 2017
 !-------------------------------------------------------------------------------
-      complex(cp),  intent(inout)   :: dWlm_loc(lm_loc)
-      complex(cp),  intent(inout)   :: Zlm_loc(lm_loc)
+      complex(cp),  intent(inout)   :: dWn_lm(n_lm)
+      complex(cp),  intent(inout)   :: Zn_lm(n_lm)
       real(cp),     intent(out)     :: dVt_loc(n_phi_max, n_theta_max)
       real(cp),     intent(out)     :: dVp_loc(n_phi_max, n_theta_max)
       
-      complex(cp) :: Slm_loc(lm_loc)
-      complex(cp) :: Tlm_loc(lm_loc)
-      complex(cp) :: Sl_loc(n_theta_max,n_m_loc)
-      complex(cp) :: Tl_loc(n_theta_max,n_m_loc)
-      complex(cp) :: transpose_loc(n_m_max,n_theta_loc)
-      complex(cp) :: F_loc(n_phi_max/2+1,n_theta_loc)
+      complex(cp) :: Sn_lm(n_lm)
+      complex(cp) :: Tn_lm(n_lm)
+      complex(cp) :: Sl_loc(n_theta_max,n_m)
+      complex(cp) :: Tl_loc(n_theta_max,n_m)
+      complex(cp) :: transpose_loc(n_m_max,n_theta)
+      complex(cp) :: F_loc(n_phi_max/2+1,n_theta)
       
       integer  :: i, j, lm_s, lm_e, m_idx
       complex(cp) :: m
       
       !>@TODO do we need those temporary arrays?
       ! This is D_m_loc is just m_idx...
-      do i = 1, lm_loc
+      do i = 1, n_lm
          m = ci*D_m_loc(i)
-         Slm_loc(i) = m*dWlm_loc(i)
-         Tlm_loc(i) = m* Zlm_loc(i)
+         Sn_lm(i) = m*dWn_lm(i)
+         Tn_lm(i) = m* Zn_lm(i)
       end do
       
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m_idx = lm_dist(coord_theta, i, 1)/minc
         lm_s  = lm_dist(coord_theta, i, 3)
         lm_e  = lm_dist(coord_theta, i, 4)
-        call shtns_sphtor_to_spat_ml(m_idx, Slm_loc(lm_s:lm_e), Tlm_loc(lm_s:lm_e), &
+        call shtns_sphtor_to_spat_ml(m_idx, Sn_lm(lm_s:lm_e), Tn_lm(lm_s:lm_e), &
                                      Sl_loc(:,i), Tl_loc(:,i), l_max)
       end do
       
@@ -552,28 +550,28 @@ contains
       !> the toroidal part can be transposed and Fourier-transformed simultanouesly
       call transpose_theta_m(Sl_loc, transpose_loc)
       F_loc = 0.0
-      F_loc(1:n_m_max,1:n_theta_loc) = transpose_loc
+      F_loc(1:n_m_max,1:n_theta) = transpose_loc
       call fft_phi_loc(dVt_loc, F_loc, -1)
-      do j=1, n_theta_loc
+      do j=1, n_theta
          do i=1, n_phi_max
-            dVt_loc(i, j) = dVt_loc(i, j) * O_sin_theta_E2(n_theta_beg+j-1)
+            dVt_loc(i, j) = dVt_loc(i, j) * O_sin_theta_E2(l_theta+j-1)
          end do
       end do
       !--------
       call transpose_theta_m(Tl_loc, transpose_loc)
       F_loc = 0.0
-      F_loc(1:n_m_max,1:n_theta_loc) = transpose_loc
+      F_loc(1:n_m_max,1:n_theta) = transpose_loc
       call fft_phi_loc(dVp_loc, F_loc, -1)
       
-      do j=1, n_theta_loc
+      do j=1, n_theta
          do i=1, n_phi_max
-            dVp_loc(i, j) = dVp_loc(i, j) * O_sin_theta_E2(n_theta_beg+j-1)
+            dVp_loc(i, j) = dVp_loc(i, j) * O_sin_theta_E2(l_theta+j-1)
          end do
       end do
             
    end subroutine torpol_to_dphspat_dist
 !-------------------------------------------------------------------------------
-   subroutine torpol_to_curl_spat_dist(Blm_loc, ddBlm_loc, Jlm_loc, Slm_loc, &
+   subroutine torpol_to_curl_spat_dist(Bn_lm, ddBn_lm, Jn_lm, Sn_lm, &
                                        nR, cVr_loc, cVt_loc, cVp_loc)
 !@>details 3D vector transform from spherical coordinates to the curl of the 
 !> radial-spheroidal-toroidal spectral components. 
@@ -582,23 +580,23 @@ contains
 !> 
 !@>author Rafael Lago (MPCDF) November 2017
 !-------------------------------------------------------------------------------
-      complex(cp),  intent(inout) :: Blm_loc(lm_loc)
-      complex(cp),  intent(inout) :: ddBlm_loc(lm_loc)
-      complex(cp),  intent(inout) :: Jlm_loc(lm_loc)
-      complex(cp),  intent(inout) :: Slm_loc(lm_loc)
+      complex(cp),  intent(inout) :: Bn_lm(n_lm)
+      complex(cp),  intent(inout) :: ddBn_lm(n_lm)
+      complex(cp),  intent(inout) :: Jn_lm(n_lm)
+      complex(cp),  intent(inout) :: Sn_lm(n_lm)
       integer,      intent(in)    :: nR
       real(cp),     intent(out)   :: cVr_loc(n_phi_max, n_theta_max)
       real(cp),     intent(out)   :: cVt_loc(n_phi_max, n_theta_max)
       real(cp),     intent(out)   :: cVp_loc(n_phi_max, n_theta_max)
       
-      complex(cp) :: Qlm_loc(lm_loc)
-      complex(cp) :: Tlm_loc(lm_loc)
+      complex(cp) :: Qn_lm(n_lm)
+      complex(cp) :: Tn_lm(n_lm)
       
-      Qlm_loc(1:lm_loc) = dLH_loc(1:lm_loc)*Jlm_loc(1:lm_loc)
-      Tlm_loc(1:lm_loc) = or2(nR) * dLH_loc(1:lm_loc) * Blm_loc(1:lm_loc) &
-                        - ddBlm_loc(1:lm_loc) 
+      Qn_lm(1:n_lm) = dLH_loc(1:n_lm)*Jn_lm(1:n_lm)
+      Tn_lm(1:n_lm) = or2(nR) * dLH_loc(1:n_lm) * Bn_lm(1:n_lm) &
+                        - ddBn_lm(1:n_lm) 
       
-      call qst_to_spat_dist(Qlm_loc,Slm_loc,Tlm_loc,cVr_loc,cVt_loc,cVp_loc)
+      call qst_to_spat_dist(Qn_lm,Sn_lm,Tn_lm,cVr_loc,cVt_loc,cVp_loc)
       
    end subroutine torpol_to_curl_spat_dist
 

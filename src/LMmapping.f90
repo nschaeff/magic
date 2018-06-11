@@ -1,7 +1,6 @@
 module LMmapping
 
    use precision_mod
-   use geometry, only: l_axi
    use mem_alloc, only: bytes_allocated
 
    implicit none
@@ -35,10 +34,11 @@ module LMmapping
 
 contains
 
-   subroutine allocate_mappings(self,l_max,lm_max,lmP_max)
+   subroutine allocate_mappings(self,l_max,lm_max,lmP_max,l_axi)
 
       type(mappings) :: self
       integer, intent(in) :: l_max, lm_max, lmP_max
+      logical, intent(in) :: l_axi
 
       self%l_max = l_max
       if ( .not. l_axi ) then
@@ -75,13 +75,15 @@ contains
 
    end subroutine deallocate_mappings
 !-------------------------------------------------------------------------------
-   subroutine allocate_subblocks_mappings(self,map,nLMBs,l_max,lmStartB,lmStopB)
+   subroutine allocate_subblocks_mappings(self,map,nLMBs,l_max,lmStartB, &
+                                          lmStopB,l_axi)
 
       !-- Input variables
-      type(subblocks_mappings) :: self
+      type(subblocks_mappings)   :: self
       type(mappings), intent(in) :: map
       integer,        intent(in) :: nLMBs, l_max
       integer,        intent(in) :: lmStartB(nLMBs), lmStopB(nLMBs)
+      logical,        intent(in) :: l_axi
 
       !-- Local variables
       integer :: nLMB,lm1,l1,max_size_of_subblock,lmStart,lmStop

@@ -8,8 +8,9 @@ module distributed_theta
 
    use precision_mod
    use parallel_mod, only: coord_theta, rank, n_ranks, n_ranks_r, rank2theta, rank2r
-   use geometry, only: lm_dist, lmP_dist, n_m_loc, lmP_max, lm_max, l_max, &
-       &                 lm_loc, lmP_loc, n_r_max, n_theta_dist, n_r_cmb, dist_r
+   use geometry, only: lm_dist, lmP_dist, n_m, lmP_max, lm_max, l_max, &
+       &                 n_lm, n_lmP, n_r_max, dist_theta, n_r_cmb,    &
+       &                 dist_r, l_axi
    use mem_alloc, only: memWrite, bytes_allocated
    use logic, only: l_save_out, l_finite_diff
    use output_data, only: n_log_file, log_file
@@ -36,8 +37,8 @@ contains
       
 
       local_bytes_used = bytes_allocated
-      call allocate_mappings(dist_map,l_max,lm_loc,lmP_loc)
-      call allocate_mappings(lo_dist_map,l_max,lm_loc,lmP_loc)
+      call allocate_mappings(dist_map,l_max,n_lm,n_lmP,l_axi)
+      call allocate_mappings(lo_dist_map,l_max,n_lm,n_lmP,l_axi)
       
       call get_distributed_lm_mapping(dist_map)
       call get_distributed_lo_mapping(lo_dist_map)
@@ -53,8 +54,8 @@ contains
          do i=0,n_ranks-1
             iRstart = dist_r(rank2r(i),1)
             iRstop  = dist_r(rank2r(i),2)
-            iThetastart = n_theta_dist(rank2theta(i),1)
-            iThetastop  = n_theta_dist(rank2theta(i),2)
+            iThetastart = dist_theta(rank2theta(i),1)
+            iThetastop  = dist_theta(rank2theta(i),2)
             write(*,'(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A)') ' ! ',i,' = (',iThetastart,':',&
                   iThetastop,',',iRstart,':', iRstop, &
                   '), ',iThetastop-iThetastart+1,'x',dist_r(rank2r(i),0),' points'
@@ -104,7 +105,7 @@ contains
       
       lm  = 0
       lmP = 0
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m  = lm_dist(coord_theta, i, 1)
         map%lm2 (:,m) = Invalid_Idx
         map%lmP2(:,m) = Invalid_Idx
@@ -133,12 +134,12 @@ contains
         map%lmP2lm(lmP)= Invalid_Idx
         
       end do
-      if ( lm /= lm_loc ) then
-         write(*,"(2(A,I6))") 'Wrong lm=',lm," != lm_loc = ", lm_loc
+      if ( lm /= n_lm ) then
+         write(*,"(2(A,I6))") 'Wrong lm=',lm," != n_lm = ", n_lm
          call abortRun('Stop run in distribute_theta')
       end if
-      if ( lmP /= lmP_loc ) then
-         write(*,"(3(A,I6))") 'Wrong lmP=',lm," != lmP_loc = ", lmP_loc
+      if ( lmP /= n_lmP ) then
+         write(*,"(3(A,I6))") 'Wrong lmP=',lm," != n_lmP = ", n_lmP
          call abortRun('Stop run in distribute_theta')
       end if
 
@@ -147,7 +148,7 @@ contains
       map%lmP2lmPS = Invalid_Idx
       map%lmP2lmPA = Invalid_Idx
       
-      do lm=1,lm_loc
+      do lm=1,n_lm
          l=map%lm2l(lm)
          m=map%lm2m(lm)
          if ( l > 0 .and. l > m ) then
@@ -161,7 +162,7 @@ contains
             map%lm2lmA(lm)=-1
          end if
       end do
-      do lmP=1,lmP_loc
+      do lmP=1,n_lmP
          l=map%lmP2l(lmP)
          m=map%lmP2m(lmP)
          if ( l > 0 .and. l > m ) then
@@ -209,7 +210,7 @@ contains
       
       lm  = 0
       lmP = 0
-      do i = 1, n_m_loc
+      do i = 1, n_m
         m  = lm_dist(coord_theta, i, 1)
         map%lm2 (:,m) = Invalid_Idx
         map%lmP2(:,m) = Invalid_Idx
@@ -238,12 +239,12 @@ contains
         map%lmP2lm(lmP)= Invalid_Idx
         
       end do
-      if ( lm /= lm_loc ) then
-         write(*,"(2(A,I6))") 'Wrong lm=',lm," != lm_loc = ", lm_loc
+      if ( lm /= n_lm ) then
+         write(*,"(2(A,I6))") 'Wrong lm=',lm," != n_lm = ", n_lm
          call abortRun('Stop run in distribute_theta')
       end if
-      if ( lmP /= lmP_loc ) then
-         write(*,"(3(A,I6))") 'Wrong lmP=',lm," != lmP_loc = ", lmP_loc
+      if ( lmP /= n_lmP ) then
+         write(*,"(3(A,I6))") 'Wrong lmP=',lm," != n_lmP = ", n_lmP
          call abortRun('Stop run in distribute_theta')
       end if
 
@@ -252,7 +253,7 @@ contains
       map%lmP2lmPS = Invalid_Idx
       map%lmP2lmPA = Invalid_Idx
       
-      do lm=1,lm_loc
+      do lm=1,n_lm
          l=map%lm2l(lm)
          m=map%lm2m(lm)
          if ( l > 0 .and. l > m ) then
@@ -266,7 +267,7 @@ contains
             map%lm2lmA(lm)=-1
          end if
       end do
-      do lmP=1,lmP_loc
+      do lmP=1,n_lmP
          l=map%lmP2l(lmP)
          m=map%lmP2m(lmP)
          if ( l > 0 .and. l > m ) then

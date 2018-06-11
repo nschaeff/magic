@@ -10,7 +10,7 @@ module rIterThetaBlocking_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: lm_max,lmP_max,nrp,l_max,lmP_max_dtB,   &
        &                 n_phi_maxStr,n_theta_maxStr,n_r_maxStr, &
-       &                 lm_maxMag,l_axi, lm_loc, lm_locMag,     &
+       &                 lm_maxMag,l_axi, n_lm, n_lm_Mag,     &
        &                 n_r_cmb, n_r_icb, l_r, u_r
    use blocking, only: nfs
    use logic, only: l_mag,l_conv,l_mag_kin,l_heat,l_HT,l_anel,l_mag_LF,    &
@@ -69,7 +69,7 @@ contains
       !----- Help arrays for Legendre transform calculated in legPrepG:
       !      Parallelizatio note: these are the R-distributed versions
       !      of the field scalars.
-      call this%leg_helper%initialize(lm_loc,lm_locMag,l_max)
+      call this%leg_helper%initialize(n_lm,n_lm_Mag,l_max)
 
       allocate( this%BsLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r) )
       allocate( this%BpLast(n_phi_maxStr,n_theta_maxStr,l_r:u_r) )

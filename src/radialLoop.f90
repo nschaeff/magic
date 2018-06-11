@@ -96,18 +96,18 @@ contains
       !---- Output of explicit time step:
       !---- dVSrLM and dVxBhLM are output of contributions to explicit time step that
       !     need a further treatment (radial derivatives required):
-      complex(cp), intent(out) :: dwdt(lm_loc,l_r:u_r)
-      complex(cp), intent(out) :: dzdt(lm_loc,l_r:u_r)
-      complex(cp), intent(out) :: dpdt(lm_loc,l_r:u_r)
-      complex(cp), intent(out) :: dsdt(lm_loc,l_r:u_r)
-      complex(cp), intent(out) :: dxidt(lm_locChe,l_r_Che:u_r_Che)
-      complex(cp), intent(out) :: dVSrLM(lm_loc,l_r:u_r)
-      complex(cp), intent(out) :: dVPrLM(lm_locTP,l_r_TP:u_r_TP)
-      complex(cp), intent(out) :: dVXirLM(lm_locChe,l_r_Che:u_r_Che)
-      complex(cp), intent(out) :: dbdt(lm_locMag,l_r_Mag:u_r_Mag)
-      complex(cp), intent(out) :: djdt(lm_locMag,l_r_Mag:u_r_Mag)
-      complex(cp), intent(out) :: dVxVhLM(lm_locDC,l_r_DC:u_r_DC)
-      complex(cp), intent(out) :: dVxBhLM(lm_locMag,l_r_Mag:u_r_Mag)
+      complex(cp), intent(out) :: dwdt(n_lm,l_r:u_r)
+      complex(cp), intent(out) :: dzdt(n_lm,l_r:u_r)
+      complex(cp), intent(out) :: dpdt(n_lm,l_r:u_r)
+      complex(cp), intent(out) :: dsdt(n_lm,l_r:u_r)
+      complex(cp), intent(out) :: dxidt(n_lm_Che,l_r_Che:u_r_Che)
+      complex(cp), intent(out) :: dVSrLM(n_lm,l_r:u_r)
+      complex(cp), intent(out) :: dVPrLM(n_lm_TP,l_r_TP:u_r_TP)
+      complex(cp), intent(out) :: dVXirLM(n_lm_Che,l_r_Che:u_r_Che)
+      complex(cp), intent(out) :: dbdt(n_lm_Mag,l_r_Mag:u_r_Mag)
+      complex(cp), intent(out) :: djdt(n_lm_Mag,l_r_Mag:u_r_Mag)
+      complex(cp), intent(out) :: dVxVhLM(n_lm_DC,l_r_DC:u_r_DC)
+      complex(cp), intent(out) :: dVxBhLM(n_lm_Mag,l_r_Mag:u_r_Mag)
       real(cp),    intent(out) :: lorentz_torque_ma,lorentz_torque_ic
 
       !---- Output for axisymmetric helicity:
@@ -131,10 +131,10 @@ contains
 
       !---- Output of nonlinear products for nonlinear
       !     magnetic boundary conditions (needed in s_updateB.f):
-      complex(cp), intent(out) :: br_vt_lm_cmb(lmP_loc) ! product br*vt at CMB
-      complex(cp), intent(out) :: br_vp_lm_cmb(lmP_loc) ! product br*vp at CMB
-      complex(cp), intent(out) :: br_vt_lm_icb(lmP_loc) ! product br*vt at ICB
-      complex(cp), intent(out) :: br_vp_lm_icb(lmP_loc) ! product br*vp at ICB
+      complex(cp), intent(out) :: br_vt_lm_cmb(n_lmP) ! product br*vt at CMB
+      complex(cp), intent(out) :: br_vp_lm_cmb(n_lmP) ! product br*vp at CMB
+      complex(cp), intent(out) :: br_vt_lm_icb(n_lmP) ! product br*vt at ICB
+      complex(cp), intent(out) :: br_vp_lm_icb(n_lmP) ! product br*vp at ICB
 
       !---- Output for Courant criteria:
       real(cp),intent(out) :: dtrkc(l_r:u_r),dthkc(l_r:u_r)
@@ -171,7 +171,7 @@ contains
 
       !------ Set nonlinear terms that are possibly needed at the boundaries.
       !       They may be overwritten by get_td later.
-      do lm=1,lm_loc
+      do lm=1,n_lm
          if ( coord_r == 0 ) then
             dVSrLM(lm,n_r_cmb) =zero
             if ( l_chemical_conv ) dVXirLM(lm,n_r_cmb)=zero

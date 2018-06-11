@@ -6,7 +6,7 @@ module fields
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: lm_max, n_r_max, lm_maxMag, n_r_maxMag, &
-       &                 n_r_ic_maxMag, lm_loc, lm_locMag, l_r, u_r
+       &                 n_r_ic_maxMag, n_lm, n_lm_Mag, l_r, u_r
    use logic, only: l_chemical_conv
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag
    use parallel_mod, only: coord_r, n_ranks_theta
@@ -110,40 +110,40 @@ contains
       p_LMloc(llm:ulm,1:n_r_max)   => flow_LMloc_container(:,:,6)
       dp_LMloc(llm:ulm,1:n_r_max)  => flow_LMloc_container(:,:,7)
 
-      allocate( flow_Rdist_container(lm_loc,l_r:u_r,1:7) )
-      w_Rdist(1:lm_loc,l_r:u_r)   => flow_Rdist_container(:,:,1)
-      dw_Rdist(1:lm_loc,l_r:u_r)  => flow_Rdist_container(:,:,2)
-      ddw_Rdist(1:lm_loc,l_r:u_r) => flow_Rdist_container(:,:,3)
-      z_Rdist(1:lm_loc,l_r:u_r)   => flow_Rdist_container(:,:,4)
-      dz_Rdist(1:lm_loc,l_r:u_r)  => flow_Rdist_container(:,:,5)
-      p_Rdist(1:lm_loc,l_r:u_r)   => flow_Rdist_container(:,:,6)
-      dp_Rdist(1:lm_loc,l_r:u_r)  => flow_Rdist_container(:,:,7)
+      allocate( flow_Rdist_container(n_lm,l_r:u_r,1:7) )
+      w_Rdist(1:n_lm,l_r:u_r)   => flow_Rdist_container(:,:,1)
+      dw_Rdist(1:n_lm,l_r:u_r)  => flow_Rdist_container(:,:,2)
+      ddw_Rdist(1:n_lm,l_r:u_r) => flow_Rdist_container(:,:,3)
+      z_Rdist(1:n_lm,l_r:u_r)   => flow_Rdist_container(:,:,4)
+      dz_Rdist(1:n_lm,l_r:u_r)  => flow_Rdist_container(:,:,5)
+      p_Rdist(1:n_lm,l_r:u_r)   => flow_Rdist_container(:,:,6)
+      dp_Rdist(1:n_lm,l_r:u_r)  => flow_Rdist_container(:,:,7)
 
       !-- Entropy:
       allocate( s_LMloc_container(llm:ulm,n_r_max,1:2) )
       s_LMloc(llm:ulm,1:n_r_max)  => s_LMloc_container(:,:,1)
       ds_LMloc(llm:ulm,1:n_r_max) => s_LMloc_container(:,:,2)
-      allocate( s_Rdist_container(lm_loc,l_r:u_r,1:2) )
-      s_Rdist(1:lm_loc,l_r:u_r)   => s_Rdist_container(:,:,1)
-      ds_Rdist(1:lm_loc,l_r:u_r)  => s_Rdist_container(:,:,2)
+      allocate( s_Rdist_container(n_lm,l_r:u_r,1:2) )
+      s_Rdist(1:n_lm,l_r:u_r)   => s_Rdist_container(:,:,1)
+      ds_Rdist(1:n_lm,l_r:u_r)  => s_Rdist_container(:,:,2)
 
       bytes_allocated = bytes_allocated + &
                         9*(ulm-llm+1)*n_r_max*SIZEOF_DEF_COMPLEX
       bytes_allocated = bytes_allocated + &
-                        9*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
+                        9*n_lm*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
 
       !-- Chemical composition:
       if ( l_chemical_conv ) then
          allocate( xi_LMloc_container(llm:ulm,n_r_max,1:2) )
          xi_LMloc(llm:ulm,1:n_r_max)  => xi_LMloc_container(:,:,1)
          dxi_LMloc(llm:ulm,1:n_r_max) => xi_LMloc_container(:,:,2)
-         allocate( xi_Rdist_container(lm_loc,l_r:u_r,1:2) )
-         xi_Rdist(1:lm_loc,l_r:u_r)   => xi_Rdist_container(:,:,1)
-         dxi_Rdist(1:lm_loc,l_r:u_r)  => xi_Rdist_container(:,:,2)
+         allocate( xi_Rdist_container(n_lm,l_r:u_r,1:2) )
+         xi_Rdist(1:n_lm,l_r:u_r)   => xi_Rdist_container(:,:,1)
+         dxi_Rdist(1:n_lm,l_r:u_r)  => xi_Rdist_container(:,:,2)
          bytes_allocated = bytes_allocated + &
                            2*(ulm-llm+1)*n_r_max*SIZEOF_DEF_COMPLEX
          bytes_allocated = bytes_allocated + &
-                           2*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
+                           2*n_lm*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       else
          allocate( xi_LMloc_container(1,1,2) ) ! For debugging
          xi_LMloc(1:1,1:1)  => xi_LMloc_container(:,:,1)
@@ -164,14 +164,14 @@ contains
       bytes_allocated = bytes_allocated + &
                         6*(ulmMag-llmMag+1)*n_r_maxMag*SIZEOF_DEF_COMPLEX
 
-      allocate( field_Rdist_container(lm_locMag,l_r:u_r,1:5) )
-      b_Rdist(1:lm_locMag,l_r:u_r)   => field_Rdist_container(:,:,1)
-      db_Rdist(1:lm_locMag,l_r:u_r)  => field_Rdist_container(:,:,2)
-      ddb_Rdist(1:lm_locMag,l_r:u_r) => field_Rdist_container(:,:,3)
-      aj_Rdist(1:lm_locMag,l_r:u_r)  => field_Rdist_container(:,:,4)
-      dj_Rdist(1:lm_locMag,l_r:u_r)  => field_Rdist_container(:,:,5)
+      allocate( field_Rdist_container(n_lm_Mag,l_r:u_r,1:5) )
+      b_Rdist(1:n_lm_Mag,l_r:u_r)   => field_Rdist_container(:,:,1)
+      db_Rdist(1:n_lm_Mag,l_r:u_r)  => field_Rdist_container(:,:,2)
+      ddb_Rdist(1:n_lm_Mag,l_r:u_r) => field_Rdist_container(:,:,3)
+      aj_Rdist(1:n_lm_Mag,l_r:u_r)  => field_Rdist_container(:,:,4)
+      dj_Rdist(1:n_lm_Mag,l_r:u_r)  => field_Rdist_container(:,:,5)
       bytes_allocated = bytes_allocated + &
-                        5*lm_locMag*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
+                        5*n_lm_Mag*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
 
       !-- Magnetic field potentials in inner core:
       !   NOTE: n_r-dimension may be smaller once CHEBFT is adopted

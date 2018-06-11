@@ -2,7 +2,7 @@ module courant_mod
  
    use parallel_mod
    use precision_mod
-   use geometry, only: nrp, n_phi_max, n_theta_beg, n_theta_end, &
+   use geometry, only: nrp, n_phi_max, l_theta, u_theta, &
        &                 comm_theta, l_r, u_r
    use radial_functions, only: orho1, orho2, or4, or2
    use physical_parameters, only: LFfac, opm
@@ -41,12 +41,12 @@ contains
     
       !-- Input variable:
       integer,  intent(in) :: n_r           ! radial level
-      real(cp), intent(in) :: vr(n_phi_max,n_theta_beg:n_theta_end)   ! radial velocity
-      real(cp), intent(in) :: vt(n_phi_max,n_theta_beg:n_theta_end)   ! longitudinal velocity
-      real(cp), intent(in) :: vp(n_phi_max,n_theta_beg:n_theta_end)   ! azimuthal velocity
-      real(cp), intent(in) :: br(n_phi_max,n_theta_beg:n_theta_end)   ! radial magnetic field
-      real(cp), intent(in) :: bt(n_phi_max,n_theta_beg:n_theta_end)   ! longitudinal magnetic field
-      real(cp), intent(in) :: bp(n_phi_max,n_theta_beg:n_theta_end)   ! azimuthal magnetic field
+      real(cp), intent(in) :: vr(n_phi_max,l_theta:u_theta)   ! radial velocity
+      real(cp), intent(in) :: vt(n_phi_max,l_theta:u_theta)   ! longitudinal velocity
+      real(cp), intent(in) :: vp(n_phi_max,l_theta:u_theta)   ! azimuthal velocity
+      real(cp), intent(in) :: br(n_phi_max,l_theta:u_theta)   ! radial magnetic field
+      real(cp), intent(in) :: bt(n_phi_max,l_theta:u_theta)   ! longitudinal magnetic field
+      real(cp), intent(in) :: bp(n_phi_max,l_theta:u_theta)   ! azimuthal magnetic field
     
       !-- Output:
       real(cp), intent(inout) :: dtrkc    ! Courant step (based on radial advection)
@@ -83,7 +83,7 @@ contains
     
          af2=alffac*alffac
     
-         do n_theta=n_theta_beg,n_theta_end
+         do n_theta=l_theta,u_theta
             n_theta_nhs=(n_theta+1)/2 ! northern hemisphere=odd n_theta
     
             do n_phi=1,n_phi_max
@@ -109,7 +109,7 @@ contains
     
       else   ! Magnetic field ?
     
-         do n_theta=n_theta_beg,n_theta_end
+         do n_theta=l_theta,u_theta
             n_theta_nhs=(n_theta+1)/2 ! northern hemisphere=odd n_theta
     
             do n_phi=1,n_phi_max

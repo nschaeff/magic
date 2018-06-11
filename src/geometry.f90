@@ -1,9 +1,10 @@
 module geometry
    !
-   !   This module defines how the points from Grid Space, LM-Space and ML-Space 
-   !   are divided amonst the MPI domains.
+   !   This module defines how the points from Grid Space, LM-Space and 
+   !   ML-Space are divided amonst the MPI domains.
    !   
-   !   This does *not* include mappings, only lower/upper bounds and dimensions.
+   !   This does *not* include mappings, only lower/upper bounds and 
+   !   dimensions.
    ! 
    !   PS: is "truncation" still a fitting name for this module?
    !
@@ -13,24 +14,33 @@ module geometry
    use useful, only: abortRun
    use parallel_mod
    use mpi
+   use LMmapping, only: mappings, allocate_mappings, deallocate_mappings
    
    implicit none
+   
+   public
 
+   !---------------------------------
    !-- Global Dimensions:
-   !
-   !   minc here is sort of the inverse of mres in SHTns. In MagIC, the 
-   !   number of m modes stored is m_max/minc+1. In SHTns, it is simply m_max.
-   !   Conversely, there are m_max m modes in MagIC, though not all of them
-   !   are effectivelly stored/computed. In SHTns, the number of m modes
-   !   is m_max*minc+1 (therein called mres). This makes things very confusing
-   !   specially because lm2 and lmP2 arrays (and their relatives) store
-   !   m_max m points, and sets those which are not multiple of minc to 0.
+   !---------------------------------
+   !   
+   !   minc here is sort of the inverse of mres in SHTns. In MagIC, the number
+   !   of m modes stored is m_max/minc+1. In SHTns, it is simply m_max. 
+   !   Conversely, there are m_max m modes in MagIC, though not all of them are 
+   !   effectivelly stored/computed. In SHTns, the number of m modes is 
+   !   m_max*minc+1 (therein called mres). This makes things very confusing 
+   !   specially because lm2 and lmP2 arrays (and their relatives) store m_max 
+   !   m points, and sets those which are not multiple of minc to 0.
    !   
    !   In other words, this:
-   !   call shtns_lmidx(lm_idx, l_idx, m_idx/minc)
+   !   > call shtns_lmidx(lm_idx, l_idx, m_idx/minc)
    !   returns the same as 
-   !   lm_idx = lm2(l_idx, m_idx)
-   !-----------------------------------------
+   !   > lm_idx = lm2(l_idx, m_idx)
+   !   
+   !-- TODO: ask Thomas about converting all variables associated with the 
+   !   global geometry (e.g. n_r_max, n_phi_max) to the "glb" suffix
+   !   (e.g. n_r_glb, n_phi_glb). I find it more intuitive, but 
+   !   
    
    !-- Basic quantities:
    integer :: n_r_max       ! number of radial grid points
@@ -86,26 +96,26 @@ module geometry
    integer :: n_theta_maxStr ! Number of theta points for stress output
    integer :: n_phi_maxStr   ! Number of phi points for stress output
    
-   !-- General Notation:
-   ! 
-   ! For continuous variables:
-   ! dist_V(i,1) = lower bound of direction V in rank i
-   ! dist_V(i,2) = upper bound of direction V in rank i
-   ! dist_V(i,0) = shortcut to dist_V(i,2) - dist_V(i,1) + 1
-   !
-   ! Because continuous variables are simple, we can define some shortcuts:
-   ! l_V: dist_V(this_rank,1)
-   ! u_V: dist_V(this_rank,2)
-   ! n_V: u_V - l_V + 1  (number of local points in V direction)
-   ! n_V_max: global dimensions of variable V. Basically,  MPI_ALLREDUCE(n_V,n_V_max,MPI_SUM)
-   ! 
-   ! For discontinuous variables:
-   ! dist_V(i,0)  = how many V points are there for rank i
-   ! dist_V(i,1:) = an array containing all of the V points in rank i
-   ! 
-   
+   !---------------------------------
    !-- Distributed Dimensions
-   !-----------------------------------------
+   !---------------------------------
+   !  
+   !   Notation for continuous variables:
+   !   dist_V(i,1) = lower bound of direction V in rank i
+   !   dist_V(i,2) = upper bound of direction V in rank i
+   !   dist_V(i,0) = shortcut to dist_V(i,2) - dist_V(i,1) + 1
+   !   
+   !   Because continuous variables are simple, we can define some shortcuts:
+   !   l_V: dist_V(this_rank,1)
+   !   u_V: dist_V(this_rank,2)
+   !   n_V: u_V - l_V + 1  (number of local points in V direction)
+   !   n_V_max: global dimensions of variable V. Basically, the result of 
+   !   > MPI_ALLREDUCE(n_V,n_V_max,MPI_SUM)
+   !   
+   !   For discontinuous variables:
+   !   dist_V(i,0)  = how many V points are there for rank i
+   !   dist_V(i,1:) = an array containing all of the V points in rank i
+   !   
 
    !-- Distributed Grid Space 
    integer, allocatable, protected :: dist_theta(:,:)
@@ -113,7 +123,7 @@ module geometry
    integer, protected :: n_theta, l_theta, u_theta
    integer, protected :: n_r,     l_r,     u_r
    
-   ! Helpers
+   !   Helpers
    integer, protected :: l_r_Mag
    integer, protected :: l_r_Che
    integer, protected :: l_r_TP 
@@ -122,12 +132,19 @@ module geometry
    integer, protected :: u_r_Che 
    integer, protected :: u_r_TP  
    integer, protected :: u_r_DC  
+   integer, protected :: n_lm_Mag
+   integer, protected :: n_lm_Che
+   integer, protected :: n_lm_TP
+   integer, protected :: n_lm_DC
    
    !-- Distributed LM-Space
-   ! n_m:   total number of m's in this rank. Shortcut to dist_m(i,0)
-   ! n_lm:  total number of l and m points in this rank
-   ! n_lmP: total number of l and m points (for LM space with l_max+1) in this rank
+   ! 
+   !   Just for clarification:
+   !   n_lm:  total number of l and m points in this rank
+   !   n_lmP: total number of l and m points (for l_max+1) in this rank
+   !   
    integer, allocatable, protected :: dist_m(:,:)
+   type(mappings),       protected :: map_lm
    integer, protected :: n_m, n_lm, n_lmP
    integer, protected :: n_m_array
    
@@ -138,42 +155,32 @@ module geometry
    !--- Distributed domain - for n_ranks_theta > 1
    ! n_theta_dist(i,1): first theta point in the i-th rank
    ! n_theta_dist(i,2): last theta ppoint in the i-th rank
-   ! n_theta_beg: shortcut to n_theta_dist(coord_theta,1)
-   ! n_theta_end: shortcut to n_theta_dist(coord_theta,2)
-   ! n_theta_loc: number of theta points in the local rank
+   ! l_theta: shortcut to n_theta_dist(coord_theta,1)
+   ! u_theta: shortcut to n_theta_dist(coord_theta,2)
+   ! n_theta: number of theta points in the local rank
    !-------------------------------------------------------------
-   ! lm_dist - (n_ranks_theta, n_m_ext, 4)
+   ! lm_dist - (n_ranks_theta, n_m_array, 4)
    ! lm_dist(i,j,1): value of the j-th "m" in the i-th rank
-   ! lm_dist(i,j,2): length of the j-th row in Flm_loc
-   ! lm_dist(i,j,3): where the j-th row begins in Flm_loc
-   ! lm_dist(i,j,4): where the j-th row ends in Flm_loc
+   ! lm_dist(i,j,2): length of the j-th row in Fn_lm
+   ! lm_dist(i,j,3): where the j-th row begins in Fn_lm
+   ! lm_dist(i,j,4): where the j-th row ends in Fn_lm
    !-------------------------------------------------------------
    ! lmP_dist(i,j,k) : same as above, but for l_max+1 instead of l_max
    !-------------------------------------------------------------
-   ! n_m_ext: number of m points in the local rank, +1. The extra
+   ! n_m_array: number of m points in the local rank, +1. The extra
    !          point comes in when m_max + 1 is not divisible by the 
    !          number of ranks. If the extra point is "not in use"
-   !          in the j-th rank, then lmP_dist(j,n_m_ext,:) = -1,
-   !          and lmP_dist(j,n_m_ext,2) = 0
+   !          in the j-th rank, then lmP_dist(j,n_m_array,:) = -1,
+   !          and lmP_dist(j,n_m_array,2) = 0
    !          This is useful mostly for looping over lmP_dist
-   ! n_m_loc: number of points in the local rank. This coincides with
-   !          n_m_ext in the ranks with extra points.
+   ! n_m: number of points in the local rank. This coincides with
+   !          n_m_array in the ranks with extra points.
    ! 
-   ! lmP_loc: shortcut to sum(lmP_dist(coord_theta,:,2))
+   ! n_lmP: shortcut to sum(lmP_dist(coord_theta,:,2))
    ! 
    ! - Lago
-   integer :: n_theta_beg, n_theta_end, n_theta_loc
-   integer :: n_m_ext, n_m_loc, lmP_loc, lm_loc
-   integer :: lm_locMag
-   integer :: lm_locChe
-   integer :: lm_locTP
-   integer :: lm_locDC
-   integer, allocatable :: n_theta_dist(:,:), lmP_dist(:,:,:), lm_dist(:,:,:)
-   
-   
-   
-   
-   
+!    integer, allocatable :: n_theta_dist(:,:)
+   integer, allocatable :: lmP_dist(:,:,:), lm_dist(:,:,:)
    
    
    !-- Distribution of the points amonst the ranks
@@ -183,14 +190,13 @@ module geometry
    integer, allocatable :: ml_l_dist(:,:,:)
    
    
-   
 contains
    
+   !----------------------------------------------------------------------------
    subroutine initialize_global_geometry
-      
-      integer :: n_r_maxML,n_r_ic_maxML,n_r_totML,l_maxML,lm_maxML
-      integer :: lm_max_dL,lmP_max_dL,n_r_max_dL,n_r_ic_max_dL
-      integer :: n_r_maxSL,n_theta_maxSL,n_phi_maxSL
+      !   
+      !   Author: .NOT. Rafael Lago!
+      !   
       
       if ( .not. l_axi ) then
          ! absolute number of phi grid-points
@@ -235,68 +241,68 @@ contains
       
       !-- Now quantities for magnetic fields:
       !    Set lMag=0 if you want to save this memory (see c_fields)!
-      n_r_maxML     = lMagMem*n_r_max
-      n_r_ic_maxML  = lMagMem*n_r_ic_max
-      n_r_totML     = lMagMem*n_r_tot
-      l_maxML       = lMagMem*l_max
-      lm_maxML      = lMagMem*lm_max
-      n_r_maxMag    = max(1,n_r_maxML)
-      n_r_ic_maxMag = max(1,n_r_ic_maxML)
-      n_r_totMag    = max(1,n_r_totML)
-      l_maxMag      = max(1,l_maxML)
-      lm_maxMag     = max(1,lm_maxML)
+      n_r_maxMag    = max(1,lMagMem*n_r_max   )
+      n_r_ic_maxMag = max(1,lMagMem*n_r_ic_max)
+      n_r_totMag    = max(1,lMagMem*n_r_tot   )
+      l_maxMag      = max(1,lMagMem*l_max     )
+      lm_maxMag     = max(1,lMagMem*lm_max    )
       
       !-- Movie memory control:
-      lm_max_dL    =ldtBMem*lm_max
-      lmP_max_dL   =ldtBMem*lmP_max
-      n_r_max_dL   =ldtBMem*n_r_max
-      n_r_ic_max_dL=ldtBMem*n_r_ic_max
-      lm_max_dtB    =max(lm_max_DL,1) 
-      lmP_max_dtB   =max(lmP_max_DL,1)
-      n_r_max_dtB   =max(n_r_max_DL,1)
-      n_r_ic_max_dtB=max(n_r_ic_max_DL,1)
+      lm_max_dtB    =max(1, ldtBMem*lm_max    )
+      lmP_max_dtB   =max(1, ldtBMem*lmP_max   )
+      n_r_max_dtB   =max(1, ldtBMem*n_r_max   )
+      n_r_ic_max_dtB=max(1, ldtBMem*n_r_ic_max)
       
       !-- Memory control for stress output:
-      n_r_maxSL     = lStressMem*n_r_max
-      n_theta_maxSL = lStressMem*n_theta_max
-      n_phi_maxSL   = lStressMem*n_phi_max
-      n_r_maxStr    = max(n_r_maxSL,1)
-      n_theta_maxStr= max(n_theta_maxSL,1)
-      n_phi_maxStr  = max(n_phi_maxSL,1)
+      n_r_maxStr    = max(1, lStressMem*n_r_max    )
+      n_theta_maxStr= max(1, lStressMem*n_theta_max)
+      n_phi_maxStr  = max(1, lStressMem*n_phi_max  )
       
       !-- I don't know the purpose of these two variables, but they used to 
       !   belong to radial_data. I'll keep them around. - Lago
-      
-      ! must be of form 4*integer+1
-      ! Possible values for n_r_max:
-      !  5,9,13,17,21,25,33,37,41,49,
-      !  61,65,73,81,97,101,121,129, ...
       n_r_cmb = 1
       n_r_icb = n_r_max
       
    end subroutine initialize_global_geometry
    
-   !------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine initialize_distributed_geometry
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !   
       
       call distribute_gs
-      
       call print_contiguous_distribution(dist_theta, n_ranks_theta, 'θ')
       call print_contiguous_distribution(dist_r, n_ranks_r, 'r')
       
       call distribute_lm
-      
       call print_discontiguous_distribution(dist_m, n_m_array, n_ranks_theta, 'm')
       
    end subroutine initialize_distributed_geometry
    
-   !------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
+   subroutine finalize_geometry
+      !   
+      !   Author: Rafael Lago, MPCDF, June 2018
+      !   
+      
+      !-- Finalize global geometry
+      !   lol
+      
+      !-- Finalize distributed grid space
+      deallocate(dist_theta)
+      deallocate(dist_r)
+      
+      !-- Finalize distributed lm
+      deallocate(dist_m)
+      call deallocate_mappings(map_lm)      
+      
+   end subroutine finalize_geometry
+   
+   !----------------------------------------------------------------------------
    subroutine distribute_gs
       !   
-      !   Takes care of the distribution of the radial points and the θ
+      !   Distributes the radial points and the θs. Every φ point is local.
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !   
@@ -315,7 +321,7 @@ contains
       allocate(dist_r(0:n_ranks_r-1,0:2))
       call distribute_contiguous_last(dist_r,n_r_max,n_ranks_r)
       
-      !-- Take n_r_cmb into account
+      !-- Take n_r_cmb into account now
       !-- TODO check if this is correct
       dist_r(:,1:2) = dist_r(:,1:2) + n_r_cmb - 1
       
@@ -324,56 +330,69 @@ contains
       l_r = dist_r(coord_r,1)
       u_r = dist_r(coord_r,2)
       
-      !-- Setup Helpers
-      !   
-      l_r_Mag = l_r
-      l_r_Che = l_r
-      l_r_TP  = l_r
-      l_r_DC  = l_r
-      u_r_Mag = u_r
-      u_r_Che = u_r
-      u_r_TP  = u_r
-      u_r_DC  = u_r
-      
-      if ( .not. l_mag           ) l_r_Mag = 1
-      if ( .not. l_chemical_conv ) l_r_Che = 1
-      if ( .not. l_TP_form       ) l_r_TP  = 1
-      if ( .not. l_double_curl   ) l_r_DC  = 1
-      if ( .not. l_mag           ) u_r_Mag = 1
-      if ( .not. l_chemical_conv ) u_r_Che = 1
-      if ( .not. l_TP_form       ) u_r_TP  = 1
-      if ( .not. l_double_curl   ) u_r_DC  = 1
+      l_r_Mag = 1
+      l_r_Che = 1
+      l_r_TP  = 1
+      l_r_DC  = 1
+      u_r_Mag = 1
+      u_r_Che = 1
+      u_r_TP  = 1
+      u_r_DC  = 1
+      if (l_mag          ) l_r_Mag = l_r
+      if (l_chemical_conv) l_r_Che = l_r
+      if (l_TP_form      ) l_r_TP  = l_r
+      if (l_double_curl  ) l_r_DC  = l_r
+      if (l_mag          ) u_r_Mag = u_r
+      if (l_chemical_conv) u_r_Che = u_r
+      if (l_TP_form      ) u_r_TP  = u_r
+      if (l_double_curl  ) u_r_DC  = u_r
       
    end subroutine distribute_gs
    
-   !------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine distribute_lm
       !   
-      !   Takes care of the distribution of the m's from the LM-space
+      !   Distributes the m's from the LM-space. It re-uses the distribution
+      !   of the radial points obtained from distribute_gs. Every l point is
+      !   local.
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !   
       
-      !   R was already distributed in distribute_gs
-      !   Only m is left
-      
       n_m_array = ceiling(real(n_m_max) / real(n_ranks_m))
-      allocate(dist_m( 0:n_ranks_theta-1, 0:n_m_array))
+      allocate(dist_m(0:n_ranks_m-1, 0:n_m_array))
       
       call distribute_discontiguous_snake(dist_m, n_m_array, n_m_max, n_ranks_m)
       
-      !-- The function above distributes contiguous points. Nothing else.
-      !   Now we take care of minc:
+      !-- The function above distributes a list of points [p1, p2, (...), pN].
+      !   Now we resolve what those points mean in practice. In this case
+      !   it is pretty simple: p(x) = (x-1)*minc
       dist_m(:,1:) = (dist_m(:,1:)-1)*minc
       
       !-- Counts how many points were assigned to each rank
       dist_m(:,0) = count(dist_m(:,1:) >= 0, 2)
       
-      n_m = dist_m(coord_m,0)
+      !-- Formula for the number of lm-points in each rank:
+      !   n_lm  = Σ(l_max+1 - m), for every m in this rank.
+      n_m   = dist_m(coord_m,0)
+      n_lm  = n_m*(l_max+1) - sum(dist_m(coord_m,1:), mask=dist_m(coord_m,1:)>0)
+      n_lmP = n_m*(l_max+2) - sum(dist_m(coord_m,1:), mask=dist_m(coord_m,1:)>0)
+      
+      n_lm_Mag = 1
+      n_lm_Che = 1
+      n_lm_TP  = 1
+      n_lm_DC  = 1
+      if (l_mag          ) n_lm_Mag = n_lm
+      if (l_chemical_conv) n_lm_Che = n_lm
+      if (l_TP_form      ) n_lm_TP  = n_lm
+      if (l_double_curl  ) n_lm_DC  = n_lm
+      
+      call allocate_mappings(map_lm,l_max,n_lm,n_lmP,l_axi)
+      call map_lm_standard(map_lm, dist_m(coord_m,:))
       
    end subroutine distribute_lm   
 
-!------------------------------------------------------------------------------- 
+   !----------------------------------------------------------------------------
    subroutine distribute_truncation
       !   Divides the number of points in theta direction evenly amongst the 
       !   ranks; if the number of point is not round, the last first receive 
@@ -387,48 +406,24 @@ contains
       !
       !   Author: Rafael Lago, MPCDF, July 2017
       !
-      integer :: i, j, itmp, loc, proc_idx
-      
-      ! Deals with n_theta_dist
-      !-------------------------------------------
-      loc = n_theta_max/n_ranks_theta
-      itmp = n_theta_max - loc*n_ranks_theta
-      allocate(n_theta_dist(0:n_ranks_theta-1,2))
-      do i=0,n_ranks_theta-1
-         n_theta_dist(i,1) = loc*i + min(i,itmp) + 1
-         n_theta_dist(i,2) = loc*(i+1) + min(i+1,itmp)
-      end do
-      n_theta_beg = n_theta_dist(coord_theta,1)
-      n_theta_end = n_theta_dist(coord_theta,2)
-      n_theta_loc = n_theta_dist(coord_theta,2) - n_theta_dist(coord_theta,1)+1
-      
-      if (rank == 0) then
-         print "('θ partition in rank ', I3, ': ', I5, I5, I5, ' points')", &
-               0, n_theta_dist(0,1), n_theta_dist(0,2), n_theta_dist(0,2) - &
-               n_theta_dist(0,1) + 1
-         do i=1, n_ranks_theta-1
-            print "('               rank ', I3, ': ', I5, I5, I5, ' points')", &
-                  i, n_theta_dist(i,1), n_theta_dist(i,2), n_theta_dist(i,2) - &
-                  n_theta_dist(i,1) + 1
-         end do
-      end if
+      integer :: i, j, itmp, loc
       
       ! Deals with lmP_dist and lm_dist (for radial loop)
       !---------------------------------------------------
-      n_m_ext = ceiling(real(m_max+1)/real(minc*n_ranks_theta))
+!       n_m_array = ceiling(real(m_max+1)/real(minc*n_ranks_theta))
       
-      allocate(lmP_dist(0:n_ranks_theta-1, n_m_ext, 4))
-      allocate(lm_dist(0:n_ranks_theta-1, n_m_ext, 4))
+      allocate(lmP_dist(0:n_ranks_theta-1, n_m_array, 4))
+      allocate(lm_dist(0:n_ranks_theta-1, n_m_array, 4))
       
       call distribute_snake_old(lmP_dist, l_max+1, m_max, minc)
       call distribute_snake_old(lm_dist,  l_max  , m_max, minc)
       
-      n_m_loc = n_m_ext - 1
-      if (lmP_dist(coord_theta,n_m_ext,1) > -1) n_m_loc = n_m_ext
+!       n_m = n_m_array - 1
+!       if (lmP_dist(coord_theta,n_m_array,1) > -1) n_m = n_m_array
       
       if (rank == 0) then
          do i=0, n_ranks_theta-1
-            do j=1, n_m_ext
+            do j=1, n_m_array
                print "('lmP partition in rank ', I3, ': ', I5, I5, I5, I5)", i,&
                lmP_dist(i,j,1:4)
             end do
@@ -459,17 +454,8 @@ contains
       
       ! Sets some shortcuts
       !---------------------------------------------------
-      lmP_loc = sum(lmP_dist(coord_theta,:,2))
-      lm_loc  = sum(lm_dist( coord_theta,:,2))
-      lm_locMag = lm_loc
-      lm_locChe = lm_loc
-      lm_locTP  = lm_loc
-      lm_locDC  = lm_loc
-      if ( lm_maxMag==1 ) lm_locMag = 1
-      if ( .not. l_chemical_conv ) lm_locChe = 1
-      if ( .not. l_TP_form       ) lm_locTP  = 1
-      if ( .not. l_double_curl   ) lm_locDC  = 1
-      
+!       n_lmP = sum(lmP_dist(coord_theta,:,2))
+!       n_lm  = sum(lm_dist( coord_theta,:,2))
    end subroutine distribute_truncation
    
    !----------------------------------------------------------------------------   
@@ -488,7 +474,7 @@ contains
       ! 
       !   Author: Rafael Lago, MPCDF, December 2017
       !
-      integer, intent(inout) :: idx_dist(0:n_ranks_theta-1, n_m_ext, 4)
+      integer, intent(inout) :: idx_dist(0:n_ranks_theta-1, n_m_array, 4)
       integer, intent(in)    :: l_max, m_max, minc
       
       integer :: m_idx, proc_idx, row_idx
@@ -523,7 +509,7 @@ contains
       !   
       !   Author: Rafael Lago, MPCDF, December 2017
       !
-      integer, intent(inout) :: idx_dist(0:n_ranks_theta-1, n_m_ext, 4)
+      integer, intent(inout) :: idx_dist(0:n_ranks_theta-1, n_m_array, 4)
       integer, intent(in)    :: l_max, m_max, minc
       
       integer :: m_idx, proc_idx, row_idx
@@ -562,6 +548,103 @@ contains
       
      
    end subroutine distribute_snake_old
+   
+   !----------------------------------------------------------------------------   
+   subroutine map_lm_standard(map,dist)
+      !   
+      !   Author: Rafael Lago, MPCDF, December 2017
+      !
+      type(mappings), intent(inout) :: map
+      integer,        intent(in)    :: dist(0:n_m_array)
+      
+      integer, parameter :: Invalid_Idx = -1 
+      
+      ! Local variables
+      integer :: m,l,lm,lmP,i
+      
+      map%lm2    = Invalid_Idx
+      map%lmP2   = Invalid_Idx
+      map%lm2l   = Invalid_Idx
+      map%lm2m   = Invalid_Idx
+      map%lmP2l  = Invalid_Idx
+      map%lmP2m  = Invalid_Idx
+      map%lm2lmP = Invalid_Idx
+      map%lmP2lm = Invalid_Idx
+      map%l2lmAS = Invalid_Idx
+      
+      map%lm2mc = -5 ! Lago@180405: I have no idea what this one is for. It needs to be completely implemented
+      
+      lm  = 0
+      lmP = 0
+      do i = 1, n_m_array
+        m  = dist(i)
+        if (m<0) cycle  ! m<0 means that this m is not in this rank
+        
+        do l=m,map%l_max
+          lm  = lm  + 1             !   lm  = lm  + 1 ! lm_dist (coord_theta, i, 3)
+          lmP = lmP + 1             !   lmP = lmP + 1 ! lmP_dist(coord_theta, i, 3)
+          map%lm2 (l,m) = lm
+          map%lm2l(lm)  = l
+          map%lm2m(lm)  = m
+          
+          if ( m == 0 ) map%l2lmAS(l)=lm
+          
+          map%lmP2(l,m)  = lmP
+          map%lmP2l(lmP) = l
+          map%lmP2m(lmP) = m
+
+          map%lm2lmP(lm)  = lmP
+          map%lmP2lm(lmP) = lm
+        end do
+        lmP = lmP + 1
+        map%lmP2(map%l_max+1,m) = lmP
+        map%lmP2l(lmP) = map%l_max+1
+        map%lmP2m(lmP) = m
+        map%lmP2lm(lmP)= Invalid_Idx
+      end do
+      if ( lm /= n_lm ) then
+         write(*,"(2(A,I6))") 'Wrong lm=',lm," != n_lm = ", n_lm
+         call abortRun('Stop run in distribute_theta')
+      end if
+      if ( lmP /= n_lmP ) then
+         write(*,"(3(A,I6))") 'Wrong lmP=',lm," != n_lmP = ", n_lmP
+         call abortRun('Stop run in distribute_theta')
+      end if
+
+      map%lm2lmS   = Invalid_Idx
+      map%lm2lmA   = Invalid_Idx
+      map%lmP2lmPS = Invalid_Idx
+      map%lmP2lmPA = Invalid_Idx
+      
+      do lm=1,n_lm
+         l=map%lm2l(lm)
+         m=map%lm2m(lm)
+         if ( l > 0 .and. l > m ) then
+            map%lm2lmS(lm)=map%lm2(l-1,m)
+         else
+            map%lm2lmS(lm)=-1
+         end if
+         if ( l < map%l_max ) then
+            map%lm2lmA(lm)=map%lm2(l+1,m)
+         else
+            map%lm2lmA(lm)=-1
+         end if
+      end do
+      do lmP=1,n_lmP
+         l=map%lmP2l(lmP)
+         m=map%lmP2m(lmP)
+         if ( l > 0 .and. l > m ) then
+            map%lmP2lmPS(lmP)=map%lmP2(l-1,m)
+         else
+            map%lmP2lmPS(lmP)=-1
+         end if
+         if ( l < map%l_max+1 ) then
+            map%lmP2lmPA(lmP)=map%lmP2(l+1,m)
+         else
+            map%lmP2lmPA(lmP)=-1
+         end if
+      end do
+   end subroutine map_lm_standard
    
 !    !----------------------------------------------------------------------------
 !    subroutine distribute_lo_simple(idx_dist, l_max, m_max, minc)
@@ -669,8 +752,13 @@ contains
    !----------------------------------------------------------------------------   
    subroutine distribute_discontiguous_snake(dist, max_len, N, p)
       !  
-      !  Distributes N points amongst p ranks using snake ordering.
-      !  max_len is supposed to be the ceiling(N/p)
+      !   Distributes a list of points [x1, x2, ..., xN] amonst p ranks using
+      !   snake ordering. The output is just a list containing the indexes
+      !   of these points (e.g. [0,7,8,15]).
+      !  
+      !   max_len is supposed to be the ceiling(N/p)
+      !  
+      !   Author: Rafael Lago, MPCDF, June 2018
       !  
       integer, intent(in)    :: max_len, N, p
       integer, intent(inout) :: dist(0:p-1, 0:max_len)
@@ -699,8 +787,13 @@ contains
    !----------------------------------------------------------------------------   
    subroutine distribute_discontiguous_roundrobin(dist, max_len, N, p)
       !  
-      !  Distributes N points amongst p ranks using round Robin ordering.
-      !  max_len is supposed to be the ceiling(N/p)
+      !   Distributes a list of points [x1, x2, ..., xN] amonst p ranks using
+      !   round robin ordering. The output is just a list containing the indexes
+      !   of these points (e.g. [0,4,8,12]).
+      !  
+      !   max_len is supposed to be the ceiling(N/p)
+      !  
+      !   Author: Rafael Lago, MPCDF, June 2018
       !  
       integer, intent(in)    :: max_len, N, p
       integer, intent(inout) :: dist(0:p-1, 0:max_len)
@@ -721,11 +814,18 @@ contains
       end do
    end subroutine distribute_discontiguous_roundrobin
    
-   !-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine distribute_contiguous_first(dist,N,p)
       !  
-      !  Distributes N points amongst p ranks. If N is not divisible by p, add
-      !  one extra point in the first ranks (thus, "front")
+      !   Distributes a list of points [x1, x2, ..., xN] amonst p ranks such 
+      !   that each rank receives a "chunk" of points. The output are three 
+      !   integers (per rank) referring to the number of points, the first 
+      !   points and the last point of the chunk (e.g. [4,0,3]).
+      !  
+      !   If the number of points is not divisible by p, we add one extra point
+      !   in the first N-(N/p) ranks (thus, "first")
+      !  
+      !   Author: Rafael Lago, MPCDF, June 2018
       !  
       integer, intent(in) :: p
       integer, intent(in) :: N
@@ -740,11 +840,13 @@ contains
          dist(i,2) = loc*(i+1) + min(i+1,rem)
       end do
    end subroutine distribute_contiguous_first
-   !-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine distribute_contiguous_last(dist,N,p)
       !  
-      !  Like above, but extra points go in the last ranks instead of 
-      !  the first ranks
+      !   Like distribute_contiguous_first, but extra points go into the 
+      !   last N-(N/p) ranks (thus, "last")
+      !  
+      !   Author: Rafael Lago, MPCDF, June 2018
       !  
       integer, intent(in) :: p
       integer, intent(in) :: N
@@ -760,10 +862,12 @@ contains
       end do
    end subroutine distribute_contiguous_last
    
-   !-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine print_contiguous_distribution(dist,p,name)
       !  
       !  Cosmetic function to display the distributio of the points
+      !  
+      !   Author: Rafael Lago, MPCDF, June 2018
       !  
       integer, intent(in) :: p
       integer, intent(in) :: dist(0:p-1,0:2)
@@ -781,10 +885,12 @@ contains
       end do
    end subroutine print_contiguous_distribution
    
-   !-------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------
    subroutine print_discontiguous_distribution(dist,max_len,p,name)
       !  
       !  Cosmetic function to display the distributio of the points
+      !  
+      !   Author: Rafael Lago, MPCDF, June 2018
       !  
       integer, intent(in) :: max_len, p
       integer, intent(in) :: dist(0:p-1,0:max_len)

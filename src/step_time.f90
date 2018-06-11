@@ -12,8 +12,8 @@ module step_time_mod
    use constants, only: zero, one, half
    use mem_alloc, only: bytes_allocated, memWrite
    use geometry, only: n_r_max, l_max, l_maxMag, n_r_maxMag, &
-       &                 lm_max, lmP_max, lm_maxMag, lm_loc,   &
-       &                 lm_locMag, lmP_loc, l_r, u_r, l_r_Mag,&
+       &                 lm_max, lmP_max, lm_maxMag, n_lm,   &
+       &                 n_lm_Mag, n_lmP, l_r, u_r, l_r_Mag,&
        &                 u_r_Mag, n_r_icb, n_r_cmb
    use num_param, only: n_time_steps, runTimeLimit, tEnd, dtMax, &
        &                dtMin, tScale, alpha, runTime
@@ -117,36 +117,36 @@ contains
       local_bytes_used = bytes_allocated
 
       if ( l_double_curl ) then
-         allocate( dflowdt_Rdist_container(lm_loc,l_r:u_r,1:4) )
-         dVxVhLM_dist(1:lm_loc,l_r:u_r) => dflowdt_Rdist_container(:,:,4)
-         bytes_allocated = bytes_allocated+ 4*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
+         allocate( dflowdt_Rdist_container(n_lm,l_r:u_r,1:4) )
+         dVxVhLM_dist(1:n_lm,l_r:u_r) => dflowdt_Rdist_container(:,:,4)
+         bytes_allocated = bytes_allocated+ 4*n_lm*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       else
-         allocate( dflowdt_Rdist_container(lm_loc,l_r:u_r,1:3) )
+         allocate( dflowdt_Rdist_container(n_lm,l_r:u_r,1:3) )
          allocate( dVxVhLM_dist(1:1,1:1) )
-         bytes_allocated = bytes_allocated+ 3*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
+         bytes_allocated = bytes_allocated+ 3*n_lm*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       end if
-      dwdt_dist(1:lm_loc,l_r:u_r) => dflowdt_Rdist_container(:,:,1)
-      dzdt_dist(1:lm_loc,l_r:u_r) => dflowdt_Rdist_container(:,:,2)
-      dpdt_dist(1:lm_loc,l_r:u_r) => dflowdt_Rdist_container(:,:,3)
+      dwdt_dist(1:n_lm,l_r:u_r) => dflowdt_Rdist_container(:,:,1)
+      dzdt_dist(1:n_lm,l_r:u_r) => dflowdt_Rdist_container(:,:,2)
+      dpdt_dist(1:n_lm,l_r:u_r) => dflowdt_Rdist_container(:,:,3)
       
 
       if ( l_TP_form ) then
-         allocate( dsdt_Rdist_container(lm_loc,l_r:u_r,1:3) )
-         dVPrLM_dist(1:lm_loc,l_r:u_r) => dsdt_Rdist_container(:,:,3)
-         bytes_allocated = bytes_allocated+ 3*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
+         allocate( dsdt_Rdist_container(n_lm,l_r:u_r,1:3) )
+         dVPrLM_dist(1:n_lm,l_r:u_r) => dsdt_Rdist_container(:,:,3)
+         bytes_allocated = bytes_allocated+ 3*n_lm*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       else
-         allocate( dsdt_Rdist_container(lm_loc,l_r:u_r,1:2) )
+         allocate( dsdt_Rdist_container(n_lm,l_r:u_r,1:2) )
          allocate( dVPrLM_dist(1:1,1:1) )
-         bytes_allocated = bytes_allocated+ 2*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
+         bytes_allocated = bytes_allocated+ 2*n_lm*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       end if
-      dsdt_dist(1:lm_loc,l_r:u_r)   => dsdt_Rdist_container(:,:,1)
-      dVSrLM_dist(1:lm_loc,l_r:u_r) => dsdt_Rdist_container(:,:,2)
+      dsdt_dist(1:n_lm,l_r:u_r)   => dsdt_Rdist_container(:,:,1)
+      dVSrLM_dist(1:n_lm,l_r:u_r) => dsdt_Rdist_container(:,:,2)
 
       if ( l_chemical_conv ) then
-         allocate( dxidt_Rdist_container(lm_loc,l_r:u_r,1:2) )
-         dxidt_dist(1:lm_loc,l_r:u_r)   => dxidt_Rdist_container(:,:,1)
-         dVXirLM_dist(1:lm_loc,l_r:u_r) => dxidt_Rdist_container(:,:,2)
-         bytes_allocated = bytes_allocated+2*lm_loc*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
+         allocate( dxidt_Rdist_container(n_lm,l_r:u_r,1:2) )
+         dxidt_dist(1:n_lm,l_r:u_r)   => dxidt_Rdist_container(:,:,1)
+         dVXirLM_dist(1:n_lm,l_r:u_r) => dxidt_Rdist_container(:,:,2)
+         bytes_allocated = bytes_allocated+2*n_lm*(u_r-l_r+1)*SIZEOF_DEF_COMPLEX
       else
          allocate( dxidt_Rdist_container(1,1,1:2) )
          dxidt_dist(1:1,1:1)   => dxidt_Rdist_container(:,:,1)
@@ -155,16 +155,16 @@ contains
       end if
 
       ! the magnetic part
-      allocate( dbdt_Rdist_container(lm_locMag,l_r_Mag:u_r_Mag,1:3) )
-      dbdt_dist(1:lm_locMag,l_r_Mag:u_r_Mag)   => dbdt_Rdist_container(:,:,1)
-      djdt_dist(1:lm_locMag,l_r_Mag:u_r_Mag)   => dbdt_Rdist_container(:,:,2)
-      dVxBhLM_dist(1:lm_locMag,l_r_Mag:u_r_Mag)=> dbdt_Rdist_container(:,:,3)
-      bytes_allocated = bytes_allocated+ 3*lm_locMag*(u_r_Mag-l_r_Mag+1)*SIZEOF_DEF_COMPLEX
+      allocate( dbdt_Rdist_container(n_lm_Mag,l_r_Mag:u_r_Mag,1:3) )
+      dbdt_dist(1:n_lm_Mag,l_r_Mag:u_r_Mag)   => dbdt_Rdist_container(:,:,1)
+      djdt_dist(1:n_lm_Mag,l_r_Mag:u_r_Mag)   => dbdt_Rdist_container(:,:,2)
+      dVxBhLM_dist(1:n_lm_Mag,l_r_Mag:u_r_Mag)=> dbdt_Rdist_container(:,:,3)
+      bytes_allocated = bytes_allocated+ 3*n_lm_Mag*(u_r_Mag-l_r_Mag+1)*SIZEOF_DEF_COMPLEX
 
       ! first touch dist
       do nR=l_r,u_r
          !$OMP PARALLEL do 
-         do lm=1,lm_loc
+         do lm=1,n_lm
             if ( l_mag ) then
                dbdt_dist(lm,nR)=zero
                djdt_dist(lm,nR)=zero
@@ -358,10 +358,10 @@ contains
       real(cp) :: EparaxiLMr_Rloc(l_max+1,l_r:u_r)
 
       !--- Nonlinear magnetic boundary conditions needed in s_updateB.f :
-      complex(cp) :: br_vt_lm_cmb(lmP_loc)    ! product br*vt at CMB
-      complex(cp) :: br_vp_lm_cmb(lmP_loc)    ! product br*vp at CMB
-      complex(cp) :: br_vt_lm_icb(lmP_loc)    ! product br*vt at ICB
-      complex(cp) :: br_vp_lm_icb(lmP_loc)    ! product br*vp at ICB
+      complex(cp) :: br_vt_lm_cmb(n_lmP)    ! product br*vt at CMB
+      complex(cp) :: br_vp_lm_cmb(n_lmP)    ! product br*vp at CMB
+      complex(cp) :: br_vt_lm_icb(n_lmP)    ! product br*vt at ICB
+      complex(cp) :: br_vp_lm_icb(n_lmP)    ! product br*vp at ICB
       complex(cp) :: b_nl_cmb(lm_max)         ! nonlinear bc for b at CMB
       complex(cp) :: aj_nl_cmb(lm_max)        ! nonlinear bc for aj at CMB
       complex(cp) :: aj_nl_icb(lm_max)        ! nonlinear bc for dr aj at ICB
@@ -420,9 +420,9 @@ contains
       complex(cp) :: tmp_cp
       
 !       !--- Duplications - yay -.-"  [180419.Lago]
-      complex(cp) :: b_nl_cmb_Rdist(lm_loc)         ! nonlinear bc for b at CMB
-      complex(cp) :: aj_nl_cmb_Rdist(lm_loc)        ! nonlinear bc for aj at CMB
-      complex(cp) :: aj_nl_icb_Rdist(lm_loc)        ! nonlinear bc for dr aj at ICB
+      complex(cp) :: b_nl_cmb_Rdist(n_lm)         ! nonlinear bc for b at CMB
+      complex(cp) :: aj_nl_cmb_Rdist(n_lm)        ! nonlinear bc for aj at CMB
+      complex(cp) :: aj_nl_icb_Rdist(n_lm)        ! nonlinear bc for dr aj at ICB
 
 
       if ( lVerbose ) write(*,'(/,'' ! STARTING STEP_TIME !'')')
@@ -960,16 +960,16 @@ contains
             nR_i1=max(1,l_r)
             nR_i2=min(n_r_max,u_r)
             write(*,"(A,10ES20.12)") "middl: dwdt,dsdt,dzdt,dpdt = ",&
-                 & get_global_sum_dist( dwdt_dist(1:lm_loc,nR_i1:nR_i2) ),       &
-                 & get_global_sum_dist( dsdt_dist(1:lm_loc,nR_i1:nR_i2) ),       &
-                 & get_global_sum_dist( dzdt_dist(1:lm_loc,nR_i1:nR_i2) ),       &
-                 & get_global_sum_dist( dpdt_dist(1:lm_loc,nR_i1:nR_i2) ),       &
-                 & get_global_sum_dist( dVSrLM_dist(1:lm_loc,:) )
+                 & get_global_sum_dist( dwdt_dist(1:n_lm,nR_i1:nR_i2) ),       &
+                 & get_global_sum_dist( dsdt_dist(1:n_lm,nR_i1:nR_i2) ),       &
+                 & get_global_sum_dist( dzdt_dist(1:n_lm,nR_i1:nR_i2) ),       &
+                 & get_global_sum_dist( dpdt_dist(1:n_lm,nR_i1:nR_i2) ),       &
+                 & get_global_sum_dist( dVSrLM_dist(1:n_lm,:) )
             if ( l_mag ) then
                write(*,"(A,6ES20.12)") "middl: dbdt,djdt,dVxBhLM = ",&
-                    & get_global_sum_dist( dbdt_dist(1:lm_loc,nR_i1:nR_i2) ),    &
-                    & get_global_sum_dist( djdt_dist(1:lm_loc,nR_i1:nR_i2) ),    &
-                    & get_global_sum_dist( dVxBhLM_dist(1:lm_loc,:) )
+                    & get_global_sum_dist( dbdt_dist(1:n_lm,nR_i1:nR_i2) ),    &
+                    & get_global_sum_dist( djdt_dist(1:n_lm,nR_i1:nR_i2) ),    &
+                    & get_global_sum_dist( dVxBhLM_dist(1:n_lm,:) )
             end if
          end if
          
@@ -1061,7 +1061,7 @@ contains
          if ( lVerbose ) write(*,*) "This part needs to be reviewed!", __LINE__, __FILE__
          PERFON('output')
          if ( l_r <= n_r_cmb .and. l_cmb .and. l_dt_cmb_field ) then
-            call gather_Flm(dbdt_dist(1:lm_loc,n_r_cmb), dbdt_CMB(1:lm_max))
+            call gather_Flm(dbdt_dist(1:n_lm,n_r_cmb), dbdt_CMB(1:lm_max))
             call scatter_from_rank0_to_lo(dbdt_CMB, dbdt_CMB_LMloc)
          end if
          if ( lVerbose ) write(*,*) "! start real output"

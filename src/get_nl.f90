@@ -15,7 +15,7 @@ module grid_space_arrays_mod
    use general_arrays_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use geometry, only: nrp, n_phi_max, n_theta_beg, n_theta_end
+   use geometry, only: nrp, n_phi_max, l_theta, u_theta
    use communications, only: slice_f, gather_f
    use radial_functions, only: or2, orho1, beta, otemp1, visc, r, &
        &                       lambda, or4, or1, alpha0, temp0
@@ -268,7 +268,7 @@ contains
 
       if ( l_mag_LF .and. (nBc == 0 .or. lRmsCalc) .and. nR>n_r_LCR ) then
          !------ Get the Lorentz force:
-         do nTheta=n_theta_beg, n_theta_end
+         do nTheta=l_theta, u_theta
 
             nThetaNHS=(nTheta+1)/2
             or4sn2   =or4(nR)*osn2(nThetaNHS)
@@ -299,7 +299,7 @@ contains
       if ( l_conv_nl .and. (nBc == 0 .or. lRmsCalc) ) then
 
          !------ Get Advection:
-         do nTheta=n_theta_beg, n_theta_end ! loop over theta points in block
+         do nTheta=l_theta, u_theta ! loop over theta points in block
             nThetaNHS=(nTheta+1)/2
             or4sn2   =or4(nR)*osn2(nThetaNHS)
             csn2     =cosn2(nThetaNHS)
@@ -348,7 +348,7 @@ contains
       if ( l_heat_nl .and. nBc == 0 ) then
          if ( l_TP_form ) then
             !------ Get V S, the divergence of it is entropy advection:
-            do nTheta=n_theta_beg, n_theta_end
+            do nTheta=l_theta, u_theta
                nThetaNHS=(nTheta+1)/2
                or2sn2=or2(nR)*osn2(nThetaNHS)
                do nPhi=1,n_phi_max     ! calculate v*s components
@@ -368,7 +368,7 @@ contains
             end do  ! theta loop
          else
             !------ Get V S, the divergence of it is entropy advection:
-            do nTheta=n_theta_beg, n_theta_end
+            do nTheta=l_theta, u_theta
                nThetaNHS=(nTheta+1)/2
                or2sn2=or2(nR)*osn2(nThetaNHS)
                do nPhi=1,n_phi_max     ! calculate v*s components
@@ -385,7 +385,7 @@ contains
 
       if ( l_chemical_conv .and. nBc == 0 ) then
          !------ Get V S, the divergence of it is the advection of chem comp:
-         do nTheta=n_theta_beg, n_theta_end
+         do nTheta=l_theta, u_theta
             nThetaNHS=(nTheta+1)/2
             or2sn2=or2(nR)*osn2(nThetaNHS)
             do nPhi=1,n_phi_max     ! calculate v*s components
@@ -400,7 +400,7 @@ contains
       end if     ! chemical composition equation required ?
 
       if ( l_precession .and. nBc == 0 ) then
-         do nTheta=n_theta_beg, n_theta_end
+         do nTheta=l_theta, u_theta
             nThetaNHS=(nTheta+1)/2
             posnalp=-two*oek*po*sin(prec_angle)*osn1(nThetaNHS)
             cnt=cosTheta(nTheta)
@@ -425,7 +425,7 @@ contains
          if ( nBc == 0 .and. nR>n_r_LCR ) then
 
             !------ Get (V x B) , the curl of this is the dynamo term:
-            do nTheta=n_theta_beg, n_theta_end
+            do nTheta=l_theta, u_theta
                nThetaNHS=(nTheta+1)/2
                or4sn2=or4(nR)*osn2(nThetaNHS)
 
@@ -447,7 +447,7 @@ contains
             end do   ! theta loop
 
          else if ( nBc == 1 .or. nR<=n_r_LCR ) then ! stress free boundary
-            do nTheta=n_theta_beg, n_theta_end
+            do nTheta=l_theta, u_theta
                nThetaNHS=(nTheta+1)/2
                or4sn2   =or4(nR)*osn2(nThetaNHS)
                do nPhi=1,n_phi_max
@@ -461,7 +461,7 @@ contains
          else if ( nBc == 2 ) then  ! rigid boundary :
 
             !----- Only vp /= 0 at boundary allowed (rotation of boundaries about z-axis):
-            do nTheta=n_theta_beg, n_theta_end
+            do nTheta=l_theta, u_theta
                nThetaNHS=(nTheta+1)/2
                or4sn2   =or4(nR)*osn2(nThetaNHS)
                do nPhi=1,n_phi_max
@@ -477,7 +477,7 @@ contains
 
       if ( l_anel .and. nBc == 0 ) then
          !------ Get viscous heating
-         do nTheta=n_theta_beg, n_theta_end ! loop over theta points in block
+         do nTheta=l_theta, u_theta ! loop over theta points in block
             nThetaNHS=(nTheta+1)/2
             csn2     =cosn2(nThetaNHS)
             if ( mod(nTheta,2) == 0 ) csn2=-csn2 ! South, odd function in theta
@@ -510,7 +510,7 @@ contains
 
          if ( l_mag_nl .and. nR>n_r_LCR ) then
             !------ Get ohmic losses
-            do nTheta=n_theta_beg, n_theta_end ! loop over theta points in block
+            do nTheta=l_theta, u_theta ! loop over theta points in block
                nThetaNHS=(nTheta+1)/2
                do nPhi=1,n_phi_max
                   this%OhmLoss(nPhi,nTheta)= or2(nR)*otemp1(nR)*lambda(nR)*  &
@@ -525,7 +525,7 @@ contains
       end if  ! Viscous heating and Ohmic losses ?
 
       if ( lRmsCalc ) then
-         do nTheta=n_theta_beg, n_theta_end ! loop over theta points in block
+         do nTheta=l_theta, u_theta ! loop over theta points in block
             snt=sinTheta(nTheta)
             cnt=cosTheta(nTheta)
             rsnt=r(nR)*snt

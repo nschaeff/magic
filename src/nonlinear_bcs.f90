@@ -2,7 +2,7 @@ module nonlinear_bcs
 
    use precision_mod
    use geometry, only: nrp, lmP_max, n_phi_max, l_axi,            &
-       &                 n_theta_beg, n_theta_end, lmP_loc, lm_loc, &
+       &                 l_theta, u_theta, n_lmP, n_lm, &
        &                 n_r_cmb, n_r_icb
    use radial_data, only: 
    use radial_functions, only: r_cmb, r_icb, rho0
@@ -48,25 +48,25 @@ contains
       !
     
       !-- input:
-      real(cp), intent(in) :: br(n_phi_max,n_theta_beg:n_theta_end)      ! r**2 * B_r
-      real(cp), intent(in) :: vt(n_phi_max,n_theta_beg:n_theta_end)      ! r*sin(theta) U_theta
-      real(cp), intent(in) :: vp(n_phi_max,n_theta_beg:n_theta_end)      ! r*sin(theta) U_phi
+      real(cp), intent(in) :: br(n_phi_max,l_theta:u_theta)      ! r**2 * B_r
+      real(cp), intent(in) :: vt(n_phi_max,l_theta:u_theta)      ! r*sin(theta) U_theta
+      real(cp), intent(in) :: vp(n_phi_max,l_theta:u_theta)      ! r*sin(theta) U_phi
       real(cp), intent(in) :: omega          ! rotation rate of mantle or IC
       real(cp), intent(in) :: O_r_E_2        ! 1/r**2
       real(cp), intent(in) :: O_rho          ! 1/rho0 (anelastic)
     
       !-- Output variables:
       ! br*vt/(sin(theta)**2*r**2)
-      complex(cp), intent(inout) :: br_vt_lm(lmP_loc)
+      complex(cp), intent(inout) :: br_vt_lm(n_lmP)
       ! br*(vp/(sin(theta)**2*r**2)-omega_ma)
-      complex(cp), intent(inout) :: br_vp_lm(lmP_loc)
+      complex(cp), intent(inout) :: br_vp_lm(n_lmP)
     
       !-- Local variables:
       integer :: n_theta     ! number of theta position
       integer :: n_theta_rel ! number of theta position in block
       integer :: n_phi       ! number of longitude
-      real(cp) :: br_vt(n_phi_max,n_theta_beg:n_theta_end)
-      real(cp) :: br_vp(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp) :: br_vt(n_phi_max,l_theta:u_theta)
+      real(cp) :: br_vp(n_phi_max,l_theta:u_theta)
       real(cp) :: fac          ! 1/( r**2 sin(theta)**2 )
     
       ! 20180328 Lago
@@ -75,7 +75,7 @@ contains
       ! This used to have OMP stuff in it. I'm deleting it because it needs 
       ! to be reworked anyway!
     
-      do n_theta_rel=n_theta_beg,n_theta_end
+      do n_theta_rel=l_theta,u_theta
          fac=O_sin_theta(n_theta)*O_sin_theta(n_theta)*O_r_E_2*O_rho
          do n_phi=1,n_phi_max
             br_vt(n_phi,n_theta)= fac*br(n_phi,n_theta)*vt(n_phi,n_theta)
@@ -96,7 +96,7 @@ contains
       end if
     
       !-- Legendre transform contribution of thetas in block:
-      call legTF2(n_theta_beg,br_vt_lm,br_vp_lm,br_vt,br_vp)
+      call legTF2(l_theta,br_vt_lm,br_vp_lm,br_vt,br_vp)
 #endif
     
    end subroutine get_br_v_bcs
@@ -120,12 +120,12 @@ contains
          
       !-- Input variables:
       character(len=3), intent(in) :: bc                 ! Distinguishes 'CMB' and 'ICB'
-      complex(cp),      intent(in) :: br_vt_lm(lmP_loc)  ! [br*vt/(r**2*sin(theta)**2)]
-      complex(cp),      intent(in) :: br_vp_lm(lmP_loc)  ! [br*vp/(r**2*sin(theta)**2)
+      complex(cp),      intent(in) :: br_vt_lm(n_lmP)  ! [br*vt/(r**2*sin(theta)**2)]
+      complex(cp),      intent(in) :: br_vp_lm(n_lmP)  ! [br*vp/(r**2*sin(theta)**2)
 
       !-- Output variables:
-      complex(cp), intent(out) :: b_nl_bc(lm_loc)  ! nonlinear bc for b
-      complex(cp), intent(out) :: aj_nl_bc(lm_loc) ! nonlinear bc for aj
+      complex(cp), intent(out) :: b_nl_bc(n_lm)  ! nonlinear bc for b
+      complex(cp), intent(out) :: aj_nl_bc(n_lm) ! nonlinear bc for aj
 
       !-- Local variables:
       integer :: l,m       ! degree and order
@@ -143,7 +143,7 @@ contains
          if (dist_map%lm2(0,0) > 0)  b_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp) 
          if (dist_map%lm2(0,0) > 0) aj_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp) 
          
-         do lm=1,lm_loc
+         do lm=1,n_lm
             l   =dist_map%lm2l(lm)
             m   =dist_map%lm2m(lm)
             if ((l==0) .and. (m==0)) cycle
@@ -173,7 +173,7 @@ contains
          ! if m=0 is in this rank, aj_nl_bc(1) = 1.0
          if (dist_map%lm2(0,0) > 0) aj_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp)  
          
-         do lm=1,lm_loc
+         do lm=1,n_lm
             l   =dist_map%lm2l(lm)
             m   =dist_map%lm2m(lm)
             if ((l==0) .and. (m==0)) cycle
@@ -216,14 +216,14 @@ contains
       real(cp), intent(in) :: omega
 
       !-- output:
-      real(cp), intent(out) :: vrr(n_phi_max,n_theta_beg:n_theta_end)
-      real(cp), intent(out) :: vpr(n_phi_max,n_theta_beg:n_theta_end)
-      real(cp), intent(out) :: vtr(n_phi_max,n_theta_beg:n_theta_end)
-      real(cp), intent(out) :: cvrr(n_phi_max,n_theta_beg:n_theta_end)
-      real(cp), intent(out) :: dvrdtr(n_phi_max,n_theta_beg:n_theta_end)
-      real(cp), intent(out) :: dvrdpr(n_phi_max,n_theta_beg:n_theta_end)
-      real(cp), intent(out) :: dvtdpr(n_phi_max,n_theta_beg:n_theta_end)
-      real(cp), intent(out) :: dvpdpr(n_phi_max,n_theta_beg:n_theta_end)
+      real(cp), intent(out) :: vrr(n_phi_max,l_theta:u_theta)
+      real(cp), intent(out) :: vpr(n_phi_max,l_theta:u_theta)
+      real(cp), intent(out) :: vtr(n_phi_max,l_theta:u_theta)
+      real(cp), intent(out) :: cvrr(n_phi_max,l_theta:u_theta)
+      real(cp), intent(out) :: dvrdtr(n_phi_max,l_theta:u_theta)
+      real(cp), intent(out) :: dvrdpr(n_phi_max,l_theta:u_theta)
+      real(cp), intent(out) :: dvtdpr(n_phi_max,l_theta:u_theta)
+      real(cp), intent(out) :: dvpdpr(n_phi_max,l_theta:u_theta)
 
       !-- Local variables:
       real(cp) :: r2
@@ -241,8 +241,8 @@ contains
          return
       end if
 
-      nThetaCalc=n_theta_beg-1
-      do j=n_theta_beg,n_theta_end
+      nThetaCalc=l_theta-1
+      do j=l_theta,u_theta
          nThetaCalc=nThetaCalc+1
          nThetaNHS =(nThetaCalc+1)/2 ! northern hemisphere=odd n_theta
          do i=1,n_phi_max

@@ -123,8 +123,8 @@ contains
 
 
       local_bytes_used = bytes_allocated
-      call allocate_mappings(st_map,l_max,lm_max,lmP_max)
-      call allocate_mappings(lo_map,l_max,lm_max,lmP_max)
+      call allocate_mappings(st_map,l_max,lm_max,lmP_max,l_axi)
+      call allocate_mappings(lo_map,l_max,lm_max,lmP_max,l_axi)
       !call allocate_mappings(sn_map,l_max,lm_max,lmP_max)
 
       if ( rank == 0 ) then
@@ -242,9 +242,9 @@ contains
       lmP2lm(1:lmP_max) => st_map%lmP2lm
 
       call allocate_subblocks_mappings(st_sub_map,st_map,nLMBs,l_max,&
-           &                           lmStartB,lmStopB)
+           &                           lmStartB,lmStopB,l_axi)
       call allocate_subblocks_mappings(lo_sub_map,lo_map,nLMBs,l_max,&
-           &                           lmStartB,lmStopB)
+           &                           lmStartB,lmStopB,l_axi)
       !call allocate_subblocks_mappings(sn_sub_map,sn_map,nLMBs,l_max,lmStartB,lmStopB)
 
       !--- Getting lm sub-blocks:

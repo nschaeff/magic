@@ -7,8 +7,8 @@ module nonlinear_lm_mod
    use, intrinsic :: iso_c_binding
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use geometry, only: lm_max, l_max, lm_maxMag, lmP_max, lm_loc,         &
-       &             lm_locMag, lmP_loc, lm_locDC, lm_locChe, lm_locTP
+   use geometry, only: lm_max, l_max, lm_maxMag, lmP_max, n_lm,         &
+       &             n_lm_Mag, n_lmP, n_lm_DC, n_lm_Che, n_lm_TP
    use communications, only: slice_FlmP, gather_FlmP
    use logic, only : l_anel, l_conv_nl, l_corr, l_heat, l_anelastic_liquid, &
        &             l_mag_nl, l_mag_kin, l_mag_LF, l_conv, l_mag, l_RMS,   &
@@ -227,24 +227,24 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
       type(leg_helper_t), intent(in) :: leg_helper
     
       !-- Output of variables:
-      complex(cp), intent(out) :: dwdt(lm_loc),dzdt(lm_loc)
-      complex(cp), intent(out) :: dpdt(lm_loc),dsdt(lm_loc)
-      complex(cp), intent(out) :: dxidt(lm_locChe)
-      complex(cp), intent(out) :: dbdt(lm_locMag),djdt(lm_locMag)
-      complex(cp), intent(out) :: dVxBhLM(lm_locMag)
-      complex(cp), intent(out) :: dVxVhLM(lm_locDC)
-      complex(cp), intent(out) :: dVSrLM(lm_loc)
-      complex(cp), intent(out) :: dVXirLM(lm_locChe)
-      complex(cp), intent(out) :: dVPrLM(lm_locTP)
+      complex(cp), intent(out) :: dwdt(n_lm),dzdt(n_lm)
+      complex(cp), intent(out) :: dpdt(n_lm),dsdt(n_lm)
+      complex(cp), intent(out) :: dxidt(n_lm_Che)
+      complex(cp), intent(out) :: dbdt(n_lm_Mag),djdt(n_lm_Mag)
+      complex(cp), intent(out) :: dVxBhLM(n_lm_Mag)
+      complex(cp), intent(out) :: dVxVhLM(n_lm_DC)
+      complex(cp), intent(out) :: dVSrLM(n_lm)
+      complex(cp), intent(out) :: dVXirLM(n_lm_Che)
+      complex(cp), intent(out) :: dVPrLM(n_lm_TP)
     
       !-- Local variables:
       integer :: l,m,lm,lmS,lmA,lmP,lmPS,lmPA
-      complex(cp) :: CorPol(lm_loc)
-      complex(cp) :: AdvPol(lm_loc),AdvTor(lm_loc)
-      complex(cp) :: LFPol(lm_loc),LFTor(lm_loc)
-      complex(cp) :: Geo(lm_loc),CLF(lm_loc),PLF(lm_loc)
-      complex(cp) :: ArcMag(lm_loc),Mag(lm_loc),CIA(lm_loc),Arc(lm_loc)
-      complex(cp) :: Buo(lm_loc)
+      complex(cp) :: CorPol(n_lm)
+      complex(cp) :: AdvPol(n_lm),AdvTor(n_lm)
+      complex(cp) :: LFPol(n_lm),LFTor(n_lm)
+      complex(cp) :: Geo(n_lm),CLF(n_lm),PLF(n_lm)
+      complex(cp) :: ArcMag(n_lm),Mag(n_lm),CIA(n_lm),Arc(n_lm)
+      complex(cp) :: Buo(n_lm)
       complex(cp) :: AdvPol_loc,CorPol_loc,AdvTor_loc,CorTor_loc
       complex(cp) :: dsdt_loc, dxidt_loc
     
@@ -306,7 +306,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                end if
             end if
             
-            do lm=lm_maybe_skip_first,lm_loc
+            do lm=lm_maybe_skip_first,n_lm
                l   =dist_map%lm2l(lm)
                m   =dist_map%lm2m(lm)
                lmS =dist_map%lm2lmS(lm)
@@ -583,7 +583,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
       !---------------------------------------------------------------------------------------------
       ! This is (more or less) how this specific piece will look like afterwards: 
       !---------------------------------------------------------------------------------------------
-      !                do lm=1,lm_loc
+      !                do lm=1,n_lm
       !                   l = dist_map%lm2l(lm)
       !                   m = dist_map%lm2m(lm)
       !                   lm_glb = lm2(l,m)
@@ -598,13 +598,13 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
       !                   !CIA(lm)=CorPol(lm)+Buo(lm)+AdvPol(lm)
       !                end do
       !
-      !                call hIntRms(Geo(1:lm_loc),nR,1,lm_loc,0,Geo2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(CLF(1:lm_loc),nR,1,lm_loc,0,CLF2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(PLF(1:lm_loc),nR,1,lm_loc,0,PLF2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(Mag(1:lm_loc),nR,1,lm_loc,0,Mag2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(Arc(1:lm_loc),nR,1,lm_loc,0,Arc2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(ArcMag(1:lm_loc),nR,1,lm_loc,0,ArcMag2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(CIA(1:lm_loc),nR,1,lm_loc,0,CIA2hInt(0:l_max,nR),dist_map,.false.)               
+      !                call hIntRms(Geo(1:n_lm),nR,1,n_lm,0,Geo2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(CLF(1:n_lm),nR,1,n_lm,0,CLF2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(PLF(1:n_lm),nR,1,n_lm,0,PLF2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(Mag(1:n_lm),nR,1,n_lm,0,Mag2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(Arc(1:n_lm),nR,1,n_lm,0,Arc2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(ArcMag(1:n_lm),nR,1,n_lm,0,ArcMag2hInt(0:l_max,nR),dist_map,.false.)
+      !                call hIntRms(CIA(1:n_lm),nR,1,n_lm,0,CIA2hInt(0:l_max,nR),dist_map,.false.)               
       !                
       !                call mpi_iallreduce(MPI_IN_PLACE, Geo2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(1), ierr)
       !                call mpi_iallreduce(MPI_IN_PLACE, CLF2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(2), ierr)
@@ -678,7 +678,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
 
             ! In case double curl is calculated dpdt is useless
             if ( (.not. l_double_curl) .or. lPressCalc ) then 
-               do lm=lm_maybe_skip_first,lm_loc
+               do lm=lm_maybe_skip_first,n_lm
                   l   =dist_map%lm2l(lm)
                   m   =dist_map%lm2m(lm)
                   lmS =dist_map%lm2lmS(lm)
@@ -735,7 +735,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                end do ! lm loop
             end if
          else
-            do lm=lm_maybe_skip_first,lm_loc
+            do lm=lm_maybe_skip_first,n_lm
                dwdt(lm) =0.0_cp
                dzdt(lm) =0.0_cp
                dpdt(lm) =0.0_cp
@@ -776,7 +776,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                dsdt(lm)=dsdt_loc
             end if
     
-            do lm=lm_maybe_skip_first,lm_loc
+            do lm=lm_maybe_skip_first,n_lm
                l   =dist_map%lm2l(lm)
                m   =dist_map%lm2m(lm)
                lmP =dist_map%lm2lmP(lm)
@@ -824,7 +824,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
             end do
          else
             
-            do lm=lm_maybe_skip_first,lm_loc
+            do lm=lm_maybe_skip_first,n_lm
                dsdt(lm)  =0.0_cp
                dVSrLM(lm)=0.0_cp
             end do
@@ -837,7 +837,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                dxidt(lm)  =epscXi
             end if
     
-            do lm=lm_maybe_skip_first,lm_loc
+            do lm=lm_maybe_skip_first,n_lm
                l   =dist_map%lm2l(lm)
                m   =dist_map%lm2m(lm)
                lmP =dist_map%lm2lmP(lm)
@@ -859,7 +859,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
          end if
     
          if ( l_mag_nl .or. l_mag_kin  ) then
-            do lm=1,lm_loc
+            do lm=1,n_lm
                l   =dist_map%lm2l(lm)
                m   =dist_map%lm2m(lm)
                lmP =dist_map%lm2lmP(lm)
@@ -904,7 +904,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                end if
             end do
          else if ( l_mag ) then
-            do lm=1,lm_loc
+            do lm=1,n_lm
                dbdt(lm)   =zero
                djdt(lm)   =zero
                dVxBhLM(lm)=zero
@@ -918,7 +918,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
             !----- Stress free boundary, only nl mag. term for poloidal field needed.
             !      Because the radial derivative will be taken, this will contribute to
             !      the other radial grid points.
-            do lm=1,lm_loc
+            do lm=1,n_lm
                l   = dist_map%lm2l(lm)
                m   = dist_map%lm2m(lm)
                lmP = dist_map%lm2lmP(lm)
@@ -943,23 +943,23 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
             end do
     
          else
-            do lm=1,lm_loc
+            do lm=1,n_lm
                if ( l_mag ) dVxBhLM(lm)=zero
                dVSrLM(lm) =zero
             end do
          end if
          if ( l_double_curl ) then
-            do lm=1,lm_loc
+            do lm=1,n_lm
                dVxVhLM(lm)=zero
             end do
          end if
          if ( l_chemical_conv ) then
-            do lm=1,lm_loc
+            do lm=1,n_lm
                dVXirLM(lm)=zero
             end do
          end if
          if ( l_TP_form ) then
-            do lm=1,lm_loc
+            do lm=1,n_lm
                dVPrLM(lm)=zero
             end do
          end if
