@@ -1,6 +1,21 @@
+2018-06-12
+-------------------------------------------------------------------------------
+- [merged] distribute_theta -> LMmapping
+  - initialize_mappings will allocate all mappings (instead of 
+    initialize_blocking)
+- Refactored fft_mkl a little bit too (just stylistic changes)
+- [deleted] lm_dist and lmP_dist. Those were redundant, as all the information
+  is already in dist_map%lm2 and dist_map%lmP2.
+
 2018-06-11
 -------------------------------------------------------------------------------
-- Moved init_shtns and init_fft_phi to ????????
+- [moved] initialize_shtns and initialize_fft_phi to magic.f90
+- [created] mapping.f90
+- I will remove the type "mappings". This removes the abstraction but also 
+  simplifies several calls and removes the need for the lm2, lmP2 (and so on) 
+  pointers from blocking, which were quite redundant. Also, the notation was 
+  somewhat misleading (though I'm not fully certain of what notation would be 
+  really the best in this case.
 
 2018-06-07
 -------------------------------------------------------------------------------

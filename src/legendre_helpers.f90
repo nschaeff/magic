@@ -16,7 +16,7 @@ module leg_helper_mod
        &             w_Rdist,dw_Rdist,ddw_Rdist, omega_ic,omega_ma,     &
        &             xi_Rdist
    use constants, only: zero, one, two
-   use distributed_theta, only: dist_map
+   use LMmapping, only: dist_map
 
    implicit none
 

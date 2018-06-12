@@ -18,7 +18,7 @@ module nonlinear_bcs
    use shtns, only: spat_to_SH, spat_to_SH_dist
 #endif
    use useful, only: abortRun
-   use distributed_theta, only: dist_map
+   use LMmapping, only: dist_map
 
    implicit none
 
