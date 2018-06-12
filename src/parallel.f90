@@ -56,7 +56,7 @@ module parallel_mod
    integer ::    comm_r,    comm_theta
    integer :: n_ranks_r, n_ranks_theta
    integer ::   coord_r,   coord_theta
-   integer, allocatable, protected :: gs2rank(:,:), &
+   integer, allocatable :: gs2rank(:,:), &
                                       rank2theta(:), &
                                       rank2r(:)
    
@@ -66,7 +66,7 @@ module parallel_mod
    integer ::    comm_m
    integer :: n_ranks_m
    integer ::   coord_m
-   integer, allocatable, protected :: lm2rank(:,:), &
+   integer, allocatable :: lm2rank(:,:), &
                                       rank2m(:)
    
    !   ML-Space (ML Loop)
@@ -74,7 +74,7 @@ module parallel_mod
    integer ::    comm_ml_l,    comm_ml_m
    integer :: n_ranks_ml_l, n_ranks_ml_m
    integer ::   coord_ml_l,   coord_ml_m
-   integer, allocatable, protected :: ml2rank(:,:), &
+   integer, allocatable :: ml2rank(:,:), &
                                       rank2ml_m(:), &
                                       rank2ml_l(:)
    

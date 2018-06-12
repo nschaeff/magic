@@ -123,8 +123,8 @@ contains
 
 
       local_bytes_used = bytes_allocated
-      call allocate_mappings(st_map,l_max,lm_max,lmP_max,l_axi)
-      call allocate_mappings(lo_map,l_max,lm_max,lmP_max,l_axi)
+      call allocate_mappings(st_map,lm_max,lmP_max,l_axi)
+      call allocate_mappings(lo_map,lm_max,lmP_max,l_axi)
       !call allocate_mappings(sn_map,l_max,lm_max,lmP_max)
 
       if ( rank == 0 ) then

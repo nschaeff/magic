@@ -30,7 +30,7 @@ module nonlinear_lm_mod
    use constants, only: zero, two
    use fields, only: w_Rdist, dw_Rdist, ddw_Rdist, z_Rdist, dz_Rdist
    use RMS_helpers, only: hIntRms
-   use distributed_theta, only: dist_map
+   use LMmapping, only: dist_map
 
    implicit none
    

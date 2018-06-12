@@ -131,7 +131,7 @@ program magic
    use mem_alloc
    use useful, only: abortRun
    use probe_mod, only: initialize_probes, finalize_probes
-   use distributed_theta, only: initialize_distributed_theta
+   use LMmapping, only: initialize_mapping, finalize_mapping
    use shtns
    use fft
    
@@ -226,7 +226,7 @@ program magic
    call initialize_distributed_geometry
    call distribute_truncation
    local_bytes_used=bytes_allocated
-   call initialize_distributed_theta
+   call initialize_mapping
    call initialize_fft_phi
    
    call initialize_LMLoop_data ! needed before radial_functions
@@ -414,6 +414,7 @@ program magic
    call finalize_radial_functions
    call finalize_blocking
    call finalize_shtns
+   call finalize_mapping
    call finalize_fft_phi
    call finalize_geometry
 

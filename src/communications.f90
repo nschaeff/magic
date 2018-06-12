@@ -15,7 +15,7 @@ module communications
    use logic, only: l_mag, l_conv, l_heat, l_chemical_conv, &
        &            l_mag_kin, l_TP_form, l_double_curl
    use useful, only: abortRun
-   use distributed_theta, only: dist_map
+   use LMmapping, only: dist_map
  
    implicit none
  

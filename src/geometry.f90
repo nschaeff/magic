@@ -14,7 +14,6 @@ module geometry
    use useful, only: abortRun
    use parallel_mod
    use mpi
-   use LMmapping, only: mappings, allocate_mappings, deallocate_mappings
    
    implicit none
    
@@ -116,6 +115,10 @@ module geometry
    !   dist_V(i,0)  = how many V points are there for rank i
    !   dist_V(i,1:) = an array containing all of the V points in rank i
    !   
+   !   Notice that n_lm, n_lmP and etc are not the same as lm_max and lmP_max.
+   !   The former stores the number of *local* points, the later stores the 
+   !   total number of points in all ranks.
+   !   
 
    !-- Distributed Grid Space 
    integer, allocatable, protected :: dist_theta(:,:)
@@ -144,7 +147,6 @@ module geometry
    !   n_lmP: total number of l and m points (for l_max+1) in this rank
    !   
    integer, allocatable, protected :: dist_m(:,:)
-   type(mappings),       protected :: map_lm
    integer, protected :: n_m, n_lm, n_lmP
    integer, protected :: n_m_array
    
@@ -295,7 +297,6 @@ contains
       
       !-- Finalize distributed lm
       deallocate(dist_m)
-      call deallocate_mappings(map_lm)      
       
    end subroutine finalize_geometry
    
@@ -386,9 +387,6 @@ contains
       if (l_chemical_conv) n_lm_Che = n_lm
       if (l_TP_form      ) n_lm_TP  = n_lm
       if (l_double_curl  ) n_lm_DC  = n_lm
-      
-      call allocate_mappings(map_lm,l_max,n_lm,n_lmP,l_axi)
-      call map_lm_standard(map_lm, dist_m(coord_m,:))
       
    end subroutine distribute_lm   
 
@@ -549,102 +547,102 @@ contains
      
    end subroutine distribute_snake_old
    
-   !----------------------------------------------------------------------------   
-   subroutine map_lm_standard(map,dist)
-      !   
-      !   Author: Rafael Lago, MPCDF, December 2017
-      !
-      type(mappings), intent(inout) :: map
-      integer,        intent(in)    :: dist(0:n_m_array)
-      
-      integer, parameter :: Invalid_Idx = -1 
-      
-      ! Local variables
-      integer :: m,l,lm,lmP,i
-      
-      map%lm2    = Invalid_Idx
-      map%lmP2   = Invalid_Idx
-      map%lm2l   = Invalid_Idx
-      map%lm2m   = Invalid_Idx
-      map%lmP2l  = Invalid_Idx
-      map%lmP2m  = Invalid_Idx
-      map%lm2lmP = Invalid_Idx
-      map%lmP2lm = Invalid_Idx
-      map%l2lmAS = Invalid_Idx
-      
-      map%lm2mc = -5 ! Lago@180405: I have no idea what this one is for. It needs to be completely implemented
-      
-      lm  = 0
-      lmP = 0
-      do i = 1, n_m_array
-        m  = dist(i)
-        if (m<0) cycle  ! m<0 means that this m is not in this rank
-        
-        do l=m,map%l_max
-          lm  = lm  + 1             !   lm  = lm  + 1 ! lm_dist (coord_theta, i, 3)
-          lmP = lmP + 1             !   lmP = lmP + 1 ! lmP_dist(coord_theta, i, 3)
-          map%lm2 (l,m) = lm
-          map%lm2l(lm)  = l
-          map%lm2m(lm)  = m
-          
-          if ( m == 0 ) map%l2lmAS(l)=lm
-          
-          map%lmP2(l,m)  = lmP
-          map%lmP2l(lmP) = l
-          map%lmP2m(lmP) = m
-
-          map%lm2lmP(lm)  = lmP
-          map%lmP2lm(lmP) = lm
-        end do
-        lmP = lmP + 1
-        map%lmP2(map%l_max+1,m) = lmP
-        map%lmP2l(lmP) = map%l_max+1
-        map%lmP2m(lmP) = m
-        map%lmP2lm(lmP)= Invalid_Idx
-      end do
-      if ( lm /= n_lm ) then
-         write(*,"(2(A,I6))") 'Wrong lm=',lm," != n_lm = ", n_lm
-         call abortRun('Stop run in distribute_theta')
-      end if
-      if ( lmP /= n_lmP ) then
-         write(*,"(3(A,I6))") 'Wrong lmP=',lm," != n_lmP = ", n_lmP
-         call abortRun('Stop run in distribute_theta')
-      end if
-
-      map%lm2lmS   = Invalid_Idx
-      map%lm2lmA   = Invalid_Idx
-      map%lmP2lmPS = Invalid_Idx
-      map%lmP2lmPA = Invalid_Idx
-      
-      do lm=1,n_lm
-         l=map%lm2l(lm)
-         m=map%lm2m(lm)
-         if ( l > 0 .and. l > m ) then
-            map%lm2lmS(lm)=map%lm2(l-1,m)
-         else
-            map%lm2lmS(lm)=-1
-         end if
-         if ( l < map%l_max ) then
-            map%lm2lmA(lm)=map%lm2(l+1,m)
-         else
-            map%lm2lmA(lm)=-1
-         end if
-      end do
-      do lmP=1,n_lmP
-         l=map%lmP2l(lmP)
-         m=map%lmP2m(lmP)
-         if ( l > 0 .and. l > m ) then
-            map%lmP2lmPS(lmP)=map%lmP2(l-1,m)
-         else
-            map%lmP2lmPS(lmP)=-1
-         end if
-         if ( l < map%l_max+1 ) then
-            map%lmP2lmPA(lmP)=map%lmP2(l+1,m)
-         else
-            map%lmP2lmPA(lmP)=-1
-         end if
-      end do
-   end subroutine map_lm_standard
+!    !----------------------------------------------------------------------------   
+!    subroutine map_lm_standard(map,dist)
+!       !   
+!       !   Author: Rafael Lago, MPCDF, December 2017
+!       !
+!       type(mappings), intent(inout) :: map
+!       integer,        intent(in)    :: dist(0:n_m_array)
+!       
+!       integer, parameter :: Invalid_Idx = -1 
+!       
+!       ! Local variables
+!       integer :: m,l,lm,lmP,i
+!       
+!       map%lm2    = Invalid_Idx
+!       map%lmP2   = Invalid_Idx
+!       map%lm2l   = Invalid_Idx
+!       map%lm2m   = Invalid_Idx
+!       map%lmP2l  = Invalid_Idx
+!       map%lmP2m  = Invalid_Idx
+!       map%lm2lmP = Invalid_Idx
+!       map%lmP2lm = Invalid_Idx
+!       map%l2lmAS = Invalid_Idx
+!       
+!       map%lm2mc = -5 ! Lago@180405: I have no idea what this one is for. It needs to be completely implemented
+!       
+!       lm  = 0
+!       lmP = 0
+!       do i = 1, n_m_array
+!         m  = dist(i)
+!         if (m<0) cycle  ! m<0 means that this m is not in this rank
+!         
+!         do l=m,map%l_max
+!           lm  = lm  + 1             !   lm  = lm  + 1 ! lm_dist (coord_theta, i, 3)
+!           lmP = lmP + 1             !   lmP = lmP + 1 ! lmP_dist(coord_theta, i, 3)
+!           map%lm2 (l,m) = lm
+!           map%lm2l(lm)  = l
+!           map%lm2m(lm)  = m
+!           
+!           if ( m == 0 ) map%l2lmAS(l)=lm
+!           
+!           map%lmP2(l,m)  = lmP
+!           map%lmP2l(lmP) = l
+!           map%lmP2m(lmP) = m
+! 
+!           map%lm2lmP(lm)  = lmP
+!           map%lmP2lm(lmP) = lm
+!         end do
+!         lmP = lmP + 1
+!         map%lmP2(map%l_max+1,m) = lmP
+!         map%lmP2l(lmP) = map%l_max+1
+!         map%lmP2m(lmP) = m
+!         map%lmP2lm(lmP)= Invalid_Idx
+!       end do
+!       if ( lm /= n_lm ) then
+!          write(*,"(2(A,I6))") 'Wrong lm=',lm," != n_lm = ", n_lm
+!          call abortRun('Stop run in distribute_theta')
+!       end if
+!       if ( lmP /= n_lmP ) then
+!          write(*,"(3(A,I6))") 'Wrong lmP=',lm," != n_lmP = ", n_lmP
+!          call abortRun('Stop run in distribute_theta')
+!       end if
+! 
+!       map%lm2lmS   = Invalid_Idx
+!       map%lm2lmA   = Invalid_Idx
+!       map%lmP2lmPS = Invalid_Idx
+!       map%lmP2lmPA = Invalid_Idx
+!       
+!       do lm=1,n_lm
+!          l=map%lm2l(lm)
+!          m=map%lm2m(lm)
+!          if ( l > 0 .and. l > m ) then
+!             map%lm2lmS(lm)=map%lm2(l-1,m)
+!          else
+!             map%lm2lmS(lm)=-1
+!          end if
+!          if ( l < map%l_max ) then
+!             map%lm2lmA(lm)=map%lm2(l+1,m)
+!          else
+!             map%lm2lmA(lm)=-1
+!          end if
+!       end do
+!       do lmP=1,n_lmP
+!          l=map%lmP2l(lmP)
+!          m=map%lmP2m(lmP)
+!          if ( l > 0 .and. l > m ) then
+!             map%lmP2lmPS(lmP)=map%lmP2(l-1,m)
+!          else
+!             map%lmP2lmPS(lmP)=-1
+!          end if
+!          if ( l < map%l_max+1 ) then
+!             map%lmP2lmPA(lmP)=map%lmP2(l+1,m)
+!          else
+!             map%lmP2lmPA(lmP)=-1
+!          end if
+!       end do
+!    end subroutine map_lm_standard
    
 !    !----------------------------------------------------------------------------
 !    subroutine distribute_lo_simple(idx_dist, l_max, m_max, minc)
@@ -865,8 +863,6 @@ contains
    !----------------------------------------------------------------------------
    subroutine print_contiguous_distribution(dist,p,name)
       !  
-      !  Cosmetic function to display the distributio of the points
-      !  
       !   Author: Rafael Lago, MPCDF, June 2018
       !  
       integer, intent(in) :: p
@@ -876,19 +872,17 @@ contains
       
       if (rank /= 0) return
       
-      print "(' ! ',A,' partition in rank ', I0, ': ', I0,'-',I0, '  (', I0, ' pts)')", name, &
+      print "(' !  Partition in rank_',A,' ', I0, ': ', I0,'-',I0, '  (', I0, ' pts)')", name, &
             0, dist(0,1), dist(0,2), dist(0,0)
             
       do i=1, p-1
-         print "(' !                rank ', I0, ': ', I0,'-',I0, '  (', I0, ' pts)')", &
+         print "(' !               rank_',A,' ', I0, ': ', I0,'-',I0, '  (', I0, ' pts)')", name, &
                i, dist(i,1), dist(i,2), dist(i,0)
       end do
    end subroutine print_contiguous_distribution
    
    !----------------------------------------------------------------------------
    subroutine print_discontiguous_distribution(dist,max_len,p,name)
-      !  
-      !  Cosmetic function to display the distributio of the points
       !  
       !   Author: Rafael Lago, MPCDF, June 2018
       !  
@@ -900,8 +894,15 @@ contains
       
       if (rank /= 0) return
       
-      do i=0, n_ranks_theta-1
-         write (*,'(A,I0,A,I0)', ADVANCE='NO') ' ! '//name//' partition in rank ', i, ' :', dist(i,1)
+      write (*,'(A,I0,A,I0)', ADVANCE='NO') ' !  Partition in rank_'//name//' ', 0, ' :', dist(0,1)
+      counter = 1
+      do j=2, dist(0,0)
+         write (*, '(A,I0)', ADVANCE='NO') ',', dist(0,j)
+      end do
+      write (*, '(A,I0,A)') "  (",dist(0,0)," pts)"
+      
+      do i=1, n_ranks_theta-1
+         write (*,'(A,I0,A,I0)', ADVANCE='NO') ' !               rank_'//name//' ', i, ' :', dist(i,1)
          counter = 1
          do j=2, dist(i,0)
             write (*, '(A,I0)', ADVANCE='NO') ',', dist(i,j)
