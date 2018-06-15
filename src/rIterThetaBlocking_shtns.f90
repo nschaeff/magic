@@ -87,7 +87,7 @@ contains
       if ( l_TO ) call this%TO_arrays%initialize()
       call this%dtB_arrays%initialize()
       
-      call this%nl_lm%initialize(n_lmP)
+      call this%nl_lm%initialize(n_lmP_loc)
       
 
    end subroutine initialize_rIterThetaBlocking_shtns
@@ -211,7 +211,7 @@ contains
          call this%transform_to_lm_space_shtns
       
       else if ( l_mag ) then
-         do lm=1,n_lmP
+         do lm=1,n_lmP_loc
             this%nl_lm%VxBtLM(lm)=0.0_cp
             this%nl_lm%VxBpLM(lm)=0.0_cp
          end do

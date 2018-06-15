@@ -213,20 +213,17 @@ program magic
    call initialize_output
    
 
-   !--- Check parameters and write info to SDTOUT
-   call checkTruncation
+   !-- Check parameters and write info to SDTOUT
+   call check_geometry
 
    log_file='log.'//tag
    call print_greeting
 
-   !-- Blocking/radial/horizontal
-   call initialize_blocking
-   
-   !>@TODO merge the two following calls
    call initialize_distributed_geometry
-   call distribute_truncation
-   local_bytes_used=bytes_allocated
+   local_bytes_used=bytes_allocated  ! I might have ruined the value of this variable - Lago
+   
    call initialize_mapping
+   call initialize_blocking
    call initialize_fft_phi
    
    call initialize_LMLoop_data ! needed before radial_functions

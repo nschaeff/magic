@@ -102,7 +102,7 @@ contains
       real(cp), intent(out) :: r(n_r_max)
 
       !-- Local variables:
-      integer :: n_r
+      integer :: n_r_loc
       real(cp) :: lambd,paraK,paraX0 !parameters of the nonlinear mapping
 
       !--
@@ -126,25 +126,25 @@ contains
 
       if ( this%l_map ) then
 
-         do n_r=1,n_r_max
-            this%drx(n_r)  =                         (two*this%alpha1) /      &
-            &    ((one+this%alpha1**2*(two*r(n_r)-ricb-rcmb-this%alpha2)**2)* &
+         do n_r_loc=1,n_r_max
+            this%drx(n_r_loc)  =                         (two*this%alpha1) /      &
+            &    ((one+this%alpha1**2*(two*r(n_r_loc)-ricb-rcmb-this%alpha2)**2)* &
             &    lambd)
-            this%ddrx(n_r) =-(8.0_cp*this%alpha1**3*(two*r(n_r)-ricb-rcmb-this%alpha2)) / &
-            &    ((one+this%alpha1**2*(-two*r(n_r)+ricb+rcmb+this%alpha2)**2)**2*     &
+            this%ddrx(n_r_loc) =-(8.0_cp*this%alpha1**3*(two*r(n_r_loc)-ricb-rcmb-this%alpha2)) / &
+            &    ((one+this%alpha1**2*(-two*r(n_r_loc)+ricb+rcmb+this%alpha2)**2)**2*     &
             &    lambd)
-            this%dddrx(n_r)=(16.0_cp*this%alpha1**3*(-one+three*this%alpha1**2*     &
-            &                           (-two*r(n_r)+ricb+rcmb+this%alpha2)**2)) /  &
-            &      ((one+this%alpha1**2*(-two*r(n_r)+ricb+rcmb+this%alpha2)**2)**3* &
+            this%dddrx(n_r_loc)=(16.0_cp*this%alpha1**3*(-one+three*this%alpha1**2*     &
+            &                           (-two*r(n_r_loc)+ricb+rcmb+this%alpha2)**2)) /  &
+            &      ((one+this%alpha1**2*(-two*r(n_r_loc)+ricb+rcmb+this%alpha2)**2)**3* &
             &       lambd)
          end do
 
       else
 
-         do n_r=1,n_r_max
-            this%drx(n_r)  =two/(rcmb-ricb)
-            this%ddrx(n_r) =0.0_cp
-            this%dddrx(n_r)=0.0_cp
+         do n_r_loc=1,n_r_max
+            this%drx(n_r_loc)  =two/(rcmb-ricb)
+            this%ddrx(n_r_loc) =0.0_cp
+            this%dddrx(n_r_loc)=0.0_cp
          end do
 
       end if
@@ -169,7 +169,7 @@ contains
    subroutine get_der_mat(this, n_r_max)
       !
       !  Construct Chebychev polynomials and their first, second,
-      !  and third derivative up to degree n_r at n_r points x
+      !  and third derivative up to degree n_r_loc at n_r_loc points x
       !  in the interval [a,b]. Since the Chebs are only defined
       !  in [-1,1] we have to use a map, mapping the points x
       !  points y in the interval [-1,1]. This map is executed
@@ -191,7 +191,7 @@ contains
       !                   = map_fac * d Cheb(y) / d y
 
       !-- construction of chebs and derivatives with recursion:
-      do k=1,n_r_max  ! do loop over the n_r grid points !
+      do k=1,n_r_max  ! do loop over the n_r_loc grid points !
 
          !----- set first two chebs:
          this%rMat(1,k)=one

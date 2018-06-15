@@ -43,7 +43,6 @@ module LMmapping
  
    !-- ????
    !   
-   !   
    type, public :: subblocks_mappings
       integer :: nLMBs,l_max,m_max,sizeLMB2max
       integer, allocatable :: nLMBs2(:)
@@ -53,7 +52,7 @@ module LMmapping
       integer, allocatable :: lm22m(:,:,:)
    end type subblocks_mappings
  
-   type(mappings) :: dist_map, lo_dist_map
+   type(mappings) :: dist_map, radial_map
    
 contains
    
@@ -68,17 +67,19 @@ contains
       
 
       local_bytes_used = bytes_allocated
-!       call allocate_mappings(st_map,l_max,lm_max,lmP_max,l_axi)
+!       call allocate_mappings(radial_map,l_max,lm_max,lmP_max,l_axi)
 !       call allocate_mappings(lo_map,l_max,lm_max,lmP_max,l_axi)
 
-      call allocate_mappings(dist_map,   n_lm,n_lmP,l_axi)
-      call allocate_mappings(lo_dist_map,n_lm,n_lmP,l_axi)
+      call allocate_mappings(radial_map, lm_max, lmP_max, l_axi)
+      call allocate_mappings(dist_map, n_lm_loc,n_lmP_loc,l_axi)
       
-      call set_lmmapping_default(dist_map,    dist_m(coord_m,1:))
-      call set_lmmapping_default(lo_dist_map, dist_m(coord_m,1:))
+      ! (/0:n_m_max-1/)*minc: an array containing all m points
+      call set_lmmapping_default(radial_map, (/0:n_m_max-1/)*minc ) 
+      call set_lmmapping_default(dist_map,   dist_m(coord_m,1:))
       
-      call print_mapping(dist_map, 'dist')
-
+      call print_mapping(dist_map,  'dist')
+      call print_mapping(radial_map,'radial')
+      
       local_bytes_used = bytes_allocated-local_bytes_used
       call memWrite('LMmapping.f90', local_bytes_used)
    end subroutine initialize_mapping
@@ -91,20 +92,23 @@ contains
    end subroutine finalize_mapping
    
    !----------------------------------------------------------------------------
-   subroutine allocate_mappings(self, in_n_lm, in_n_lmP, l_axi)
+   subroutine allocate_mappings(self, n_lm_len, n_lmP_len, l_axi)
       !   
       !   Allocates the mapping objects. 
       !   
       !   The l_max is taken from geometry module. It is supposed to represent 
-      !   the global number of l points, not local. 
-      !   in_n_lm is the number of local lm points. Similarly, in_n_lmP is the 
-      !   same quantity, for l_max+1.
+      !   the global number of l points.
+      !   n_lm_len is the number of local lm points. Similarly, n_lmP_len 
+      !   is the same quantity, for l_max+1.
+      !   
+      !   So, if you're creating the dist_map, pass (n_lm_loc, n_lmP_len).
+      !   If you're creating radial_map, pass (n_lm_max, n_lmP_max).
       !   
       !   Author: Rafael Lago, MPCDF, April 2018
       !   
 
       type(mappings), intent(inout) :: self
-      integer, intent(in) :: in_n_lm, in_n_lmP
+      integer, intent(in) :: n_lm_len, n_lmP_len
       logical, intent(in) :: l_axi
 
       self%l_max = l_max
@@ -113,23 +117,23 @@ contains
       else
          self%m_max = 0
       end if
-      self%lm_max   = in_n_lm   ! deprecated; to be later replaced by %in_n_lm
-      self%lmP_max  = in_n_lmP  ! deprecated; to be later replaced by %in_n_lmP
-      self%n_lm  = in_n_lm
-      self%n_lmP = in_n_lmP
+      self%lm_max   = n_lm_len   ! deprecated; to be later replaced by %n_lm_len. Only used in blocking.f90
+      self%lmP_max  = n_lmP_len  ! deprecated; to be later replaced by %n_lmP_len. Only used in blocking.f90
+      self%n_lm  = n_lm_len
+      self%n_lmP = n_lmP_len
 
-      allocate( self%lm2(0:l_max,0:l_max),self%lm2l(in_n_lm),self%lm2m(in_n_lm))
-      allocate( self%lm2mc(in_n_lm),self%l2lmAS(0:l_max) )
-      allocate( self%lm2lmS(in_n_lm),self%lm2lmA(in_n_lm) )
+      allocate( self%lm2(0:l_max,0:l_max),self%lm2l(n_lm_len),self%lm2m(n_lm_len))
+      allocate( self%lm2mc(n_lm_len),self%l2lmAS(0:l_max) )
+      allocate( self%lm2lmS(n_lm_len),self%lm2lmA(n_lm_len) )
       bytes_allocated = bytes_allocated + &
-                        ((l_max+1)*(l_max+1)+5*in_n_lm+l_max+1)*SIZEOF_INTEGER
+                        ((l_max+1)*(l_max+1)+5*n_lm_len+l_max+1)*SIZEOF_INTEGER
 
-      allocate( self%lmP2(0:l_max+1,0:l_max+1),self%lmP2l(in_n_lmP) )
-      allocate( self%lmP2m(in_n_lmP) )
-      allocate( self%lmP2lmPS(in_n_lmP),self%lmP2lmPA(in_n_lmP) )
-      allocate( self%lm2lmP(in_n_lm),self%lmP2lm(in_n_lmP) )
+      allocate( self%lmP2(0:l_max+1,0:l_max+1),self%lmP2l(n_lmP_len) )
+      allocate( self%lmP2m(n_lmP_len) )
+      allocate( self%lmP2lmPS(n_lmP_len),self%lmP2lmPA(n_lmP_len) )
+      allocate( self%lm2lmP(n_lm_len),self%lmP2lm(n_lmP_len) )
       bytes_allocated = bytes_allocated + &
-                        ((l_max+2)*(l_max+2)+5*in_n_lmP+in_n_lm)*SIZEOF_INTEGER
+                        ((l_max+2)*(l_max+2)+5*n_lmP_len+n_lm_len)*SIZEOF_INTEGER
 
    end subroutine allocate_mappings
    
@@ -213,7 +217,6 @@ contains
    !
    !
    !----------------------------------------------------------------------------
-   
    subroutine set_lmmapping_default(map, m_arr)
       !   
       !   This function will place (all l_max) l's sequentially in increasing 
@@ -224,15 +227,19 @@ contains
       !   
       !   It makes no assumption about the lengths m_arr.
       !   
-      !   Remark: if you pass m_arr = (/0,1,2,...,m_max/) this function does 
+      !-- Remark: if you pass m_arr = (/0,1,2,...,m_max/) this function does 
       !      exactly the same distribution as the global lm map for minc=1.
       !   
-      !   Author: Rafael Lago, MPCDF, April 2018
       !   
-      !-- TODO: this function can more or less easily be adapted to support 
+      !-- Remark: this function can more or less easily be adapted to support 
       !      intervals of l, so, for instance, from l_l to u_l. Just keep this 
-      !      in mind in case we need it in the future
+      !      in mind in case we need it in the future.
       !
+      !   Author: Rafael Lago, MPCDF, April 2018
+      !
+      !-- TODO: double-check if lm2mc is correctly computed (or if it is needed
+      !   at all anymore. I don't think it is.)
+      !   
       type(mappings), intent(inout) :: map
       integer,        intent(in)    :: m_arr(:)
       
@@ -254,8 +261,7 @@ contains
       map%lm2lmA   = Invalid_Idx
       map%lmP2lmPS = Invalid_Idx
       map%lmP2lmPA = Invalid_Idx
-      
-      map%lm2mc = -5 ! Lago@180405: I have no idea what this one is for. It needs to be completely implemented
+      map%lm2mc    = Invalid_Idx
       
       lm  = 0
       lmP = 0
@@ -270,7 +276,6 @@ contains
             map%lm2l(lm)  = l
             map%lm2m(lm)  = m
             
-   !           map%lm2mc(lm) = mc
             if ( m == 0 ) map%l2lmAS(l)=lm
             
             map%lmP2(l,m)  = lmP
@@ -287,45 +292,29 @@ contains
       end do
       
       if ( lm /= map%n_lm ) then
-         write(*,"(2(A,I6))") 'Wrong lm=',lm," != n_lm = ", map%n_lm
+         write(*,"(2(A,I6))") 'Wrong lm=',lm," != n_lm_loc = ", map%n_lm
          call abortRun('Stop run in distribute_theta')
       end if
       if ( lmP /= map%n_lmP ) then
-         write(*,"(3(A,I6))") 'Wrong lmP=',lm," != n_lmP = ", map%n_lmP
+         write(*,"(3(A,I6))") 'Wrong lmP=',lm," != n_lmP_loc = ", map%n_lmP
          call abortRun('Stop run in distribute_theta')
       end if
 
       do lm=1,map%n_lm
          l=map%lm2l(lm) 
          m=map%lm2m(lm)
-         if ( l > 0 .and. l > m ) then
-            map%lm2lmS(lm)=map%lm2(l-1,m)
-         else
-            map%lm2lmS(lm)=-1
-         end if
-         if ( l < map%l_max ) then
-            map%lm2lmA(lm)=map%lm2(l+1,m)
-         else
-            map%lm2lmA(lm)=-1
-         end if
+         if ( l > 0 .and. l > m ) map%lm2lmS(lm)=map%lm2(l-1,m)
+         if ( l < map%l_max )     map%lm2lmA(lm)=map%lm2(l+1,m)
+         map%lm2mc(lm) =map%lm2m(lm)/minc + 1
       end do
       do lmP=1,map%n_lmP
          l=map%lmP2l(lmP)
          m=map%lmP2m(lmP)
-         if ( l > 0 .and. l > m ) then
-            map%lmP2lmPS(lmP)=map%lmP2(l-1,m)
-         else
-            map%lmP2lmPS(lmP)=-1
-         end if
-         if ( l < map%l_max+1 ) then
-            map%lmP2lmPA(lmP)=map%lmP2(l+1,m)
-         else
-            map%lmP2lmPA(lmP)=-1
-         end if 
+         if ( l > 0 .and. l > m ) map%lmP2lmPS(lmP)=map%lmP2(l-1,m)
+         if ( l < map%l_max+1 )   map%lmP2lmPA(lmP)=map%lmP2(l+1,m)
       end do
       
    end subroutine set_lmmapping_default
-   
    
    !----------------------------------------------------------------------------
    subroutine print_mapping(map,name)
@@ -338,23 +327,22 @@ contains
       
       count_m = 0
       count_l = 0
-      do i=0,map%m_max
-         if (any(map%lm2(:,i) >= 0)) count_m = count_m + 1
-      end do
       do i=0,map%l_max
-         if (any(map%lm2(i,:) >= 0)) count_l = count_l + 1
+         if (any(map%lm2(i,:) >= 0)) count_m = count_m + 1
+      end do
+      do i=0,map%m_max
+         if (any(map%lm2(:,i) >= 0)) count_l = count_l + 1
       end do
       
       
       if (coord_m == 0 .and. coord_r == 0) then
-         print "(' ! ',A,' mapping in rank ', I0, ': ', I0,' l pts and ',I0,'m pts (', I0, ' pts)')", name, &
+         print "(' ! ',A,' mapping in rank ', I0, ': ', I0,' l-pts and ',I0,' m-pts (', I0, ' pts)')", name, &
             0, count_m, count_l, map%n_lm
       end if
-      
       call mpi_barrier(mpi_comm_world,ierr)
       do irank=1,n_ranks_m-1
          if (coord_m == irank .and. coord_r == 0) then
-            print "(' !                rank ', I0, ': ', I0,' l pts and ',I0,'m pts (', I0, ' pts)')", &
+            print "(' !                rank ', I0, ': ', I0,' l-pts and ',I0,' m-pts (', I0, ' pts)')", &
                irank, count_m, count_l, map%n_lm
          end if
          call mpi_barrier(mpi_comm_world,ierr)

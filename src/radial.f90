@@ -207,7 +207,7 @@ contains
       !
 
       !-- Local variables:
-      integer :: n_r,n_cheb,n_cheb_int
+      integer :: n_r_loc,n_cheb,n_cheb_int
       integer :: n_r_ic_tot, k, i
       integer :: n_const(1)
 
@@ -250,8 +250,8 @@ contains
       if ( rank == 0 ) then
          fileName = 'radius.'//tag
          open(newunit=fileHandle, file=fileName, status='unknown')
-         do n_r=1,n_r_max
-            write(fileHandle,'(I4, ES16.8)') n_r, r(n_r)
+         do n_r_loc=1,n_r_max
+            write(fileHandle,'(I4, ES16.8)') n_r_loc, r(n_r_loc)
          end do
          close(fileHandle)
       end if
@@ -653,15 +653,15 @@ contains
                          r_ic_2,r_cheb_ic,0.0_cp,0.0_cp,0.0_cp,0.0_cp)
 
          !----- Store first n_r_ic_max points of r_ic_2 to r_ic:
-         do n_r=1,n_r_ic_max-1
-            r_ic(n_r)   =r_ic_2(n_r)
-            O_r_ic(n_r) =one/r_ic(n_r)
-            O_r_ic2(n_r)=O_r_ic(n_r)*O_r_ic(n_r)
+         do n_r_loc=1,n_r_ic_max-1
+            r_ic(n_r_loc)   =r_ic_2(n_r_loc)
+            O_r_ic(n_r_loc) =one/r_ic(n_r_loc)
+            O_r_ic2(n_r_loc)=O_r_ic(n_r_loc)*O_r_ic(n_r_loc)
          end do
-         n_r=n_r_ic_max
-         r_ic(n_r)   =0.0_cp
-         O_r_ic(n_r) =0.0_cp
-         O_r_ic2(n_r)=0.0_cp
+         n_r_loc=n_r_ic_max
+         r_ic(n_r_loc)   =0.0_cp
+         O_r_ic(n_r_loc) =0.0_cp
+         O_r_ic2(n_r_loc)=0.0_cp
 
          !-- Get no of point on graphical output grid:
          !   No is set to -1 to indicate that point is not on graphical output grid.
@@ -702,7 +702,7 @@ contains
       ! kinematic viscosity and thermal conductivity.
       !
 
-      integer :: n_r
+      integer :: n_r_loc
 
       real(cp) :: a,b,c,s1,s2,r0
       real(cp) :: dsigma0
@@ -740,27 +740,27 @@ contains
 
              r0=con_radratio*r_cmb
              !------ Use grid point closest to r0:
-             do n_r=1,n_r_max
-                if ( r(n_r) < r0 )then
-                   r0=r(n_r)
+             do n_r_loc=1,n_r_max
+                if ( r(n_r_loc) < r0 )then
+                   r0=r(n_r_loc)
                    exit
                 end if
              end do
              dsigma0=(con_LambdaMatch-1)*con_DecRate /(r0-r_icb)
-             do n_r=1,n_r_max
-                if ( r(n_r) < r0 ) then
-                   sigma(n_r)   = one+(con_LambdaMatch-1)* &
-                       ( (r(n_r)-r_icb)/(r0-r_icb) )**con_DecRate
-                   dsigma(n_r)  =  dsigma0 * &
-                       ( (r(n_r)-r_icb)/(r0-r_icb) )**(con_DecRate-1)
+             do n_r_loc=1,n_r_max
+                if ( r(n_r_loc) < r0 ) then
+                   sigma(n_r_loc)   = one+(con_LambdaMatch-1)* &
+                       ( (r(n_r_loc)-r_icb)/(r0-r_icb) )**con_DecRate
+                   dsigma(n_r_loc)  =  dsigma0 * &
+                       ( (r(n_r_loc)-r_icb)/(r0-r_icb) )**(con_DecRate-1)
                 else
-                   sigma(n_r)  =con_LambdaMatch * &
-                       exp(dsigma0/con_LambdaMatch*(r(n_r)-r0))
-                   dsigma(n_r) = dsigma0* &
-                       exp(dsigma0/con_LambdaMatch*(r(n_r)-r0))
+                   sigma(n_r_loc)  =con_LambdaMatch * &
+                       exp(dsigma0/con_LambdaMatch*(r(n_r_loc)-r0))
+                   dsigma(n_r_loc) = dsigma0* &
+                       exp(dsigma0/con_LambdaMatch*(r(n_r_loc)-r0))
                 end if
-                lambda(n_r)  = one/sigma(n_r)
-                dLlambda(n_r)=-dsigma(n_r)/sigma(n_r)
+                lambda(n_r_loc)  = one/sigma(n_r_loc)
+                dLlambda(n_r_loc)=-dsigma(n_r_loc)/sigma(n_r_loc)
              end do
           else if ( nVarCond == 3 ) then ! Magnetic diff propto 1/rho
              lambda=rho0(n_r_max)/rho0
@@ -781,7 +781,7 @@ contains
             kappa  =one
             dLkappa=0.0_cp
          else if ( nVarDiff == 1 ) then ! Constant conductivity
-            ! kappa(n_r)=one/rho0(n_r) Denise's version
+            ! kappa(n_r_loc)=one/rho0(n_r_loc) Denise's version
             kappa=rho0(n_r_max)/rho0
             call get_dr(kappa,dkappa,n_r_max,rscheme_oc)
             dLkappa=dkappa/kappa
@@ -803,9 +803,9 @@ contains
             a3 =  0.63741485_cp
             a4 = -0.15812944_cp
             a5 =  0.01034262_cp
-            do n_r=1,n_r_max
-               rrOcmb = r(n_r)/r_cmb*r_cut_model
-               kappa(n_r)= a5 + a4*rrOcmb    + a3*rrOcmb**2 &
+            do n_r_loc=1,n_r_max
+               rrOcmb = r(n_r_loc)/r_cmb*r_cut_model
+               kappa(n_r_loc)= a5 + a4*rrOcmb    + a3*rrOcmb**2 &
                &              + a2*rrOcmb**3 + a1*rrOcmb**4 &
                &                             + a0*rrOcmb**5
 
@@ -816,12 +816,12 @@ contains
             dLkappa=dkappa/kappa
          else if ( nVarDiff == 4) then ! Earth case
             !condTop=r_cmb**2*dtemp0(1)*or2/dtemp0
-            !do n_r=2,n_r_max
-            !  if ( r(n_r-1)>rStrat .and. r(n_r)<=rStrat ) then
-            !     if ( r(n_r-1)-rStrat < rStrat-r(n_r) ) then
-            !        n_const=n_r-1
+            !do n_r_loc=2,n_r_max
+            !  if ( r(n_r_loc-1)>rStrat .and. r(n_r_loc)<=rStrat ) then
+            !     if ( r(n_r_loc-1)-rStrat < rStrat-r(n_r_loc) ) then
+            !        n_const=n_r_loc-1
             !     else
-            !        n_const=n_r
+            !        n_const=n_r_loc
             !     end if
             !  end if
             !end do
@@ -904,7 +904,7 @@ contains
       ! in case stable stratification is required
       !
 
-      integer :: n_r
+      integer :: n_r_loc
 
       if ( nVarEntropyGrad == 0 ) then ! Default: isentropic
          dEntropy0(:)=0.0_cp
@@ -921,11 +921,11 @@ contains
          if ( rStrat <= r_icb ) then
             dentropy0(:) = ampStrat
          else
-            do n_r=1,n_r_max
-               if ( r(n_r) <= rStrat ) then
-                  dentropy0(n_r)=-one
+            do n_r_loc=1,n_r_max
+               if ( r(n_r_loc) <= rStrat ) then
+                  dentropy0(n_r_loc)=-one
                else
-                  dentropy0(n_r)=(ampStrat+one)*(r(n_r)-r_cmb)/(r_cmb-rStrat) + &
+                  dentropy0(n_r_loc)=(ampStrat+one)*(r(n_r_loc)-r_cmb)/(r_cmb-rStrat) + &
                   &              ampStrat
                end if
             end do
@@ -959,7 +959,7 @@ contains
 
       !-- Local variables:
       real(cp) :: rhs(n_r_max)
-      integer :: n_r,info,n_r_out
+      integer :: n_r_loc,info,n_r_out
       real(cp) :: workMat_fac(n_r_max, 2)
 
       real(cp), allocatable :: workMat(:,:)
@@ -969,14 +969,14 @@ contains
       allocate( workPivot(n_r_max) )
 
       do n_r_out=1,n_r_max
-         do n_r=2,n_r_max
+         do n_r_loc=2,n_r_max
             if ( present(coeff) ) then
-               workMat(n_r,n_r_out)=rscheme_oc%rnorm*(              &
-               &                      rscheme_oc%drMat(n_r,n_r_out)+&
-               &            coeff(n_r)*rscheme_oc%rMat(n_r,n_r_out) )
+               workMat(n_r_loc,n_r_out)=rscheme_oc%rnorm*(              &
+               &                      rscheme_oc%drMat(n_r_loc,n_r_out)+&
+               &            coeff(n_r_loc)*rscheme_oc%rMat(n_r_loc,n_r_out) )
             else
-               workMat(n_r,n_r_out)=rscheme_oc%rnorm*               &
-               &                    rscheme_oc%drMat(n_r,n_r_out)
+               workMat(n_r_loc,n_r_out)=rscheme_oc%rnorm*               &
+               &                    rscheme_oc%drMat(n_r_loc,n_r_out)
             end if
          end do
       end do
@@ -995,22 +995,22 @@ contains
       end if
 
       !-- renormalize
-      do n_r=1,n_r_max
-        workMat(n_r,1)      =rscheme_oc%boundary_fac*workMat(n_r,1)
-        workMat(n_r,n_r_max)=rscheme_oc%boundary_fac*workMat(n_r,n_r_max)
+      do n_r_loc=1,n_r_max
+        workMat(n_r_loc,1)      =rscheme_oc%boundary_fac*workMat(n_r_loc,1)
+        workMat(n_r_loc,n_r_max)=rscheme_oc%boundary_fac*workMat(n_r_loc,n_r_max)
       end do
 
-      do n_r=1,n_r_max
-         workMat_fac(n_r,1)=one/maxval(abs(workMat(n_r,:)))
+      do n_r_loc=1,n_r_max
+         workMat_fac(n_r_loc,1)=one/maxval(abs(workMat(n_r_loc,:)))
       end do
-      do n_r=1,n_r_max
-         workMat(n_r,:)=workMat(n_r,:)*workMat_fac(n_r,1)
+      do n_r_loc=1,n_r_max
+         workMat(n_r_loc,:)=workMat(n_r_loc,:)*workMat_fac(n_r_loc,1)
       end do
-      do n_r=1,n_r_max
-         workMat_fac(n_r,2)=one/maxval(abs(workMat(:,n_r)))
+      do n_r_loc=1,n_r_max
+         workMat_fac(n_r_loc,2)=one/maxval(abs(workMat(:,n_r_loc)))
       end do
-      do n_r=1,n_r_max
-         workMat(:,n_r)=workMat(:,n_r)*workMat_fac(n_r,2)
+      do n_r_loc=1,n_r_max
+         workMat(:,n_r_loc)=workMat(:,n_r_loc)*workMat_fac(n_r_loc,2)
       end do
 
 
@@ -1020,21 +1020,21 @@ contains
          call abortRun('! Singular Matrix in getBackground!')
       end if
 
-      do n_r=2,n_r_max
-         rhs(n_r)=input(n_r)
+      do n_r_loc=2,n_r_max
+         rhs(n_r_loc)=input(n_r_loc)
       end do
       rhs(1)=boundaryVal
 
-      do n_r=1,n_r_max
-         rhs(n_r)=rhs(n_r)*workMat_fac(n_r,1)
+      do n_r_loc=1,n_r_max
+         rhs(n_r_loc)=rhs(n_r_loc)*workMat_fac(n_r_loc,1)
       end do
 
       !-- Solve for s0:
       call sgesl(workMat,n_r_max,n_r_max,workPivot,rhs)
 
       !-- Copy result to s0:
-      do n_r=1,n_r_max
-         output(n_r)=rhs(n_r)*workMat_fac(n_r,2)
+      do n_r_loc=1,n_r_max
+         output(n_r_loc)=rhs(n_r_loc)*workMat_fac(n_r_loc,2)
       end do
 
       !-- Set cheb-modes > n_cheb_max to zero:

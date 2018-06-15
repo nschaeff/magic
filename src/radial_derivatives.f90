@@ -253,14 +253,14 @@ contains
       real(cp), intent(out) :: df(n_r_max)   ! first derivative of f
     
       !-- Local:
-      integer :: n_r, od
+      integer :: n_r_loc, od
     
     
       if ( r_scheme%version == 'cheb' ) then
 
          !-- Copy input functions:
-         do n_r=1,n_r_max
-            work_1d_real(n_r)=f(n_r)
+         do n_r_loc=1,n_r_max
+            work_1d_real(n_r_loc)=f(n_r_loc)
          end do
     
          !-- Transform f to cheb space:
@@ -273,8 +273,8 @@ contains
          call r_scheme%costf1(df)
     
          !-- New map:
-         do n_r=1,n_r_max
-            df(n_r)=r_scheme%drx(n_r)*df(n_r)
+         do n_r_loc=1,n_r_max
+            df(n_r_loc)=r_scheme%drx(n_r_loc)*df(n_r_loc)
          end do
 
       else
@@ -283,18 +283,18 @@ contains
 
          do od=0,r_scheme%order
             !-- Bulk points
-            do n_r=1+r_scheme%order/2,n_r_max-r_scheme%order/2
-               df(n_r) = df(n_r)+r_scheme%dr(n_r, od) * f(n_r-r_scheme%order/2+od)
+            do n_r_loc=1+r_scheme%order/2,n_r_max-r_scheme%order/2
+               df(n_r_loc) = df(n_r_loc)+r_scheme%dr(n_r_loc, od) * f(n_r_loc-r_scheme%order/2+od)
             end do
          end do
 
          do od=0,r_scheme%order_boundary
             !-- Boundary points
-            do n_r=1,r_scheme%order/2
-               df(n_r) = df(n_r)+r_scheme%dr_top(n_r,od) * f(od+1)
+            do n_r_loc=1,r_scheme%order/2
+               df(n_r_loc) = df(n_r_loc)+r_scheme%dr_top(n_r_loc,od) * f(od+1)
             end do
-            do n_r=1,r_scheme%order/2
-               df(n_r_max-n_r+1) = df(n_r_max-n_r+1)+r_scheme%dr_bot(n_r,od)*f(n_r_max-od)
+            do n_r_loc=1,r_scheme%order/2
+               df(n_r_max-n_r_loc+1) = df(n_r_max-n_r_loc+1)+r_scheme%dr_bot(n_r_loc,od)*f(n_r_max-od)
             end do
          end do
 
@@ -325,7 +325,7 @@ contains
       complex(cp), intent(out) :: df(n_f_max,n_r_max)   ! first derivative of f
     
       !-- Local:
-      integer :: n_r,n_f,od
+      integer :: n_r_loc,n_f,od
       logical :: copy_array
     
       if ( r_scheme%version == 'cheb' ) then
@@ -337,9 +337,9 @@ contains
          end if
     
          if ( copy_array )  then
-            do n_r=1,n_r_max
+            do n_r_loc=1,n_r_max
                do n_f=n_f_start,n_f_stop
-                  work(n_f,n_r)=f(n_f,n_r)
+                  work(n_f,n_r_loc)=f(n_f,n_r_loc)
                end do
             end do
        
@@ -369,41 +369,41 @@ contains
          end if
        
          !-- New map:
-         do n_r=1,n_r_max
+         do n_r_loc=1,n_r_max
             do n_f=n_f_start,n_f_stop
-               df(n_f,n_r)=r_scheme%drx(n_r)*df(n_f,n_r)
+               df(n_f,n_r_loc)=r_scheme%drx(n_r_loc)*df(n_f,n_r_loc)
             end do
          end do
 
       else
 
          !-- Initialise to zero:
-         do n_r=1,n_r_max
+         do n_r_loc=1,n_r_max
             do n_f=n_f_start,n_f_stop
-               df(n_f,n_r) =zero
+               df(n_f,n_r_loc) =zero
             end do
          end do
 
          !-- Bulk points for 1st derivative
          do od=0,r_scheme%order
-            do n_r=1+r_scheme%order/2,n_r_max-r_scheme%order/2
+            do n_r_loc=1+r_scheme%order/2,n_r_max-r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  df(n_f,n_r)=df(n_f,n_r)+r_scheme%dr(n_r,od)*f(n_f,n_r-r_scheme%order/2+od)
+                  df(n_f,n_r_loc)=df(n_f,n_r_loc)+r_scheme%dr(n_r_loc,od)*f(n_f,n_r_loc-r_scheme%order/2+od)
                end do
             end do
          end do
 
          !-- Boundary points for 1st derivative
          do od=0,r_scheme%order_boundary
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  df(n_f,n_r) = df(n_f,n_r)+r_scheme%dr_top(n_r,od) * f(n_f,od+1)
+                  df(n_f,n_r_loc) = df(n_f,n_r_loc)+r_scheme%dr_top(n_r_loc,od) * f(n_f,od+1)
                end do
             end do
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  df(n_f,n_r_max-n_r+1) = df(n_f,n_r_max-n_r+1)+               &
-                  &                       r_scheme%dr_bot(n_r,od)*f(n_f,n_r_max-od)
+                  df(n_f,n_r_max-n_r_loc+1) = df(n_f,n_r_max-n_r_loc+1)+               &
+                  &                       r_scheme%dr_bot(n_r_loc,od)*f(n_f,n_r_max-od)
                end do
             end do
          end do
@@ -436,14 +436,14 @@ contains
       complex(cp), intent(out) :: ddf(n_f_max,n_r_max)  ! second derivative of f
     
       !-- Local variables:
-      integer :: n_r,n_f,od
+      integer :: n_r_loc,n_f,od
 
       if ( r_scheme%version == 'cheb' ) then
     
          !-- Copy input functions:
-         do n_r=1,n_r_max
+         do n_r_loc=1,n_r_max
             do n_f=n_f_start,n_f_stop
-               work(n_f,n_r)=f(n_f,n_r)
+               work(n_f,n_r_loc)=f(n_f,n_r_loc)
             end do
          end do
     
@@ -459,60 +459,60 @@ contains
          call r_scheme%costf1(ddf,n_f_max,n_f_start,n_f_stop)
     
          !-- New map:
-         do n_r=1,n_r_max
+         do n_r_loc=1,n_r_max
             do n_f=n_f_start,n_f_stop
-               ddf(n_f,n_r)=r_scheme%ddrx(n_r)*df(n_f,n_r)+r_scheme%drx(n_r)* &
-               &             r_scheme%drx(n_r)*ddf(n_f,n_r)
-               df(n_f,n_r) = r_scheme%drx(n_r)*df(n_f,n_r)
+               ddf(n_f,n_r_loc)=r_scheme%ddrx(n_r_loc)*df(n_f,n_r_loc)+r_scheme%drx(n_r_loc)* &
+               &             r_scheme%drx(n_r_loc)*ddf(n_f,n_r_loc)
+               df(n_f,n_r_loc) = r_scheme%drx(n_r_loc)*df(n_f,n_r_loc)
             end do
          end do
 
       else
 
          !-- Initialise to zero:
-         do n_r=1,n_r_max
+         do n_r_loc=1,n_r_max
             do n_f=n_f_start,n_f_stop
-               df(n_f,n_r) =zero
-               ddf(n_f,n_r)=zero
+               df(n_f,n_r_loc) =zero
+               ddf(n_f,n_r_loc)=zero
             end do
          end do
 
          !-- Bulk points for 1st and 2nd derivatives
          do od=0,r_scheme%order
-            do n_r=1+r_scheme%order/2,n_r_max-r_scheme%order/2
+            do n_r_loc=1+r_scheme%order/2,n_r_max-r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  df(n_f,n_r)  = df(n_f,n_r) + r_scheme%dr(n_r,od) * f(n_f,n_r-r_scheme%order/2+od)
-                  ddf(n_f,n_r) = ddf(n_f,n_r)+r_scheme%ddr(n_r,od) * f(n_f,n_r-r_scheme%order/2+od)
+                  df(n_f,n_r_loc)  = df(n_f,n_r_loc) + r_scheme%dr(n_r_loc,od) * f(n_f,n_r_loc-r_scheme%order/2+od)
+                  ddf(n_f,n_r_loc) = ddf(n_f,n_r_loc)+r_scheme%ddr(n_r_loc,od) * f(n_f,n_r_loc-r_scheme%order/2+od)
                end do
             end do
          end do
 
          !-- Boundary points for 1st derivative
          do od=0,r_scheme%order_boundary
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  df(n_f,n_r) = df(n_f,n_r)+r_scheme%dr_top(n_r,od) * f(n_f,od+1)
+                  df(n_f,n_r_loc) = df(n_f,n_r_loc)+r_scheme%dr_top(n_r_loc,od) * f(n_f,od+1)
                end do
             end do
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  df(n_f,n_r_max-n_r+1) = df(n_f,n_r_max-n_r+1)+               &
-                  &                       r_scheme%dr_bot(n_r,od)*f(n_f,n_r_max-od)
+                  df(n_f,n_r_max-n_r_loc+1) = df(n_f,n_r_max-n_r_loc+1)+               &
+                  &                       r_scheme%dr_bot(n_r_loc,od)*f(n_f,n_r_max-od)
                end do
             end do
          end do
 
          !-- Boundary points for 2nd derivative
          do od=0,r_scheme%order_boundary+1
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  ddf(n_f,n_r) = ddf(n_f,n_r)+r_scheme%ddr_top(n_r,od) * f(n_f,od+1)
+                  ddf(n_f,n_r_loc) = ddf(n_f,n_r_loc)+r_scheme%ddr_top(n_r_loc,od) * f(n_f,od+1)
                end do
             end do
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  ddf(n_f,n_r_max-n_r+1) = ddf(n_f,n_r_max-n_r+1)+               &
-                  &                       r_scheme%ddr_bot(n_r,od)*f(n_f,n_r_max-od)
+                  ddf(n_f,n_r_max-n_r_loc+1) = ddf(n_f,n_r_max-n_r_loc+1)+               &
+                  &                       r_scheme%ddr_bot(n_r_loc,od)*f(n_f,n_r_max-od)
                end do
             end do
          end do
@@ -546,14 +546,14 @@ contains
       complex(cp), intent(out) :: dddf(n_f_max,n_r_max)  ! third derivative of f
 
       !-- Local variables
-      integer :: n_r,n_f,od
+      integer :: n_r_loc,n_f,od
 
       if ( r_scheme%version == 'cheb' ) then
 
          !-- Copy input functions:
-         do n_r=1,n_r_max
+         do n_r_loc=1,n_r_max
             do n_f=n_f_start,n_f_stop
-               work(n_f,n_r)=f(n_f,n_r)
+               work(n_f,n_r_loc)=f(n_f,n_r_loc)
             end do
          end do
 
@@ -570,90 +570,90 @@ contains
          call r_scheme%costf1(dddf,n_f_max,n_f_start,n_f_stop)
 
          !-- New map:
-         do n_r=1,n_r_max
+         do n_r_loc=1,n_r_max
             do n_f=n_f_start,n_f_stop
-               dddf(n_f,n_r)=        r_scheme%dddrx(n_r)*df(n_f,n_r) +   &
-               &             three*r_scheme%ddrx(n_r)*r_scheme%drx(n_r)* &
-               &                                        ddf(n_f,n_r) +   &
-               &             r_scheme%drx(n_r)*r_scheme%drx(n_r)*        &
-               &             r_scheme%drx(n_r)*        dddf(n_f,n_r)
-               ddf(n_f,n_r) =r_scheme%ddrx(n_r)*df(n_f,n_r) + r_scheme%drx(n_r)* &
-               &             r_scheme%drx(n_r)*ddf(n_f,n_r)
-               df(n_f,n_r)  = r_scheme%drx(n_r)*df(n_f,n_r)
+               dddf(n_f,n_r_loc)=        r_scheme%dddrx(n_r_loc)*df(n_f,n_r_loc) +   &
+               &             three*r_scheme%ddrx(n_r_loc)*r_scheme%drx(n_r_loc)* &
+               &                                        ddf(n_f,n_r_loc) +   &
+               &             r_scheme%drx(n_r_loc)*r_scheme%drx(n_r_loc)*        &
+               &             r_scheme%drx(n_r_loc)*        dddf(n_f,n_r_loc)
+               ddf(n_f,n_r_loc) =r_scheme%ddrx(n_r_loc)*df(n_f,n_r_loc) + r_scheme%drx(n_r_loc)* &
+               &             r_scheme%drx(n_r_loc)*ddf(n_f,n_r_loc)
+               df(n_f,n_r_loc)  = r_scheme%drx(n_r_loc)*df(n_f,n_r_loc)
             end do
          end do
 
       else
 
          !-- Initialise to zero:
-         do n_r=1,n_r_max
+         do n_r_loc=1,n_r_max
             do n_f=n_f_start,n_f_stop
-               df(n_f,n_r)  =zero
-               ddf(n_f,n_r) =zero
-               dddf(n_f,n_r)=zero
+               df(n_f,n_r_loc)  =zero
+               ddf(n_f,n_r_loc) =zero
+               dddf(n_f,n_r_loc)=zero
             end do
          end do
 
          !-- Bulk points for 1st and 2nd derivatives
          do od=0,r_scheme%order
-            do n_r=1+r_scheme%order/2,n_r_max-r_scheme%order/2
+            do n_r_loc=1+r_scheme%order/2,n_r_max-r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  df(n_f,n_r)  = df(n_f,n_r) + r_scheme%dr(n_r,od) * f(n_f,n_r-r_scheme%order/2+od)
-                  ddf(n_f,n_r) = ddf(n_f,n_r)+r_scheme%ddr(n_r,od) * f(n_f,n_r-r_scheme%order/2+od)
+                  df(n_f,n_r_loc)  = df(n_f,n_r_loc) + r_scheme%dr(n_r_loc,od) * f(n_f,n_r_loc-r_scheme%order/2+od)
+                  ddf(n_f,n_r_loc) = ddf(n_f,n_r_loc)+r_scheme%ddr(n_r_loc,od) * f(n_f,n_r_loc-r_scheme%order/2+od)
                end do
             end do
          end do
 
          !-- Bulk points for 3rd derivative
          do od=0,r_scheme%order+2
-            do n_r=2+r_scheme%order/2,n_r_max-r_scheme%order/2-1
+            do n_r_loc=2+r_scheme%order/2,n_r_max-r_scheme%order/2-1
                do n_f=n_f_start,n_f_stop
-                  dddf(n_f,n_r)=dddf(n_f,n_r)+r_scheme%dddr(n_r,od)*f(n_f,n_r-r_scheme%order/2-1+od)
+                  dddf(n_f,n_r_loc)=dddf(n_f,n_r_loc)+r_scheme%dddr(n_r_loc,od)*f(n_f,n_r_loc-r_scheme%order/2-1+od)
                end do
             end do
          end do
 
          !-- Boundary points for 1st derivative
          do od=0,r_scheme%order_boundary
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  df(n_f,n_r) = df(n_f,n_r)+r_scheme%dr_top(n_r,od) * f(n_f,od+1)
+                  df(n_f,n_r_loc) = df(n_f,n_r_loc)+r_scheme%dr_top(n_r_loc,od) * f(n_f,od+1)
                end do
             end do
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  df(n_f,n_r_max-n_r+1) = df(n_f,n_r_max-n_r+1)+               &
-                  &                       r_scheme%dr_bot(n_r,od)*f(n_f,n_r_max-od)
+                  df(n_f,n_r_max-n_r_loc+1) = df(n_f,n_r_max-n_r_loc+1)+               &
+                  &                       r_scheme%dr_bot(n_r_loc,od)*f(n_f,n_r_max-od)
                end do
             end do
          end do
 
          !-- Boundary points for 2nd derivative
          do od=0,r_scheme%order_boundary+1
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  ddf(n_f,n_r) = ddf(n_f,n_r)+r_scheme%ddr_top(n_r,od) * f(n_f,od+1)
+                  ddf(n_f,n_r_loc) = ddf(n_f,n_r_loc)+r_scheme%ddr_top(n_r_loc,od) * f(n_f,od+1)
                end do
             end do
-            do n_r=1,r_scheme%order/2
+            do n_r_loc=1,r_scheme%order/2
                do n_f=n_f_start,n_f_stop
-                  ddf(n_f,n_r_max-n_r+1) = ddf(n_f,n_r_max-n_r+1)+               &
-                  &                       r_scheme%ddr_bot(n_r,od)*f(n_f,n_r_max-od)
+                  ddf(n_f,n_r_max-n_r_loc+1) = ddf(n_f,n_r_max-n_r_loc+1)+               &
+                  &                       r_scheme%ddr_bot(n_r_loc,od)*f(n_f,n_r_max-od)
                end do
             end do
          end do
 
          !-- Boundary points for 3rd derivative
          do od=0,r_scheme%order_boundary+2
-            do n_r=1,r_scheme%order/2+1
+            do n_r_loc=1,r_scheme%order/2+1
                do n_f=n_f_start,n_f_stop
-                  dddf(n_f,n_r) = dddf(n_f,n_r)+r_scheme%dddr_top(n_r,od) * f(n_f,od+1)
+                  dddf(n_f,n_r_loc) = dddf(n_f,n_r_loc)+r_scheme%dddr_top(n_r_loc,od) * f(n_f,od+1)
                end do
             end do
-            do n_r=1,r_scheme%order/2+1
+            do n_r_loc=1,r_scheme%order/2+1
                do n_f=n_f_start,n_f_stop
-                  dddf(n_f,n_r_max-n_r+1) = dddf(n_f,n_r_max-n_r+1)+               &
-                  &                       r_scheme%dddr_bot(n_r,od)*f(n_f,n_r_max-od)
+                  dddf(n_f,n_r_max-n_r_loc+1) = dddf(n_f,n_r_max-n_r_loc+1)+               &
+                  &                       r_scheme%dddr_bot(n_r_loc,od)*f(n_f,n_r_max-od)
                end do
             end do
          end do

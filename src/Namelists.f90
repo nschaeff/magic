@@ -50,7 +50,7 @@ contains
       character(len=1024) :: sbuffer         ! for parallel namelist
       character(:), allocatable :: cmd_args  ! for parallel namelist
 
-      !-- Name lists:
+      !-- Namelists:
       integer :: runHours,runMinutes,runSeconds
       
       namelist/parallel/n_ranks_r,n_ranks_theta,  &

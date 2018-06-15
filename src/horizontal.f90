@@ -5,7 +5,7 @@ module horizontal_data
    !
 
    use geometry, only: l_max, lmP_max, n_theta_max, n_phi_max, &
-       &                 lm_max, n_lm, n_m_max, minc, m_max, l_axi
+       &                 lm_max, n_lm_loc, n_m_max, minc, m_max, l_axi
    use communications, only: slice_Flm
    use radial_functions, only: r_cmb
    use physical_parameters, only: ek
@@ -31,7 +31,7 @@ module horizontal_data
    real(cp), public, allocatable :: osn2(:)
    real(cp), public, allocatable :: cosn2(:)
    real(cp), public, allocatable :: osn1(:)
-   real(cp), public, allocatable :: O_sin_theta(:)
+   real(cp), public, allocatable :: O_sin_theta_loc(:)
    real(cp), public, allocatable :: O_sin_theta_E2(:)
    real(cp), public, allocatable :: sinTheta(:)
    real(cp), public, allocatable :: cosTheta(:)
@@ -93,7 +93,7 @@ contains
       allocate( osn2(n_theta_max/2) )
       allocate( cosn2(n_theta_max/2) )
       allocate( osn1(n_theta_max/2) )
-      allocate( O_sin_theta(n_theta_max) )
+      allocate( O_sin_theta_loc(n_theta_max) )
       allocate( O_sin_theta_E2(n_theta_max) )
       allocate( sinTheta(n_theta_max) )
       allocate( cosTheta(n_theta_max) )
@@ -134,19 +134,19 @@ contains
       bytes_allocated = bytes_allocated+(19*lm_max+n_m_max)*SIZEOF_DEF_REAL
       
       !-- Distributed arrays depending on l and m:
-      allocate( dPhi_loc(n_lm) )
-      allocate( dPhi0_loc(n_lm) )
-!       allocate( dPhi02_loc(n_lm) )
-      allocate( dLH_loc(n_lm) )
-      allocate( dTheta1S_loc(n_lm), dTheta1A_loc(n_lm) )
-      allocate( dTheta2S_loc(n_lm), dTheta2A_loc(n_lm) )
-      allocate( dTheta3S_loc(n_lm), dTheta3A_loc(n_lm) )
-      allocate( dTheta4S_loc(n_lm), dTheta4A_loc(n_lm) )     
-!       allocate( D_l_loc(n_lm),D_lP1_loc(n_lm) )
+      allocate( dPhi_loc(n_lm_loc) )
+      allocate( dPhi0_loc(n_lm_loc) )
+!       allocate( dPhi02_loc(n_lm_loc) )
+      allocate( dLH_loc(n_lm_loc) )
+      allocate( dTheta1S_loc(n_lm_loc), dTheta1A_loc(n_lm_loc) )
+      allocate( dTheta2S_loc(n_lm_loc), dTheta2A_loc(n_lm_loc) )
+      allocate( dTheta3S_loc(n_lm_loc), dTheta3A_loc(n_lm_loc) )
+      allocate( dTheta4S_loc(n_lm_loc), dTheta4A_loc(n_lm_loc) )     
+!       allocate( D_l_loc(n_lm_loc),D_lP1_loc(n_lm_loc) )
 !       allocate( D_mc2m_loc(n_m_max) )
-      allocate( D_m_loc(n_lm) )
-      allocate( hdif_B_loc(n_lm),hdif_V_loc(n_lm),hdif_S_loc(n_lm) )
-      allocate( hdif_Xi_loc(n_lm) )
+      allocate( D_m_loc(n_lm_loc) )
+      allocate( hdif_B_loc(n_lm_loc),hdif_V_loc(n_lm_loc),hdif_S_loc(n_lm_loc) )
+      allocate( hdif_Xi_loc(n_lm_loc) )
 
       !-- Limiting l for a given m, used in legtf
       allocate( lStart(n_m_max),lStop(n_m_max) )
@@ -159,7 +159,7 @@ contains
    subroutine finalize_horizontal_data
 
       deallocate( sinTheta, cosTheta, theta, theta_ord, n_theta_cal2ord )
-      deallocate( sn2, osn2, cosn2, osn1, O_sin_theta, O_sin_theta_E2, phi )
+      deallocate( sn2, osn2, cosn2, osn1, O_sin_theta_loc, O_sin_theta_E2, phi )
       deallocate( Plm, wPlm, dPlm, gauss, dPl0Eq )
       if ( l_RMS ) deallocate( wdPlm )
       deallocate( dPhi, dPhi0, dPhi02, dLh, dTheta1S, dTheta1A )
@@ -186,7 +186,7 @@ contains
       !
 
       !-- Local variables:
-      integer :: norm,n_theta,n_phi
+      integer :: norm,n_theta_loc,n_phi
       integer :: l,m,lm,lmP,mc
       real(cp) :: ampnu!,q0
       real(cp) :: clm(0:l_max+1,0:l_max+1)
@@ -208,24 +208,24 @@ contains
       !         southern hemisphere values differ from the northern hemisphere
       !         values by a sign that depends on the symmetry of the function.
       !         The only asymmetric function (sign=-1) stored here is cosn2 !
-      do n_theta=1,n_theta_max/2  ! Loop over colat in NHS
+      do n_theta_loc=1,n_theta_max/2  ! Loop over colat in NHS
 
-         colat=theta_ord(n_theta)
+         colat=theta_ord(n_theta_loc)
 
          !----- plmtheta calculates plms and their derivatives
          !      up to degree and order l_max+1 and m_max at
-         !      the points cos(theta_ord(n_theta)):
+         !      the points cos(theta_ord(n_theta_loc)):
          call plm_theta(colat,l_max+1,m_max,minc, &
                         plma,dtheta_plma,lmP_max,norm)
          do lmP=1,lmP_max
             l=lmP2l(lmP)
             if ( l <= l_max ) then
                lm=lmP2lm(lmP)
-               Plm(lm,n_theta) =plma(lmP)
-               dPlm(lm,n_theta)=dtheta_plma(lmP)
+               Plm(lm,n_theta_loc) =plma(lmP)
+               dPlm(lm,n_theta_loc)=dtheta_plma(lmP)
             end if
-            wPlm(lmP,n_theta) =two*pi*gauss(n_theta)*plma(lmP)
-            if ( l_RMS ) wdPlm(lmP,n_theta)=two*pi*gauss(n_theta)*dtheta_plma(lmP)
+            wPlm(lmP,n_theta_loc) =two*pi*gauss(n_theta_loc)*plma(lmP)
+            if ( l_RMS ) wdPlm(lmP,n_theta_loc)=two*pi*gauss(n_theta_loc)*dtheta_plma(lmP)
          end do
 
          ! Get dP for all degrees and order m=0 at the equator only
@@ -233,29 +233,29 @@ contains
          call plm_theta(half*pi,l_max,0,minc,Pl0Eq,dPl0Eq,l_max+1,norm)
 
          !-- More functions stored to obscure the code:
-         sn2(n_theta)               =sin(colat)**2
-         osn1(n_theta)              =one/sin(colat)
-         osn2(n_theta)              =osn1(n_theta)*osn1(n_theta)
-         cosn2(n_theta)             =cos(colat)*osn2(n_theta)
-         O_sin_theta(2*n_theta-1)   =one/sin(colat)
-         O_sin_theta(2*n_theta  )   =one/sin(colat)
-         O_sin_theta_E2(2*n_theta-1)=one/(sin(colat)*sin(colat))
-         O_sin_theta_E2(2*n_theta  )=one/(sin(colat)*sin(colat))
-         sinTheta(2*n_theta-1)      =sin(colat)
-         sinTheta(2*n_theta  )      =sin(colat)
-         cosTheta(2*n_theta-1)      =cos(colat)
-         cosTheta(2*n_theta  )      =-cos(colat)
+         sn2(n_theta_loc)               =sin(colat)**2
+         osn1(n_theta_loc)              =one/sin(colat)
+         osn2(n_theta_loc)              =osn1(n_theta_loc)*osn1(n_theta_loc)
+         cosn2(n_theta_loc)             =cos(colat)*osn2(n_theta_loc)
+         O_sin_theta_loc(2*n_theta_loc-1)   =one/sin(colat)
+         O_sin_theta_loc(2*n_theta_loc  )   =one/sin(colat)
+         O_sin_theta_E2(2*n_theta_loc-1)=one/(sin(colat)*sin(colat))
+         O_sin_theta_E2(2*n_theta_loc  )=one/(sin(colat)*sin(colat))
+         sinTheta(2*n_theta_loc-1)      =sin(colat)
+         sinTheta(2*n_theta_loc  )      =sin(colat)
+         cosTheta(2*n_theta_loc-1)      =cos(colat)
+         cosTheta(2*n_theta_loc  )      =-cos(colat)
                     
       end do
 
 
       !-- Resort thetas in the alternating north/south order they
       !   are used for the calculations:
-      do n_theta=1,n_theta_max/2
-         n_theta_cal2ord(2*n_theta-1)=n_theta
-         n_theta_cal2ord(2*n_theta)  =n_theta_max-n_theta+1
-         theta(2*n_theta-1)          =theta_ord(n_theta)
-         theta(2*n_theta)            =theta_ord(n_theta_max-n_theta+1)
+      do n_theta_loc=1,n_theta_max/2
+         n_theta_cal2ord(2*n_theta_loc-1)=n_theta_loc
+         n_theta_cal2ord(2*n_theta_loc)  =n_theta_max-n_theta_loc+1
+         theta(2*n_theta_loc-1)          =theta_ord(n_theta_loc)
+         theta(2*n_theta_loc)            =theta_ord(n_theta_max-n_theta_loc+1)
       end do
          
 

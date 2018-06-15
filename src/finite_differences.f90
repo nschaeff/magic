@@ -102,7 +102,7 @@ contains
       !-- Local quantities:
       real(cp) :: dr_before, dr_after
       character(len=80) :: message
-      integer :: n_r
+      integer :: n_r_loc
       integer :: n_bulk_points, n_boundary_points
 
       r(1)=rcmb ! start with the outer boundary
@@ -111,8 +111,8 @@ contains
 
          dr_before = one/(real(n_r_max,cp)-one)
          dr_after = dr_before
-         do n_r=2,n_r_max
-            r(n_r)=r(n_r-1)-dr_before
+         do n_r_loc=2,n_r_max
+            r(n_r_loc)=r(n_r_loc-1)-dr_before
          end do
 
       else  ! irregular grid
@@ -124,7 +124,7 @@ contains
          dr_after  = exp( log(ratio2)/real(n_boundary_points,cp) )
          dr_before = one
 
-         do n_r=1,n_boundary_points
+         do n_r_loc=1,n_boundary_points
             dr_before=dr_before*dr_after
          end do
          dr_before=one/(real(n_bulk_points,cp)+two*dr_after*((one-dr_before) &
@@ -133,26 +133,26 @@ contains
          write(message,'(''!      drMax='',ES16.6)') dr_before
          call logWrite(message)
 
-         do n_r=1,n_boundary_points
+         do n_r_loc=1,n_boundary_points
             dr_before = dr_before*dr_after
          end do
 
          write(message,'(''!      drMin='',ES16.6)') dr_before
          call logWrite(message)
 
-         do n_r=2,n_boundary_points+1
-            r(n_r) = r(n_r-1)-dr_before
+         do n_r_loc=2,n_boundary_points+1
+            r(n_r_loc) = r(n_r_loc-1)-dr_before
             dr_before = dr_before/dr_after
          end do
 
-         do n_r=1,n_bulk_points
-            r(n_r+n_boundary_points+1)=r(n_r+n_boundary_points)-dr_before
+         do n_r_loc=1,n_bulk_points
+            r(n_r_loc+n_boundary_points+1)=r(n_r_loc+n_boundary_points)-dr_before
          end do
 
-         do n_r=1,n_boundary_points
+         do n_r_loc=1,n_boundary_points
             dr_before = dr_before*dr_after
-            r(n_r+n_boundary_points+n_bulk_points+1)=         &
-            &        r(n_r+n_boundary_points+n_bulk_points)-dr_before
+            r(n_r_loc+n_boundary_points+n_bulk_points+1)=         &
+            &        r(n_r_loc+n_boundary_points+n_bulk_points)-dr_before
          end do
 
       end if
@@ -181,7 +181,7 @@ contains
       !-- Local quantities:
       real(cp), allocatable :: dr_spacing(:)
       real(cp), allocatable :: taylor_exp(:,:)
-      integer :: n_r, od
+      integer :: n_r_loc, od
 
       !
       !-- Step 1: First and 2nd derivatives in the bulk
@@ -189,17 +189,17 @@ contains
       allocate( dr_spacing(this%order+1) )
       allocate( taylor_exp(0:this%order,0:this%order) )
 
-      do n_r=1+this%order/2,this%n_max-this%order/2
+      do n_r_loc=1+this%order/2,this%n_max-this%order/2
          do od=0,this%order
-            dr_spacing(od+1)=r(n_r-this%order/2+od)-r(n_r)
+            dr_spacing(od+1)=r(n_r_loc-this%order/2+od)-r(n_r_loc)
          end do
 
          call populate_fd_weights(0.0_cp,dr_spacing,this%order, &
               &                   this%order,taylor_exp)
 
          do od=0,this%order
-            this%dr(n_r,od) =taylor_exp(od,1)
-            this%ddr(n_r,od)=taylor_exp(od,2)
+            this%dr(n_r_loc,od) =taylor_exp(od,1)
+            this%ddr(n_r_loc,od)=taylor_exp(od,2)
          end do
       end do
 
@@ -211,32 +211,32 @@ contains
       allocate( dr_spacing(this%order_boundary+1) )
       allocate( taylor_exp(0:this%order_boundary,0:this%order_boundary) )
 
-      do n_r=1,this%order/2
+      do n_r_loc=1,this%order/2
          do od=0,this%order_boundary
-            dr_spacing(od+1)=r(od+1)-r(n_r)
+            dr_spacing(od+1)=r(od+1)-r(n_r_loc)
          end do
 
          call populate_fd_weights(0.0_cp,dr_spacing,this%order_boundary, &
               &                   this%order_boundary,taylor_exp)
 
          do od=0,this%order_boundary
-            this%dr_top(n_r,od) =taylor_exp(od,1)
+            this%dr_top(n_r_loc,od) =taylor_exp(od,1)
          end do
       end do
 
       !
       !-- Step 3: First derivative for the inner points
       !
-      do n_r=1,this%order/2
+      do n_r_loc=1,this%order/2
          do od=0,this%order_boundary
-            dr_spacing(od+1)=r(this%n_max-od)-r(this%n_max-n_r+1)
+            dr_spacing(od+1)=r(this%n_max-od)-r(this%n_max-n_r_loc+1)
          end do
 
          call populate_fd_weights(0.0_cp,dr_spacing,this%order_boundary, &
               &                   this%order_boundary,taylor_exp)
 
          do od=0,this%order_boundary
-            this%dr_bot(n_r,od) =taylor_exp(od,1)
+            this%dr_bot(n_r_loc,od) =taylor_exp(od,1)
          end do
       end do
 
@@ -248,32 +248,32 @@ contains
       allocate( dr_spacing(this%order_boundary+2) )
       allocate( taylor_exp(0:this%order_boundary+1,0:this%order_boundary+1) )
 
-      do n_r=1,this%order/2
+      do n_r_loc=1,this%order/2
          do od=0,this%order_boundary+1
-            dr_spacing(od+1)=r(od+1)-r(n_r)
+            dr_spacing(od+1)=r(od+1)-r(n_r_loc)
          end do
 
          call populate_fd_weights(0.0_cp,dr_spacing,this%order_boundary+1, &
               &                   this%order_boundary+1,taylor_exp)
 
          do od=0,this%order_boundary+1
-            this%ddr_top(n_r,od) =taylor_exp(od,2)
+            this%ddr_top(n_r_loc,od) =taylor_exp(od,2)
          end do
       end do
 
       !
       !-- Step 5: 2nd derivative for the inner points
       !
-      do n_r=1,this%order/2
+      do n_r_loc=1,this%order/2
          do od=0,this%order_boundary+1
-            dr_spacing(od+1)=r(this%n_max-od)-r(this%n_max-n_r+1)
+            dr_spacing(od+1)=r(this%n_max-od)-r(this%n_max-n_r_loc+1)
          end do
 
          call populate_fd_weights(0.0_cp,dr_spacing,this%order_boundary+1, &
               &                   this%order_boundary+1,taylor_exp)
 
          do od=0,this%order_boundary+1
-            this%ddr_bot(n_r,od) =taylor_exp(od,2)
+            this%ddr_bot(n_r_loc,od) =taylor_exp(od,2)
          end do
       end do
 
@@ -285,15 +285,15 @@ contains
       allocate( dr_spacing(this%order+3) )
       allocate( taylor_exp(0:this%order+2,0:this%order+2) )
 
-      do n_r=2+this%order/2,this%n_max-this%order/2-1
+      do n_r_loc=2+this%order/2,this%n_max-this%order/2-1
          do od=0,this%order+2
-            dr_spacing(od+1)=r(n_r-this%order/2-1+od)-r(n_r)
+            dr_spacing(od+1)=r(n_r_loc-this%order/2-1+od)-r(n_r_loc)
          end do
 
          call populate_fd_weights(0.0_cp,dr_spacing,this%order+2,this%order+2, &
               &                   taylor_exp)
          do od=0,this%order+2
-            this%dddr(n_r,od) =taylor_exp(od,3)
+            this%dddr(n_r_loc,od) =taylor_exp(od,3)
          end do
       end do
 
@@ -305,32 +305,32 @@ contains
       allocate( dr_spacing(this%order_boundary+3) )
       allocate( taylor_exp(0:this%order_boundary+2,0:this%order_boundary+2) )
 
-      do n_r=1,this%order/2+1
+      do n_r_loc=1,this%order/2+1
          do od=0,this%order_boundary+2
-            dr_spacing(od+1)=r(od+1)-r(n_r)
+            dr_spacing(od+1)=r(od+1)-r(n_r_loc)
          end do
 
          call populate_fd_weights(0.0_cp,dr_spacing,this%order_boundary+2, &
               &                   this%order_boundary+2,taylor_exp)
 
          do od=0,this%order_boundary+2
-            this%dddr_top(n_r,od) =taylor_exp(od,3)
+            this%dddr_top(n_r_loc,od) =taylor_exp(od,3)
          end do
       end do
 
       !
       !-- Step 8: 3rd derivative for the inner points
       !
-      do n_r=1,this%order/2+1
+      do n_r_loc=1,this%order/2+1
          do od=0,this%order_boundary+2
-            dr_spacing(od+1)=r(this%n_max-od)-r(this%n_max-n_r+1)
+            dr_spacing(od+1)=r(this%n_max-od)-r(this%n_max-n_r_loc+1)
          end do
 
          call populate_fd_weights(0.0_cp,dr_spacing,this%order_boundary+2, &
               &                   this%order_boundary+2,taylor_exp)
 
          do od=0,this%order_boundary+2
-            this%dddr_bot(n_r,od) =taylor_exp(od,3)
+            this%dddr_bot(n_r_loc,od) =taylor_exp(od,3)
          end do
       end do
 
@@ -346,7 +346,7 @@ contains
       integer,  intent(in) :: n_r_max
 
       !-- Local variables
-      integer :: i, j, n_r
+      integer :: i, j, n_r_loc
 
       !-- Set everything to zero
       do j=1,n_r_max
@@ -360,32 +360,32 @@ contains
       end do
 
       !-- Bulk points for 1st and 2nd derivatives
-      do n_r=this%order/2+1,n_r_max-this%order/2
-         this%drMat(n_r,n_r-this%order/2:n_r+this%order/2) = this%dr(n_r,:)
-         this%d2rMat(n_r,n_r-this%order/2:n_r+this%order/2)=this%ddr(n_r,:)
+      do n_r_loc=this%order/2+1,n_r_max-this%order/2
+         this%drMat(n_r_loc,n_r_loc-this%order/2:n_r_loc+this%order/2) = this%dr(n_r_loc,:)
+         this%d2rMat(n_r_loc,n_r_loc-this%order/2:n_r_loc+this%order/2)=this%ddr(n_r_loc,:)
       end do
 
       !-- Bulk points for 3rd derivative
-      do n_r=2+this%order/2,n_r_max-this%order/2-1
-         this%d3rMat(n_r,n_r-this%order/2-1:n_r+this%order/2+1)=this%dddr(n_r,:)
+      do n_r_loc=2+this%order/2,n_r_max-this%order/2-1
+         this%d3rMat(n_r_loc,n_r_loc-this%order/2-1:n_r_loc+this%order/2+1)=this%dddr(n_r_loc,:)
       end do
 
       !-- Boundary points for 1st derivative
-      do n_r=1,this%order/2
-         this%drMat(n_r,1:this%order_boundary+1)                         =this%dr_top(n_r,:)
-         this%drMat(n_r_max-n_r+1,n_r_max:n_r_max-this%order_boundary:-1)=this%dr_bot(n_r,:)
+      do n_r_loc=1,this%order/2
+         this%drMat(n_r_loc,1:this%order_boundary+1)                         =this%dr_top(n_r_loc,:)
+         this%drMat(n_r_max-n_r_loc+1,n_r_max:n_r_max-this%order_boundary:-1)=this%dr_bot(n_r_loc,:)
       end do
 
       !-- Boundary points for 2nd derivative
-      do n_r=1,this%order/2
-         this%d2rMat(n_r,1:this%order_boundary+2)                           =this%ddr_top(n_r,:)
-         this%d2rMat(n_r_max-n_r+1,n_r_max:n_r_max-this%order_boundary-1:-1)=this%ddr_bot(n_r,:)
+      do n_r_loc=1,this%order/2
+         this%d2rMat(n_r_loc,1:this%order_boundary+2)                           =this%ddr_top(n_r_loc,:)
+         this%d2rMat(n_r_max-n_r_loc+1,n_r_max:n_r_max-this%order_boundary-1:-1)=this%ddr_bot(n_r_loc,:)
       end do
 
       !-- Boundary points for 3rd derivative
-      do n_r=1,this%order/2+1
-         this%d3rMat(n_r,1:this%order_boundary+3)                           =this%dddr_top(n_r,:)
-         this%d3rMat(n_r_max-n_r+1,n_r_max:n_r_max-this%order_boundary-2:-1)=this%dddr_bot(n_r,:)
+      do n_r_loc=1,this%order/2+1
+         this%d3rMat(n_r_loc,1:this%order_boundary+3)                           =this%dddr_top(n_r_loc,:)
+         this%d3rMat(n_r_max-n_r_loc+1,n_r_max:n_r_max-this%order_boundary-2:-1)=this%dddr_bot(n_r_loc,:)
       end do
 
    end subroutine get_der_mat

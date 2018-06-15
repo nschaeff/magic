@@ -15,7 +15,7 @@ module init_fields
        &                 l_axi,minc,n_cheb_ic_max,lm_max, n_r_icb,    &
        &                 n_r_cmb, l_r, u_r
    use mem_alloc, only: bytes_allocated
-   use blocking, only: nfs, nThetaBs, sizeThetaB, lo_map, st_map,  &
+   use blocking, only: nfs, nThetaBs, sizeThetaB, lo_map,  &
        &               lmStartB, lmStopB
    use horizontal_data, only: sinTheta, dLh, dTheta1S, dTheta1A, &
        &                      phi, cosTheta, hdif_B, D_lP1
@@ -49,6 +49,7 @@ module init_fields
    use algebra, only: sgesl, sgefa, cgesl
    use legendre_grid_to_spec, only: legTF1
    use cosine_transform_odd
+   use LMmapping, only: radial_map
 
    implicit none
 
@@ -209,17 +210,17 @@ contains
             !        additional application of r**2/(l*(l+1)) then yields
             !        the axisymmetric toriodal flow contribution:
             do lm=2,lm_max
-               l   =st_map%lm2l(lm)
-               m   =st_map%lm2m(lm)
-               st_lmP=st_map%lm2lmP(lm)
+               l   =radial_map%lm2l(lm)
+               m   =radial_map%lm2m(lm)
+               st_lmP=radial_map%lm2lmP(lm)
                if ( l > m ) then
                   z_Rloc(lm,nR)=z_Rloc(lm,nR) + r(nR)**2/dLh(lm) * ( &
-                  &    dTheta1S(lm)*omeLM(st_map%lmP2lmPS(st_lmP))   &
-                  &   -dTheta1A(lm)*omeLM(st_map%lmP2lmPA(st_lmP)) )
+                  &    dTheta1S(lm)*omeLM(radial_map%lmP2lmPS(st_lmP))   &
+                  &   -dTheta1A(lm)*omeLM(radial_map%lmP2lmPA(st_lmP)) )
                else if ( l == m ) then
                   if ( dLh(lm) /= 0.0_cp ) then 
                      z_Rloc(lm,nR)=z_Rloc(lm,nR) - r(nR)**2/dLh(lm) *  &
-                     &    dTheta1A(lm)*omeLM(st_map%lmP2lmPA(st_lmP))
+                     &    dTheta1A(lm)*omeLM(radial_map%lmP2lmPA(st_lmP))
                   end if
                end if
             end do
@@ -279,18 +280,18 @@ contains
             !             additional application of r**2/(l*(l+1)) then yields
             !             the axisymmetric toriodal flow contribution:
             do lm=2,lm_max
-               l   =st_map%lm2l(lm)
-               m   =st_map%lm2m(lm)
-               st_lmP=st_map%lm2lmP(st_map%lm2(l,m))
+               l   =radial_map%lm2l(lm)
+               m   =radial_map%lm2m(lm)
+               st_lmP=radial_map%lm2lmP(radial_map%lm2(l,m))
                if ( l > m ) then
                   z_Rloc(lm,nR)=z_Rloc(lm,nR) + &
                   &    r(nR)**2/dLh(lm) * ( &
-                  &    dTheta1S(lm)*omeLM(st_map%lmP2lmPS(st_lmP)) &
-                  &    - dTheta1A(lm)*omeLM(st_map%lmP2lmPA(st_lmP)) )
+                  &    dTheta1S(lm)*omeLM(radial_map%lmP2lmPS(st_lmP)) &
+                  &    - dTheta1A(lm)*omeLM(radial_map%lmP2lmPA(st_lmP)) )
                else if ( l == m ) then
                   if ( dLh(lm) /= 0.0_cp ) then 
                       z_Rloc(lm,nR)=z_Rloc(lm,nR) - r(nR)**2/dLh(lm) * &
-                      &    dTheta1A(lm)*omeLM(st_map%lmP2lmPA(st_lmP))
+                      &    dTheta1A(lm)*omeLM(radial_map%lmP2lmPA(st_lmP))
                   end if
                end if
             end do
@@ -447,7 +448,7 @@ contains
       complex(cp), intent(inout) :: p(llm:ulm,n_r_max)
 
       !-- Local variables:
-      integer :: n_r,lm,l,m,lm00
+      integer :: n_r_loc,lm,l,m,lm00
       real(cp) :: x,rr,c_r,c_i,s_r,s_i
       real(cp) :: ra1,ra2
       real(cp) :: s0(n_r_max),p0(n_r_max),s1(n_r_max)
@@ -479,30 +480,30 @@ contains
             open(newunit=filehandle, file='scond.dat')
             if ( l_TP_form .or. l_anelastic_liquid ) then
                call pt_cond(s0,p0)
-               do n_r=1,n_r_max
-                  write(filehandle,'(5ES20.12)') r(n_r), osq4pi*otemp1(n_r)* &
-                  &            (s0(n_r)-ViscHeatFac*ThExpNb*alpha0(n_r)*     &
-                  &            temp0(n_r)*orho1(n_r)*p0(n_r)),               &
-                  &            osq4pi*p0(n_r), osq4pi*s0(n_r),               &
-                  &            osq4pi*alpha0(n_r)*(-rho0(n_r)*s0(n_r)+       &
-                  &            ViscHeatFac*ThExpNb*(alpha0(n_r)*temp0(n_r)   &
-                  &            +ogrun(n_r))*p0(n_r))
+               do n_r_loc=1,n_r_max
+                  write(filehandle,'(5ES20.12)') r(n_r_loc), osq4pi*otemp1(n_r_loc)* &
+                  &            (s0(n_r_loc)-ViscHeatFac*ThExpNb*alpha0(n_r_loc)*     &
+                  &            temp0(n_r_loc)*orho1(n_r_loc)*p0(n_r_loc)),               &
+                  &            osq4pi*p0(n_r_loc), osq4pi*s0(n_r_loc),               &
+                  &            osq4pi*alpha0(n_r_loc)*(-rho0(n_r_loc)*s0(n_r_loc)+       &
+                  &            ViscHeatFac*ThExpNb*(alpha0(n_r_loc)*temp0(n_r_loc)   &
+                  &            +ogrun(n_r_loc))*p0(n_r_loc))
                end do
             else
                call ps_cond(s0,p0)
-               do n_r=1,n_r_max
-                  write(filehandle,'(5ES20.12)') r(n_r), s0(n_r)*osq4pi, &
-                  &            p0(n_r)*osq4pi, osq4pi*temp0(n_r)*(       &
-                  &            s0(n_r)+alpha0(n_r)*orho1(n_r)*p0(n_r)*   &
-                  &            ThExpNb*ViscHeatFac), osq4pi*alpha0(n_r)* &
-                  &            ThExpNb*(-rho0(n_r)*temp0(n_r)*s0(n_r)+   &
-                  &            ViscHeatFac*ogrun(n_r)*p0(n_r))
+               do n_r_loc=1,n_r_max
+                  write(filehandle,'(5ES20.12)') r(n_r_loc), s0(n_r_loc)*osq4pi, &
+                  &            p0(n_r_loc)*osq4pi, osq4pi*temp0(n_r_loc)*(       &
+                  &            s0(n_r_loc)+alpha0(n_r_loc)*orho1(n_r_loc)*p0(n_r_loc)*   &
+                  &            ThExpNb*ViscHeatFac), osq4pi*alpha0(n_r_loc)* &
+                  &            ThExpNb*(-rho0(n_r_loc)*temp0(n_r_loc)*s0(n_r_loc)+   &
+                  &            ViscHeatFac*ogrun(n_r_loc)*p0(n_r_loc))
                end do
             end if
             close(filehandle)
-            do n_r=1,n_r_max
-               s(lm00,n_r)=s0(n_r)
-               p(lm00,n_r)=p0(n_r)
+            do n_r_loc=1,n_r_max
+               s(lm00,n_r_loc)=s0(n_r_loc)
+               p(lm00,n_r_loc)=p0(n_r_loc)
             end do
 
          end if
@@ -510,9 +511,9 @@ contains
       end if
 
       !-- Radial dependence of perturbation in s1:
-      do n_r=1,n_r_max
-         x=two*r(n_r)-r_cmb-r_icb
-         s1(n_r)=one-three*x**2+three*x**4-x**6
+      do n_r_loc=1,n_r_max
+         x=two*r(n_r_loc)-r_cmb-r_icb
+         s1(n_r_loc)=one-three*x**2+three*x**4-x**6
       end do
 
       !-- In case 's' denotes temperature
@@ -528,13 +529,13 @@ contains
             l1 = lo_map%lm2l(lm)
             ra1=(-one+two*random(0.0_cp))*amp_s1/(real(l1,cp))**(init_s1-1)
             ra2=(-one+two*random(0.0_cp))*amp_s1/(real(l1,cp))**(init_s1-1)
-            do n_r=1,n_r_max
-               c_r=ra1*s1(n_r)
-               c_i=ra2*s1(n_r)
+            do n_r_loc=1,n_r_max
+               c_r=ra1*s1(n_r_loc)
+               c_i=ra2*s1(n_r_loc)
                if ( m1 > 0 ) then  ! non axisymmetric modes
-                  s(lm,n_r)=s(lm,n_r)+cmplx(c_r,c_i,kind=cp)
+                  s(lm,n_r_loc)=s(lm,n_r_loc)+cmplx(c_r,c_i,kind=cp)
                else
-                  s(lm,n_r)=s(lm,n_r)+cmplx(c_r,0.0_cp,kind=cp)
+                  s(lm,n_r_loc)=s(lm,n_r_loc)+cmplx(c_r,0.0_cp,kind=cp)
                end if
             end do
          end do
@@ -560,9 +561,9 @@ contains
          end if
          lm=lo_map%lm2(l,m)
          if( (lm>=lmStartB(coord_r+1)) .and. (lm<=lmStopB(coord_r+1)) ) then
-            do n_r=1,n_r_max
-               c_r=s1(n_r)*amp_s1
-               s(lm,n_r)=s(lm,n_r)+cmplx(c_r,0.0_cp,kind=cp)
+            do n_r_loc=1,n_r_max
+               c_r=s1(n_r_loc)*amp_s1
+               s(lm,n_r_loc)=s(lm,n_r_loc)+cmplx(c_r,0.0_cp,kind=cp)
             end do
 
             write(*,'(/'' ! Entropy initialized at mode:'', &
@@ -593,10 +594,10 @@ contains
                   s_r = 0.0_cp
                   s_i = amp_s2
                end if
-               do n_r=1,n_r_max
-                  c_r=s1(n_r)*s_r
-                  c_i=s1(n_r)*s_i
-                  s(lm,n_r)=s(lm,n_r)+cmplx(c_r,c_i,kind=cp)
+               do n_r_loc=1,n_r_max
+                  c_r=s1(n_r_loc)*s_r
+                  c_i=s1(n_r_loc)*s_i
+                  s(lm,n_r_loc)=s(lm,n_r_loc)+cmplx(c_r,c_i,kind=cp)
                end do
                write(6,'('' ! Second mode:'', &
                     &  '' l='',i3,'' m='',i3,'' Ampl='',f8.5/)') l,m,amp_s2
@@ -673,7 +674,7 @@ contains
       !--- sFac describes the linear dependence of the (l=0,m=0) mode
       !    on the amplitude peakS, SQRT(4*pi) is a normalisation factor
       !    according to the spherical harmonic function form chosen here.
-         sFac(nS)=real(sLM(st_map%lm2(0,0)))*osq4pi
+         sFac(nS)=real(sLM(radial_map%lm2(0,0)))*osq4pi
 
       end do ! Loop over peak
 
@@ -758,7 +759,7 @@ contains
       !    for example by setting: s_top= 0 0 -1 0
       do m=0,l_max,minc
          do l=m,l_max
-            lm=st_map%lmP2(l,m)
+            lm=radial_map%lmP2(l,m)
             if ( l <= l_max .and. l > 0 ) tops(l,m)=tops(l,m)+sLM(lm)
          end do
       end do
@@ -797,7 +798,7 @@ contains
       complex(cp), intent(inout) :: xi(llm:ulm,n_r_max)
 
       !-- Local variables:
-      integer :: n_r,lm,l,m,lm00
+      integer :: n_r_loc,lm,l,m,lm00
       real(cp) :: x,rr,c_r,c_i,xi_r,xi_i
       real(cp) :: ra1,ra2
       real(cp) :: xi0(n_r_max),xi1(n_r_max)
@@ -821,9 +822,9 @@ contains
          if ( (lmStartB(coord_r+1) <= lm00) .and. (lmStopB(coord_r+1) >= lm00) ) then
             call xi_cond(xi0)
             open(newunit=fileHandle, file='xicond.dat')
-            do n_r=1,n_r_max
-               xi(lm00,n_r)=xi0(n_r)
-               write(fileHandle,*) r(n_r), xi0(n_r)*osq4pi
+            do n_r_loc=1,n_r_max
+               xi(lm00,n_r_loc)=xi0(n_r_loc)
+               write(fileHandle,*) r(n_r_loc), xi0(n_r_loc)*osq4pi
             end do
             close(fileHandle)
          end if
@@ -831,9 +832,9 @@ contains
       end if
 
       !-- Radial dependence of perturbation in xi1:
-      do n_r=1,n_r_max
-         x=two*r(n_r)-r_cmb-r_icb
-         xi1(n_r)=one-three*x**2+three*x**4-x**6
+      do n_r_loc=1,n_r_max
+         x=two*r(n_r_loc)-r_cmb-r_icb
+         xi1(n_r_loc)=one-three*x**2+three*x**4-x**6
       end do
 
       if ( init_xi1 < 100 .and. init_xi1 > 0 ) then
@@ -846,13 +847,13 @@ contains
             l1 = lo_map%lm2l(lm)
             ra1=(-one+two*random(0.0_cp))*amp_xi1/(real(l1,cp))**(init_xi1-1)
             ra2=(-one+two*random(0.0_cp))*amp_xi1/(real(l1,cp))**(init_xi1-1)
-            do n_r=1,n_r_max
-               c_r=ra1*xi1(n_r)
-               c_i=ra2*xi1(n_r)
+            do n_r_loc=1,n_r_max
+               c_r=ra1*xi1(n_r_loc)
+               c_i=ra2*xi1(n_r_loc)
                if ( m1 > 0 ) then  ! non axisymmetric modes
-                  xi(lm,n_r)=xi(lm,n_r)+cmplx(c_r,c_i,kind=cp)
+                  xi(lm,n_r_loc)=xi(lm,n_r_loc)+cmplx(c_r,c_i,kind=cp)
                else
-                  xi(lm,n_r)=xi(lm,n_r)+cmplx(c_r,0.0_cp,kind=cp)
+                  xi(lm,n_r_loc)=xi(lm,n_r_loc)+cmplx(c_r,0.0_cp,kind=cp)
                end if
             end do
          end do
@@ -879,9 +880,9 @@ contains
          lm=lo_map%lm2(l,m)
 
          if ( (lmStartB(coord_r+1) <= lm) .and. (lmStopB(coord_r+1) >= lm) ) then
-            do n_r=1,n_r_max
-               c_r=xi1(n_r)*amp_xi1
-               xi(lm,n_r)=xi(lm,n_r)+cmplx(c_r,0.0_cp,kind=cp)
+            do n_r_loc=1,n_r_max
+               c_r=xi1(n_r_loc)*amp_xi1
+               xi(lm,n_r_loc)=xi(lm,n_r_loc)+cmplx(c_r,0.0_cp,kind=cp)
             end do
 
             write(*,'(/'' ! Chemical composition initialized at mode:'', &
@@ -912,10 +913,10 @@ contains
                   xi_r = 0.0_cp
                   xi_i = amp_s2
                end if
-               do n_r=1,n_r_max
-                  c_r=xi1(n_r)*xi_r
-                  c_i=xi1(n_r)*xi_i
-                  xi(lm,n_r)=xi(lm,n_r)+cmplx(c_r,c_i,kind=cp)
+               do n_r_loc=1,n_r_max
+                  c_r=xi1(n_r_loc)*xi_r
+                  c_i=xi1(n_r_loc)*xi_i
+                  xi(lm,n_r_loc)=xi(lm,n_r_loc)+cmplx(c_r,c_i,kind=cp)
                end do
                write(6,'('' ! Second mode:'', &
                     &  '' l='',i3,'' m='',i3,'' Ampl='',f8.5/)') l,m,amp_xi2
@@ -991,7 +992,7 @@ contains
       !--- xiFac describes the linear dependence of the (l=0,m=0) mode
       !    on the amplitude peakXi, sqrt(4*pi) is a normalisation factor
       !    according to the spherical harmonic function form chosen here.
-         xiFac(nXi)=real(xiLM(st_map%lm2(0,0)))*osq4pi
+         xiFac(nXi)=real(xiLM(radial_map%lm2(0,0)))*osq4pi
 
       end do ! Loop over peak
 
@@ -1075,7 +1076,7 @@ contains
       !    for example by setting: s_top= 0 0 -1 0
       do m=0,l_max,minc
          do l=m,l_max
-            lm=st_map%lmP2(l,m)
+            lm=radial_map%lmP2(l,m)
             if ( l <= l_max .and. l > 0 ) topxi(l,m)=topxi(l,m)+xiLM(lm)
          end do
       end do
@@ -1101,7 +1102,7 @@ contains
 
       !-- Local variables:
       integer :: lm,lm0,l1,m1
-      integer :: n_r
+      integer :: n_r_loc
       real(cp) :: b_pol,b_tor
       complex(cp) :: aj0(n_r_max+1)
       complex(cp) :: aj0_ic(n_r_ic_max)
@@ -1190,9 +1191,9 @@ contains
          aVarCon =-one/255.0_cp
          bVarCon =256.0_cp/255.0_cp
          if ( lmStartB(coord_r+1) <= lm0 .and. lmStopB(coord_r+1) >= lm0 ) then ! select processor
-            do n_r=1,n_r_max             ! Diffusive toroidal field
-               jVarCon(n_r)=aVarCon*r(n_r)**2 + bVarCon/(r(n_r)**6)
-               aj(lm0,n_r) =jVarCon(n_r) + 0.1_cp*sin((r(n_r)-r_ICB)*pi)
+            do n_r_loc=1,n_r_max             ! Diffusive toroidal field
+               jVarCon(n_r_loc)=aVarCon*r(n_r_loc)**2 + bVarCon/(r(n_r_loc)**6)
+               aj(lm0,n_r_loc) =jVarCon(n_r_loc) + 0.1_cp*sin((r(n_r_loc)-r_ICB)*pi)
             end do
          end if
 
@@ -1205,12 +1206,12 @@ contains
       !      bpeakbot is only used for insulating inner core !
          if ( lmStartB(coord_r+1) <= lm0 .and. lmStopB(coord_r+1) >= lm0 ) then ! select processor
             call j_cond(lm0,aj0,aj0_ic)
-            do n_r=1,n_r_max             ! Diffusive toroidal field
-               aj(lm0,n_r)=aj0(n_r)
+            do n_r_loc=1,n_r_max             ! Diffusive toroidal field
+               aj(lm0,n_r_loc)=aj0(n_r_loc)
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  aj_ic(lm0,n_r)=aj0_ic(n_r)
+               do n_r_loc=1,n_r_ic_max
+                  aj_ic(lm0,n_r_loc)=aj0_ic(n_r_loc)
                end do
             end if
          end if
@@ -1224,16 +1225,16 @@ contains
          if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then ! select processor
             b_tor=-two*amp_b1*sqrt(third*pi)  ! minus sign makes phi comp. > 0
             if ( l_cond_ic ) then
-               do n_r=1,n_r_max
-                  aj(l1m0,n_r)=aj(l1m0,n_r) + b_tor*r(n_r)*sin(pi*r(n_r)/r_cmb)
+               do n_r_loc=1,n_r_max
+                  aj(l1m0,n_r_loc)=aj(l1m0,n_r_loc) + b_tor*r(n_r_loc)*sin(pi*r(n_r_loc)/r_cmb)
                end do
-               do n_r=1,n_r_ic_max
-                  aj_ic(l1m0,n_r)=aj_ic(l1m0,n_r) + &
-                                  b_tor*r_ic(n_r)*sin(pi*r_ic(n_r)/r_cmb)
+               do n_r_loc=1,n_r_ic_max
+                  aj_ic(l1m0,n_r_loc)=aj_ic(l1m0,n_r_loc) + &
+                                  b_tor*r_ic(n_r_loc)*sin(pi*r_ic(n_r_loc)/r_cmb)
               end do
             else
-               do n_r=1,n_r_max
-                  aj(l1m0,n_r)=aj(l1m0,n_r) + b_tor*r(n_r)*sin(pi*(r(n_r)-r_icb))
+               do n_r_loc=1,n_r_max
+                  aj(l1m0,n_r_loc)=aj(l1m0,n_r_loc) + b_tor*r(n_r_loc)*sin(pi*(r(n_r_loc)-r_icb))
                end do
             end if
          end if
@@ -1252,26 +1253,26 @@ contains
             b_tor=-four*third*amp_b1*sqrt(pi/5.0_cp)
             if ( l_cond_ic ) then
                b_pol=amp_b1*sqrt(three*pi)/(three+r_cmb)
-               do n_r=1,n_r_max
-                  b(l1m0,n_r)=b(l1m0,n_r) + &
-                              b_pol*(r(n_r)**3 - four*third*r_cmb*r(n_r)**2)
+               do n_r_loc=1,n_r_max
+                  b(l1m0,n_r_loc)=b(l1m0,n_r_loc) + &
+                              b_pol*(r(n_r_loc)**3 - four*third*r_cmb*r(n_r_loc)**2)
                end do
                arg=pi*r_icb/r_cmb
                aj_ic1=(arg-two*sin(arg)*cos(arg)) / (arg+sin(arg)*cos(arg))
                aj_ic2=(one-aj_ic1)*r_icb*sin(arg)/cos(arg)
-               do n_r=1,n_r_ic_max
-                  b_ic(l1m0,n_r)=b_ic(l1m0,n_r)+b_pol*r_icb**2 * (    &
-                                            half*r_ic(n_r)**2/r_icb + &
+               do n_r_loc=1,n_r_ic_max
+                  b_ic(l1m0,n_r_loc)=b_ic(l1m0,n_r_loc)+b_pol*r_icb**2 * (    &
+                                            half*r_ic(n_r_loc)**2/r_icb + &
                                                          half*r_icb - &
                                                     four*third*r_cmb )
                end do
             else
                b_pol=amp_b1*sqrt(three*pi)/four
-               do n_r=1,n_r_max
-                  b(l1m0,n_r)=b(l1m0,n_r)+ b_pol *     ( &
-                                             r(n_r)**3 - &
-                             four*third*r_cmb*r(n_r)**2 + &
-                          third*r_icb**4/r(n_r)    )
+               do n_r_loc=1,n_r_max
+                  b(l1m0,n_r_loc)=b(l1m0,n_r_loc)+ b_pol *     ( &
+                                             r(n_r_loc)**3 - &
+                             four*third*r_cmb*r(n_r_loc)**2 + &
+                          third*r_icb**4/r(n_r_loc)    )
                end do
             end if
          end if
@@ -1280,21 +1281,21 @@ contains
             b_tor=-four*third*amp_b1*sqrt(pi/5.0_cp)
             if ( l_cond_ic ) then
                b_pol=amp_b1*sqrt(three*pi)/(three+r_cmb)
-               do n_r=1,n_r_max
-                  aj(l2m0,n_r)=aj(l2m0,n_r) + b_tor*r(n_r)*sin(pi*(r(n_r)/r_cmb))
+               do n_r_loc=1,n_r_max
+                  aj(l2m0,n_r_loc)=aj(l2m0,n_r_loc) + b_tor*r(n_r_loc)*sin(pi*(r(n_r_loc)/r_cmb))
                end do
                arg=pi*r_icb/r_cmb
                aj_ic1=(arg-two*sin(arg)*cos(arg)) / (arg+sin(arg)*cos(arg))
                aj_ic2=(one-aj_ic1)*r_icb*sin(arg)/cos(arg)
-               do n_r=1,n_r_ic_max
-                  aj_ic(l2m0,n_r)=aj_ic(l2m0,n_r)+b_tor*             ( &
-                           aj_ic1*r_ic(n_r)*sin(pi*r_ic(n_r)/r_cmb) + &
-                                     aj_ic2*cos(pi*r_ic(n_r)/r_cmb) )
+               do n_r_loc=1,n_r_ic_max
+                  aj_ic(l2m0,n_r_loc)=aj_ic(l2m0,n_r_loc)+b_tor*             ( &
+                           aj_ic1*r_ic(n_r_loc)*sin(pi*r_ic(n_r_loc)/r_cmb) + &
+                                     aj_ic2*cos(pi*r_ic(n_r_loc)/r_cmb) )
                end do
             else
                b_pol=amp_b1*sqrt(three*pi)/four
-               do n_r=1,n_r_max
-                  aj(l2m0,n_r)=aj(l2m0,n_r) + b_tor*r(n_r)*sin(pi*(r(n_r)-r_icb))
+               do n_r_loc=1,n_r_max
+                  aj(l2m0,n_r_loc)=aj(l2m0,n_r_loc) + b_tor*r(n_r_loc)*sin(pi*(r(n_r_loc)-r_icb))
                end do
             end if
          end if
@@ -1303,13 +1304,13 @@ contains
       ! with max field amplitude amp_b1 at r_icb
        if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then ! select processor
           b_pol=-amp_b1*r_icb**3*sqrt(third*pi)
-          do n_r=1,n_r_max
-             b(l1m0,n_r)=b(l1m0,n_r)+b_pol*or1(n_r)
+          do n_r_loc=1,n_r_max
+             b(l1m0,n_r_loc)=b(l1m0,n_r_loc)+b_pol*or1(n_r_loc)
           end do
           if ( l_cond_ic ) then
-             do n_r=1,n_r_ic_max
-                b_ic(l1m0,n_r)=b_ic(l1m0,n_r)+b_pol/r_icb* &
-                               ( -three*half + half*(r_ic(n_r)/r_icb)**2 )
+             do n_r_loc=1,n_r_ic_max
+                b_ic(l1m0,n_r_loc)=b_ic(l1m0,n_r_loc)+b_pol/r_icb* &
+                               ( -three*half + half*(r_ic(n_r_loc)/r_icb)**2 )
              end do
           end if
        end if
@@ -1319,20 +1320,20 @@ contains
        if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then ! select processor
           if ( l_cond_ic ) then
              b_pol=amp_b1*sqrt(three*pi)/r_cmb
-             do n_r=1,n_r_max
-                b(l1m0,n_r)=b(l1m0,n_r)+b_pol* (   r(n_r)**3 - &
-                            four*third*r_cmb * r(n_r)**2 )
+             do n_r_loc=1,n_r_max
+                b(l1m0,n_r_loc)=b(l1m0,n_r_loc)+b_pol* (   r(n_r_loc)**3 - &
+                            four*third*r_cmb * r(n_r_loc)**2 )
              end do
-             do n_r=1,n_r_ic_max
-                b_ic(l1m0,n_r)=b_ic(l1m0,n_r)+b_pol*r_icb**2 * &
-                   (-5.0_cp/6.0_cp*r_icb-four*third+half*r_ic(n_r)**2/r_icb)
+             do n_r_loc=1,n_r_ic_max
+                b_ic(l1m0,n_r_loc)=b_ic(l1m0,n_r_loc)+b_pol*r_icb**2 * &
+                   (-5.0_cp/6.0_cp*r_icb-four*third+half*r_ic(n_r_loc)**2/r_icb)
              end do
           else
              b_pol=amp_b1*sqrt(three*pi)/(r_cmb*(one-radratio**4))
-             do n_r=1,n_r_max
-                b(l1m0,n_r)=b(l1m0,n_r)+b_pol* (   r(n_r)**3 - &
-                                 four*third*r_cmb * r(n_r)**2 + &
-                                 third*r_icb**4 / r(n_r)    )
+             do n_r_loc=1,n_r_max
+                b(l1m0,n_r_loc)=b(l1m0,n_r_loc)+b_pol* (   r(n_r_loc)**3 - &
+                                 four*third*r_cmb * r(n_r_loc)**2 + &
+                                 third*r_icb**4 / r(n_r_loc)    )
              end do
           end if
        end if
@@ -1341,12 +1342,12 @@ contains
       ! no potential at r_cmb but simple
          if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then ! select processor
             b_pol=amp_b1
-            do n_r=1,n_r_max
-               b(l1m0,n_r)=b(l1m0,n_r)+b_pol*r(n_r)**2
+            do n_r_loc=1,n_r_max
+               b(l1m0,n_r_loc)=b(l1m0,n_r_loc)+b_pol*r(n_r_loc)**2
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  b_ic(l1m0,n_r)=b_ic(l1m0,n_r)+b_pol*r_icb**2
+               do n_r_loc=1,n_r_ic_max
+                  b_ic(l1m0,n_r_loc)=b_ic(l1m0,n_r_loc)+b_pol*r_icb**2
                end do
             end if
          end if
@@ -1355,14 +1356,14 @@ contains
       ! which is potential field at r_cmb
          if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then ! select processor
             b_pol=amp_b1*5.0_cp*half*sqrt(third*pi)*r_icb**2
-            do n_r=1,n_r_max
-               b(l1m0,n_r)=b(l1m0,n_r)+b_pol*(r(n_r)/r_icb)**2 * &
-                           ( one - three/5.0_cp*(r(n_r)/r_cmb)**2 )
+            do n_r_loc=1,n_r_max
+               b(l1m0,n_r_loc)=b(l1m0,n_r_loc)+b_pol*(r(n_r_loc)/r_icb)**2 * &
+                           ( one - three/5.0_cp*(r(n_r_loc)/r_cmb)**2 )
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  b_ic(l1m0,n_r)=b_ic(l1m0,n_r)+b_pol * &
-                                 ( one - three/5.0_cp*(r_ic(n_r)/r_cmb)**2 )
+               do n_r_loc=1,n_r_ic_max
+                  b_ic(l1m0,n_r_loc)=b_ic(l1m0,n_r_loc)+b_pol * &
+                                 ( one - three/5.0_cp*(r_ic(n_r_loc)/r_cmb)**2 )
                end do
             end if
          end if
@@ -1371,28 +1372,28 @@ contains
       ! which is potential field at r_cmb
          if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then ! select processor
             b_pol=amp_b1*5.0_cp*half*sqrt(third*pi)*r_icb**2
-            do n_r=1,n_r_max
-               b(l1m0,n_r)=b(l1m0,n_r)+b_pol*(r(n_r)/r_cmb)**2 * &
-                           ( one - three/5.0_cp*(r(n_r)/r_cmb)**2 )
+            do n_r_loc=1,n_r_max
+               b(l1m0,n_r_loc)=b(l1m0,n_r_loc)+b_pol*(r(n_r_loc)/r_cmb)**2 * &
+                           ( one - three/5.0_cp*(r(n_r_loc)/r_cmb)**2 )
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  b_ic(l1m0,n_r)=b_ic(l1m0,n_r)+b_pol * &
-                                 ( one - three/5.0_cp*(r_ic(n_r)/r_cmb)**2 )
+               do n_r_loc=1,n_r_ic_max
+                  b_ic(l1m0,n_r_loc)=b_ic(l1m0,n_r_loc)+b_pol * &
+                                 ( one - three/5.0_cp*(r_ic(n_r_loc)/r_cmb)**2 )
                end do
             end if
          end if
 
          if ( lmStartB(coord_r+1) <= l2m0 .and. lmStopB(coord_r+1) >= l2m0 ) then ! select processor
             b_tor=amp_b1*three*half*sqrt(pi/5.0_cp)*r_icb**2*radratio
-            do n_r=1,n_r_max
-               aj(l2m0,n_r)=aj(l2m0,n_r)+b_tor*(r(n_r)/r_icb)**3 * &
-                            ( one - (r(n_r)/r_cmb)**2 )
+            do n_r_loc=1,n_r_max
+               aj(l2m0,n_r_loc)=aj(l2m0,n_r_loc)+b_tor*(r(n_r_loc)/r_icb)**3 * &
+                            ( one - (r(n_r_loc)/r_cmb)**2 )
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  aj_ic(l2m0,n_r)=aj_ic(l2m0,n_r)+b_tor * &
-                                  ( one - (r_ic(n_r)/r_cmb)**2 )
+               do n_r_loc=1,n_r_ic_max
+                  aj_ic(l2m0,n_r_loc)=aj_ic(l2m0,n_r_loc)+b_tor * &
+                                  ( one - (r_ic(n_r_loc)/r_cmb)**2 )
                end do
             end if
          end if
@@ -1401,14 +1402,14 @@ contains
       ! which is potential field at r_cmb
          if ( lmStartB(coord_r+1) <= l2m0 .and. lmStopB(coord_r+1) >= l2m0 ) then ! select processor
             b_pol=amp_b1*7.0_cp/6.0_cp*sqrt(pi/5.0_cp)*r_icb**2*radratio
-            do n_r=1,n_r_max
-               b(l2m0,n_r)=b(l2m0,n_r)+b_pol*(r(n_r)/r_icb)**3 * &
-                           ( one - 5.0_cp/7.0_cp*(r(n_r)/r_cmb)**2 )
+            do n_r_loc=1,n_r_max
+               b(l2m0,n_r_loc)=b(l2m0,n_r_loc)+b_pol*(r(n_r_loc)/r_icb)**3 * &
+                           ( one - 5.0_cp/7.0_cp*(r(n_r_loc)/r_cmb)**2 )
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  b_ic(l2m0,n_r)=b_ic(l2m0,n_r)+b_pol * &
-                                 ( one - 5.0_cp/7.0_cp*(r_ic(n_r)/r_cmb)**2 )
+               do n_r_loc=1,n_r_ic_max
+                  b_ic(l2m0,n_r_loc)=b_ic(l2m0,n_r_loc)+b_pol * &
+                                 ( one - 5.0_cp/7.0_cp*(r_ic(n_r_loc)/r_cmb)**2 )
                end do
             end if
          end if
@@ -1421,14 +1422,14 @@ contains
 
        if ( lmStartB(coord_r+1) <= l1m1 .and. lmStopB(coord_r+1) >= l1m1 ) then ! select processor
           b_pol=amp_b1*5.0_cp*half*sqrt(third*pi)*r_icb**2
-          do n_r=1,n_r_max
-             b(l1m1,n_r)=b(l1m1,n_r)+b_pol*(r(n_r)/r_icb)**2 * &
-                          ( one - three/5.0_cp*(r(n_r)/r_cmb)**2 )
+          do n_r_loc=1,n_r_max
+             b(l1m1,n_r_loc)=b(l1m1,n_r_loc)+b_pol*(r(n_r_loc)/r_icb)**2 * &
+                          ( one - three/5.0_cp*(r(n_r_loc)/r_cmb)**2 )
           end do
           if ( l_cond_ic ) then
-             do n_r=1,n_r_ic_max
-                b_ic(l1m1,n_r)=b_ic(l1m1,n_r)+b_pol * &
-                               ( one - three/5.0_cp*(r_ic(n_r)/r_cmb)**2 )
+             do n_r_loc=1,n_r_ic_max
+                b_ic(l1m1,n_r_loc)=b_ic(l1m1,n_r_loc)+b_pol * &
+                               ( one - three/5.0_cp*(r_ic(n_r_loc)/r_cmb)**2 )
              end do
           end if
        end if
@@ -1436,12 +1437,12 @@ contains
       else if ( init_b1 < 0 ) then  ! l,m mixture, random init
 
          bExp=abs(init_b1)
-         do n_r=1,n_r_max
-            b1(n_r)=(r(n_r)/r_cmb)**2 * ( one-three/5.0_cp*(r(n_r)/r_cmb)**2 )
+         do n_r_loc=1,n_r_max
+            b1(n_r_loc)=(r(n_r_loc)/r_cmb)**2 * ( one-three/5.0_cp*(r(n_r_loc)/r_cmb)**2 )
          end do
          if ( l_cond_ic ) then
-            do n_r=1,n_r_ic_max
-               b1_ic(n_r)= ( one-three/5.0_cp*(r_ic(n_r)/r_cmb)**2 )
+            do n_r_loc=1,n_r_ic_max
+               b1_ic(n_r_loc)= ( one-three/5.0_cp*(r_ic(n_r_loc)/r_cmb)**2 )
             end do
          end if
 
@@ -1453,12 +1454,12 @@ contains
             bR=(-one+two*random(0.0_cp))*amp_b1/(real(l1,cp))**(bExp-1)
             bI=(-one+two*random(0.0_cp))*amp_b1/(real(l1,cp))**(bExp-1)
             if ( m1 == 0 ) bI=0.0_cp
-            do n_r=1,n_r_max
-               b(lm,n_r)=b(lm,n_r) + cmplx(bR*b1(n_r),bI*b1(n_r),kind=cp)
+            do n_r_loc=1,n_r_max
+               b(lm,n_r_loc)=b(lm,n_r_loc) + cmplx(bR*b1(n_r_loc),bI*b1(n_r_loc),kind=cp)
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  b_ic(lm,n_r)=b_ic(lm,n_r) + cmplx(bR*b1_ic(n_r), bI*b1_ic(n_r), cp)
+               do n_r_loc=1,n_r_ic_max
+                  b_ic(lm,n_r_loc)=b_ic(lm,n_r_loc) + cmplx(bR*b1_ic(n_r_loc), bI*b1_ic(n_r_loc), cp)
                end do
             end if
          end do
@@ -1467,14 +1468,14 @@ contains
 
          if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then ! select processor
             b_pol=amp_b1*5.0_cp*half*sqrt(third*pi)*r_icb**2
-            do n_r=1,n_r_max
-               b(l1m0,n_r)=b(l1m0,n_r)+b_pol*(r(n_r)/r_cmb)**2 * &
-                           ( one - three/5.0_cp*(r(n_r)/r_cmb)**2 )
+            do n_r_loc=1,n_r_max
+               b(l1m0,n_r_loc)=b(l1m0,n_r_loc)+b_pol*(r(n_r_loc)/r_cmb)**2 * &
+                           ( one - three/5.0_cp*(r(n_r_loc)/r_cmb)**2 )
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  b_ic(l1m0,n_r)=b_ic(l1m0,n_r)+b_pol * &
-                                 ( one - three/5.0_cp*(r_ic(n_r)/r_cmb)**2 )
+               do n_r_loc=1,n_r_ic_max
+                  b_ic(l1m0,n_r_loc)=b_ic(l1m0,n_r_loc)+b_pol * &
+                                 ( one - three/5.0_cp*(r_ic(n_r_loc)/r_cmb)**2 )
                end do
             end if
          end if
@@ -1485,15 +1486,15 @@ contains
 
          if ( lmStartB(coord_r+1) <= l1m1 .and. lmStopB(coord_r+1) >= l1m1 ) then ! select processor
             b_pol=amp_b1*5.0_cp*half*sqrt(third*pi)*r_icb**2
-            do n_r=1,n_r_max
-               b(l1m1,n_r)=b(l1m1,n_r) +                   &
-                           b_pol/10.0_cp*(r(n_r)/r_icb)**2 * &
-                           ( one - three/5.0_cp*(r(n_r)/r_cmb)**2 )
+            do n_r_loc=1,n_r_max
+               b(l1m1,n_r_loc)=b(l1m1,n_r_loc) +                   &
+                           b_pol/10.0_cp*(r(n_r_loc)/r_icb)**2 * &
+                           ( one - three/5.0_cp*(r(n_r_loc)/r_cmb)**2 )
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  b_ic(l1m1,n_r)=b_ic(l1m1,n_r)+b_pol/5.0_cp * &
-                                 ( one - three/5.0_cp*(r_ic(n_r)/r_cmb)**2 )
+               do n_r_loc=1,n_r_ic_max
+                  b_ic(l1m1,n_r_loc)=b_ic(l1m1,n_r_loc)+b_pol/5.0_cp * &
+                                 ( one - three/5.0_cp*(r_ic(n_r_loc)/r_cmb)**2 )
                end do
             end if
          end if
@@ -1501,15 +1502,15 @@ contains
       else if ( init_b1 == 21 ) then ! toroidal field created by inner core rotation
       ! equatorialy symmetric
          if ( lmStartB(coord_r+1) <= l1m0 .and. lmStopB(coord_r+1) >= l1m0 ) then ! select processor
-            do n_r=1,n_r_max
-               aj0(n_r)=amp_b1*(r_icb/r(n_r))**6
+            do n_r_loc=1,n_r_max
+               aj0(n_r_loc)=amp_b1*(r_icb/r(n_r_loc))**6
             end do
-            do n_r=1,n_r_max             ! Diffusive toroidal field
-               aj(l1m0,n_r)=aj(l1m0,n_r)+aj0(n_r)
+            do n_r_loc=1,n_r_max             ! Diffusive toroidal field
+               aj(l1m0,n_r_loc)=aj(l1m0,n_r_loc)+aj0(n_r_loc)
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  aj_ic(l1m0,n_r)=aj_ic(l1m0,n_r)+aj0(n_r_icb)
+               do n_r_loc=1,n_r_ic_max
+                  aj_ic(l1m0,n_r_loc)=aj_ic(l1m0,n_r_loc)+aj0(n_r_icb)
                end do
             end if
          end if
@@ -1517,15 +1518,15 @@ contains
       else if ( init_b1 == 22 ) then ! toroidal field created by inner core rotation
       ! equatorialy asymmetric
          if ( lmStartB(coord_r+1) <= l2m0 .and. lmStopB(coord_r+1) >= l2m0 ) then ! select processor
-            do n_r=1,n_r_max
-               aj0(n_r)=amp_b1*(r_icb/r(n_r))**6
+            do n_r_loc=1,n_r_max
+               aj0(n_r_loc)=amp_b1*(r_icb/r(n_r_loc))**6
             end do
-            do n_r=1,n_r_max             ! Diffusive toroidal field
-               aj(l2m0,n_r)=aj(l2m0,n_r)+aj0(n_r)
+            do n_r_loc=1,n_r_max             ! Diffusive toroidal field
+               aj(l2m0,n_r_loc)=aj(l2m0,n_r_loc)+aj0(n_r_loc)
             end do
             if ( l_cond_ic ) then
-               do n_r=1,n_r_ic_max
-                  aj_ic(l2m0,n_r)=aj_ic(l2m0,n_r)+aj0(n_r_icb)
+               do n_r_loc=1,n_r_ic_max
+                  aj_ic(l2m0,n_r_loc)=aj_ic(l2m0,n_r_loc)+aj0(n_r_icb)
                end do
             end if
          end if
@@ -1552,7 +1553,7 @@ contains
       complex(cp), intent(out) :: aj0_ic(:) ! aj(l=0,m=0) in the inner core
 
       !-- Local variables
-      integer :: n_cheb,n_r,info,n_r_real,n_r_out
+      integer :: n_cheb,n_r_loc,info,n_r_real,n_r_out
       complex(cp) :: rhs(n_r_tot)
       complex(cp) :: work_l_ic(n_r_ic_max)
       real(cp), allocatable :: jMat(:,:)
@@ -1566,12 +1567,12 @@ contains
 
       !----- Outer core:
       do n_r_out=1,rscheme_oc%n_max
-         do n_r=2,n_r_max-1
-            jMat(n_r,n_r_out)= rscheme_oc%rnorm *                   &
-              &    hdif_B(lm0)*dLh(lm0)*opm*lambda(n_r)*or2(n_r) *  &
-              &       (            rscheme_oc%d2rMat(n_r,n_r_out) + &
-              &       dLlambda(n_r)*rscheme_oc%drMat(n_r,n_r_out) - &
-              &    dLh(lm0)*or2(n_r)*rscheme_oc%rMat(n_r,n_r_out) )
+         do n_r_loc=2,n_r_max-1
+            jMat(n_r_loc,n_r_out)= rscheme_oc%rnorm *                   &
+              &    hdif_B(lm0)*dLh(lm0)*opm*lambda(n_r_loc)*or2(n_r_loc) *  &
+              &       (            rscheme_oc%d2rMat(n_r_loc,n_r_out) + &
+              &       dLlambda(n_r_loc)*rscheme_oc%drMat(n_r_loc,n_r_out) - &
+              &    dLh(lm0)*or2(n_r_loc)*rscheme_oc%rMat(n_r_loc,n_r_out) )
          end do
       end do
        
@@ -1608,20 +1609,20 @@ contains
 
       end if
        
-      do n_r=1,n_r_max
-         jMat(n_r,1)      =rscheme_oc%boundary_fac*jMat(n_r,1)
-         jMat(n_r,n_r_max)=rscheme_oc%boundary_fac*jMat(n_r,n_r_max)
+      do n_r_loc=1,n_r_max
+         jMat(n_r_loc,1)      =rscheme_oc%boundary_fac*jMat(n_r_loc,1)
+         jMat(n_r_loc,n_r_max)=rscheme_oc%boundary_fac*jMat(n_r_loc,n_r_max)
       end do
 
       !----- Inner core:
       if ( l_cond_ic ) then
 
          do n_cheb=1,n_r_ic_max ! counts even IC cheb modes
-            do n_r=2,n_r_ic_max ! counts IC radial grid point
-               jMat(n_r_max+n_r,n_r_max+n_cheb) =               &
+            do n_r_loc=2,n_r_ic_max ! counts IC radial grid point
+               jMat(n_r_max+n_r_loc,n_r_max+n_cheb) =               &
                   cheb_norm_ic*dLh(lm0)*or3(n_r_max)*opm*O_sr * ( &
-                                r_ic(n_r)*d2cheb_ic(n_cheb,n_r) + &
-                            two*D_lP1(lm0)*dcheb_ic(n_cheb,n_r) )
+                                r_ic(n_r_loc)*d2cheb_ic(n_cheb,n_r_loc) + &
+                            two*D_lP1(lm0)*dcheb_ic(n_cheb,n_r_loc) )
             end do
          end do
 
@@ -1638,19 +1639,19 @@ contains
          end do
 
          !-------- normalization for lowest Cheb mode:
-         do n_r=n_r_max+1,n_r_tot
-            jMat(n_r,n_r_max+1)=half*jMat(n_r,n_r_max+1)
+         do n_r_loc=n_r_max+1,n_r_tot
+            jMat(n_r_loc,n_r_max+1)=half*jMat(n_r_loc,n_r_max+1)
          end do
 
          !-------- fill matrix up with zeros:
          do n_r_out=n_r_max+1,n_r_tot
-            do n_r=1,n_r_max-1
-               jMat(n_r,n_r_out)=0.0_cp
+            do n_r_loc=1,n_r_max-1
+               jMat(n_r_loc,n_r_out)=0.0_cp
             end do
          end do
          do n_r_out=1,n_r_max
-            do n_r=n_r_max+2,n_r_tot
-               jMat(n_r,n_r_out)=0.0_cp
+            do n_r_loc=n_r_max+2,n_r_tot
+               jMat(n_r_loc,n_r_out)=0.0_cp
             end do
          end do
 
@@ -1663,8 +1664,8 @@ contains
       end if
        
       !----- zero RHS, except BC's
-      do n_r=2,n_r_real-1
-         rhs(n_r)=zero
+      do n_r_loc=2,n_r_real-1
+         rhs(n_r_loc)=zero
       end do
       rhs(1)= bpeaktop                             ! Outer boundary
       if ( .not. l_cond_ic ) rhs(n_r_max)=bpeakbot  ! Inner boundary
@@ -1714,7 +1715,7 @@ contains
       real(cp), intent(out) :: xi0(:) ! spherically-symmetric part
 
       !-- local variables:
-      integer :: n_r_out,n_r,info
+      integer :: n_r_out,n_r_loc,info
       real(cp), allocatable :: rhs(:)
       real(cp), allocatable :: xi0Mat(:,:)
       integer, allocatable :: xi0Pivot(:)
@@ -1725,11 +1726,11 @@ contains
 
       !-- Set Matrix:
       do n_r_out=1,n_r_max
-         do n_r=2,n_r_max-1
-            xi0Mat(n_r,n_r_out)=rscheme_oc%rnorm*osc*(                    &
-            &                            rscheme_oc%d2rMat(n_r,n_r_out) + &
-            &  ( two*or1(n_r)+beta(n_r) )*                                &
-            &                             rscheme_oc%drMat(n_r,n_r_out)  )
+         do n_r_loc=2,n_r_max-1
+            xi0Mat(n_r_loc,n_r_out)=rscheme_oc%rnorm*osc*(                    &
+            &                            rscheme_oc%d2rMat(n_r_loc,n_r_out) + &
+            &  ( two*or1(n_r_loc)+beta(n_r_loc) )*                                &
+            &                             rscheme_oc%drMat(n_r_loc,n_r_out)  )
          end do
       end do
        
@@ -1759,9 +1760,9 @@ contains
       end if
        
       !-- Renormalize:
-      do n_r=1,n_r_max
-         xi0Mat(n_r,1)      =rscheme_oc%boundary_fac*xi0Mat(n_r,1)
-         xi0Mat(n_r,n_r_max)=rscheme_oc%boundary_fac*xi0Mat(n_r,n_r_max)
+      do n_r_loc=1,n_r_max
+         xi0Mat(n_r_loc,1)      =rscheme_oc%boundary_fac*xi0Mat(n_r_loc,1)
+         xi0Mat(n_r_loc,n_r_max)=rscheme_oc%boundary_fac*xi0Mat(n_r_loc,n_r_max)
       end do
        
       !-- Invert matrix:
@@ -1771,8 +1772,8 @@ contains
       end if
        
       !-- Set source terms in RHS:
-      do n_r=2,n_r_max-1
-         rhs(n_r)=-epscxi
+      do n_r_loc=2,n_r_max-1
+         rhs(n_r_loc)=-epscxi
       end do
        
       !-- Set boundary values:
@@ -1787,8 +1788,8 @@ contains
       call sgesl(xi0Mat,n_r_max,n_r_max,xi0Pivot,rhs)
        
       !-- Copy result to s0:
-      do n_r=1,n_r_max
-         xi0(n_r)=rhs(n_r)
+      do n_r_loc=1,n_r_max
+         xi0(n_r_loc)=rhs(n_r_loc)
       end do
 
       !-- Set cheb-modes > rscheme_oc%n_max to zero:
@@ -1818,7 +1819,7 @@ contains
       real(cp), intent(out) :: p0(:) ! spherically-symmetric pressure
 
       !-- local variables:
-      integer :: n_cheb,nCheb_p,n_r,n_r_p,info,n_cheb_in
+      integer :: n_cheb,nCheb_p,n_r_loc,n_r_p,info,n_cheb_in
       integer :: n_r_out, n_r_out_p
       real(cp), allocatable :: work(:), work2(:), rhs(:)
       integer, allocatable :: pt0Pivot(:)
@@ -1833,27 +1834,27 @@ contains
 
          do n_r_out=1,n_r_max
             n_r_out_p=n_r_out+n_r_max
-            do n_r=1,n_r_max
-               n_r_p=n_r+n_r_max
+            do n_r_loc=1,n_r_max
+               n_r_p=n_r_loc+n_r_max
 
                ! Delta T = epsc
-               pt0Mat(n_r,n_r_out)=rscheme_oc%rnorm*opr*kappa(n_r)* (        &
-               &                          rscheme_oc%d2rMat(n_r,n_r_out) +   &
-               &         ( beta(n_r)+two*or1(n_r)+dLkappa(n_r) )*            &
-               &                           rscheme_oc%drMat(n_r,n_r_out) )
+               pt0Mat(n_r_loc,n_r_out)=rscheme_oc%rnorm*opr*kappa(n_r_loc)* (        &
+               &                          rscheme_oc%d2rMat(n_r_loc,n_r_out) +   &
+               &         ( beta(n_r_loc)+two*or1(n_r_loc)+dLkappa(n_r_loc) )*            &
+               &                           rscheme_oc%drMat(n_r_loc,n_r_out) )
 
-               pt0Mat(n_r,n_r_out_p)=0.0_cp
+               pt0Mat(n_r_loc,n_r_out_p)=0.0_cp
 
                ! Hydrostatic equilibrium
-               pt0Mat(n_r_p,n_r_out) = -rscheme_oc%rnorm*rho0(n_r)*BuoFac*   &
-               &                        rgrav(n_r)*alpha0(n_r)*              &
-               &                         rscheme_oc%rMat(n_r,n_r_out)
+               pt0Mat(n_r_p,n_r_out) = -rscheme_oc%rnorm*rho0(n_r_loc)*BuoFac*   &
+               &                        rgrav(n_r_loc)*alpha0(n_r_loc)*              &
+               &                         rscheme_oc%rMat(n_r_loc,n_r_out)
                pt0Mat(n_r_p,n_r_out_p)= rscheme_oc%rnorm *(                  &
-               &                           rscheme_oc%drMat(n_r,n_r_out)+    &
+               &                           rscheme_oc%drMat(n_r_loc,n_r_out)+    &
                &                      ViscHeatFac*BuoFac*(                   &
-               &               ThExpNb*alpha0(n_r)*temp0(n_r)+ogrun(n_r) )*  &
-               &                      alpha0(n_r)*rgrav(n_r)*                &
-               &                            rscheme_oc%rMat(n_r,n_r_out) )
+               &               ThExpNb*alpha0(n_r_loc)*temp0(n_r_loc)+ogrun(n_r_loc) )*  &
+               &                      alpha0(n_r_loc)*rgrav(n_r_loc)*                &
+               &                            rscheme_oc%rMat(n_r_loc,n_r_out) )
 
             end do
          end do
@@ -1862,37 +1863,37 @@ contains
 
          do n_r_out=1,n_r_max
             n_r_out_p=n_r_out+n_r_max
-            do n_r=1,n_r_max
-               n_r_p=n_r+n_r_max
+            do n_r_loc=1,n_r_max
+               n_r_p=n_r_loc+n_r_max
 
                ! Delta T = epsc
-               pt0Mat(n_r,n_r_out)=rscheme_oc%rnorm*opr*kappa(n_r)* (           &
-               &                              rscheme_oc%d2rMat(n_r,n_r_out) +  &
-               & ( beta(n_r)-dLtemp0(n_r)+two*or1(n_r)+dLkappa(n_r) )*          &
-               &                               rscheme_oc%drMat(n_r,n_r_out) -  &
-               &         (ddLtemp0(n_r)+dLtemp0(n_r)*(dLkappa(n_r)+beta(n_r)    &
-               &          +two*or1(n_r)))*     rscheme_oc%rMat(n_r,n_r_out) )
-               pt0Mat(n_r,n_r_out_p)=-rscheme_oc%rnorm*opr*kappa(n_r)*          &
-               &               alpha0(n_r)*temp0(n_r)*orho1(n_r)*ViscHeatFac*   &
-               &          ThExpNb*(           rscheme_oc%d2rMat(n_r,n_r_out) +  &
-               &          ( dLkappa(n_r)+dLtemp0(n_r)+two*or1(n_r)+             &
-               &                   two*dLalpha0(n_r)-beta(n_r) ) *              &
-               &                              rscheme_oc%drMat(n_r,n_r_out) +   &
-               &                   ((dLalpha0(n_r)-beta(n_r))*( two*or1(n_r)+   &
-               &                    dLalpha0(n_r)+dLkappa(n_r)+dLtemp0(n_r) )   &
-               &                    +ddLalpha0(n_r)-dbeta(n_r) ) *              &
-               &                              rscheme_oc%rMat(n_r,n_r_out))
+               pt0Mat(n_r_loc,n_r_out)=rscheme_oc%rnorm*opr*kappa(n_r_loc)* (           &
+               &                              rscheme_oc%d2rMat(n_r_loc,n_r_out) +  &
+               & ( beta(n_r_loc)-dLtemp0(n_r_loc)+two*or1(n_r_loc)+dLkappa(n_r_loc) )*          &
+               &                               rscheme_oc%drMat(n_r_loc,n_r_out) -  &
+               &         (ddLtemp0(n_r_loc)+dLtemp0(n_r_loc)*(dLkappa(n_r_loc)+beta(n_r_loc)    &
+               &          +two*or1(n_r_loc)))*     rscheme_oc%rMat(n_r_loc,n_r_out) )
+               pt0Mat(n_r_loc,n_r_out_p)=-rscheme_oc%rnorm*opr*kappa(n_r_loc)*          &
+               &               alpha0(n_r_loc)*temp0(n_r_loc)*orho1(n_r_loc)*ViscHeatFac*   &
+               &          ThExpNb*(           rscheme_oc%d2rMat(n_r_loc,n_r_out) +  &
+               &          ( dLkappa(n_r_loc)+dLtemp0(n_r_loc)+two*or1(n_r_loc)+             &
+               &                   two*dLalpha0(n_r_loc)-beta(n_r_loc) ) *              &
+               &                              rscheme_oc%drMat(n_r_loc,n_r_out) +   &
+               &                   ((dLalpha0(n_r_loc)-beta(n_r_loc))*( two*or1(n_r_loc)+   &
+               &                    dLalpha0(n_r_loc)+dLkappa(n_r_loc)+dLtemp0(n_r_loc) )   &
+               &                    +ddLalpha0(n_r_loc)-dbeta(n_r_loc) ) *              &
+               &                              rscheme_oc%rMat(n_r_loc,n_r_out))
 
                ! Hydrostatic equilibrium
-               pt0Mat(n_r_p,n_r_out) = -rscheme_oc%rnorm*rho0(n_r)*BuoFac*    &
-               &                       rgrav(n_r)*alpha0(n_r)*                &
-               &                       rscheme_oc%rMat(n_r,n_r_out)
+               pt0Mat(n_r_p,n_r_out) = -rscheme_oc%rnorm*rho0(n_r_loc)*BuoFac*    &
+               &                       rgrav(n_r_loc)*alpha0(n_r_loc)*                &
+               &                       rscheme_oc%rMat(n_r_loc,n_r_out)
                pt0Mat(n_r_p,n_r_out_p)= rscheme_oc%rnorm *(                   &
-               &                       rscheme_oc%drMat(n_r,n_r_out)+         &
+               &                       rscheme_oc%drMat(n_r_loc,n_r_out)+         &
                &                      ViscHeatFac*BuoFac*(                    &
-               &                 ThExpNb*alpha0(n_r)*temp0(n_r)+ogrun(n_r) )* &
-               &                  alpha0(n_r)*rgrav(n_r)*                     &
-               &                        rscheme_oc%rMat(n_r,n_r_out) )
+               &                 ThExpNb*alpha0(n_r_loc)*temp0(n_r_loc)+ogrun(n_r_loc) )* &
+               &                  alpha0(n_r_loc)*rgrav(n_r_loc)*                     &
+               &                        rscheme_oc%rMat(n_r_loc,n_r_out) )
 
             end do
          end do
@@ -2036,12 +2037,12 @@ contains
       end if
        
       !-- Renormalize:
-      do n_r=1,n_r_max
-         n_r_p=n_r+n_r_max
-         pt0Mat(n_r,1)          =rscheme_oc%boundary_fac*pt0Mat(n_r,1)
-         pt0Mat(n_r,n_r_max)    =rscheme_oc%boundary_fac*pt0Mat(n_r,n_r_max)
-         pt0Mat(n_r,n_r_max+1)  =rscheme_oc%boundary_fac*pt0Mat(n_r,n_r_max+1)
-         pt0Mat(n_r,2*n_r_max)  =rscheme_oc%boundary_fac*pt0Mat(n_r,2*n_r_max)
+      do n_r_loc=1,n_r_max
+         n_r_p=n_r_loc+n_r_max
+         pt0Mat(n_r_loc,1)          =rscheme_oc%boundary_fac*pt0Mat(n_r_loc,1)
+         pt0Mat(n_r_loc,n_r_max)    =rscheme_oc%boundary_fac*pt0Mat(n_r_loc,n_r_max)
+         pt0Mat(n_r_loc,n_r_max+1)  =rscheme_oc%boundary_fac*pt0Mat(n_r_loc,n_r_max+1)
+         pt0Mat(n_r_loc,2*n_r_max)  =rscheme_oc%boundary_fac*pt0Mat(n_r_loc,2*n_r_max)
          pt0Mat(n_r_p,1)        =rscheme_oc%boundary_fac*pt0Mat(n_r_p,1)
          pt0Mat(n_r_p,n_r_max)  =rscheme_oc%boundary_fac*pt0Mat(n_r_p,n_r_max)
          pt0Mat(n_r_p,n_r_max+1)=rscheme_oc%boundary_fac*pt0Mat(n_r_p,n_r_max+1)
@@ -2050,12 +2051,12 @@ contains
 
 
       ! compute the linesum of each line
-      do n_r=1,2*n_r_max
-         pt0Mat_fac(n_r)=one/maxval(abs(pt0Mat(n_r,:)))
+      do n_r_loc=1,2*n_r_max
+         pt0Mat_fac(n_r_loc)=one/maxval(abs(pt0Mat(n_r_loc,:)))
       end do
       ! now divide each line by the linesum to regularize the matrix
-      do n_r=1,2*n_r_max
-         pt0Mat(n_r,:) = pt0Mat(n_r,:)*pt0Mat_fac(n_r)
+      do n_r_loc=1,2*n_r_max
+         pt0Mat(n_r_loc,:) = pt0Mat(n_r_loc,:)*pt0Mat_fac(n_r_loc)
       end do
 
 
@@ -2066,9 +2067,9 @@ contains
       end if
        
       !-- Set source terms in RHS:
-      do n_r=1,n_r_max
-         rhs(n_r)          =-epsc*epscProf(n_r)*orho1(n_r)
-         rhs(n_r+n_r_max)  =0.0_cp
+      do n_r_loc=1,n_r_max
+         rhs(n_r_loc)          =-epsc*epscProf(n_r_loc)*orho1(n_r_loc)
+         rhs(n_r_loc+n_r_max)  =0.0_cp
       end do
        
       !-- Set boundary values:
@@ -2088,9 +2089,9 @@ contains
       call sgesl(pt0Mat,2*n_r_max,2*n_r_max,pt0Pivot,rhs)
 
       !-- Copy result to t0 and p0:
-      do n_r=1,n_r_max
-         t0(n_r)=rhs(n_r)
-         p0(n_r)=rhs(n_r+n_r_max)
+      do n_r_loc=1,n_r_max
+         t0(n_r_loc)=rhs(n_r_loc)
+         p0(n_r_loc)=rhs(n_r_loc+n_r_max)
       end do
 
       !-- Set cheb-modes > rscheme_oc%n_max to zero:
@@ -2122,7 +2123,7 @@ contains
       real(cp), intent(out) :: p0(:) ! spherically-symmetric part
 
       !-- local variables:
-      integer :: n_cheb,nCheb_p,n_r,n_r_p,info,n_cheb_in
+      integer :: n_cheb,nCheb_p,n_r_loc,n_r_p,info,n_cheb_in
       integer :: n_r_out, n_r_out_p
       real(cp), allocatable :: work(:), work2(:), rhs(:)
       integer, allocatable :: ps0Pivot(:)
@@ -2137,35 +2138,35 @@ contains
 
          do n_r_out=1,n_r_max
             n_r_out_p=n_r_out+n_r_max
-            do n_r=1,n_r_max
-               n_r_p=n_r+n_r_max
+            do n_r_loc=1,n_r_max
+               n_r_p=n_r_loc+n_r_max
 
                ! Delta T = epsc
-               ps0Mat(n_r,n_r_out)=rscheme_oc%rnorm*opr*kappa(n_r)* (          &
-               &                            rscheme_oc%d2rMat(n_r,n_r_out) +   &
-               &      ( beta(n_r)+two*dLtemp0(n_r)+two*or1(n_r)+dLkappa(n_r) )*& 
-               &                             rscheme_oc%drMat(n_r,n_r_out) +   &
-               &      ( ddLtemp0(n_r)+dLtemp0(n_r)*(                           &
-               &  two*or1(n_r)+dLkappa(n_r)+dLtemp0(n_r)+beta(n_r) ) ) *       &
-               &                             rscheme_oc%rMat(n_r,n_r_out) ) 
+               ps0Mat(n_r_loc,n_r_out)=rscheme_oc%rnorm*opr*kappa(n_r_loc)* (          &
+               &                            rscheme_oc%d2rMat(n_r_loc,n_r_out) +   &
+               &      ( beta(n_r_loc)+two*dLtemp0(n_r_loc)+two*or1(n_r_loc)+dLkappa(n_r_loc) )*& 
+               &                             rscheme_oc%drMat(n_r_loc,n_r_out) +   &
+               &      ( ddLtemp0(n_r_loc)+dLtemp0(n_r_loc)*(                           &
+               &  two*or1(n_r_loc)+dLkappa(n_r_loc)+dLtemp0(n_r_loc)+beta(n_r_loc) ) ) *       &
+               &                             rscheme_oc%rMat(n_r_loc,n_r_out) ) 
 
-               ps0Mat(n_r,n_r_out_p)=rscheme_oc%rnorm*opr*kappa(n_r)*          &
-               &       alpha0(n_r)*orho1(n_r)*ViscHeatFac*ThExpNb*(            &
-               &                             rscheme_oc%d2rMat(n_r,n_r_out) +  &
-               &      ( dLkappa(n_r)+two*(dLalpha0(n_r)+dLtemp0(n_r)) -        &
-               &        beta(n_r) +two*or1(n_r) ) *                            &
-               &                             rscheme_oc%drMat(n_r,n_r_out) +   &
-               & ( (dLkappa(n_r)+dLalpha0(n_r)+dLtemp0(n_r)+two*or1(n_r)) *    &
-               &        (dLalpha0(n_r)+dLtemp0(n_r)-beta(n_r)) +               &
-               &        ddLalpha0(n_r)+ddLtemp0(n_r)-dbeta(n_r) ) *            &
-               &                             rscheme_oc%rMat(n_r,n_r_out) )
+               ps0Mat(n_r_loc,n_r_out_p)=rscheme_oc%rnorm*opr*kappa(n_r_loc)*          &
+               &       alpha0(n_r_loc)*orho1(n_r_loc)*ViscHeatFac*ThExpNb*(            &
+               &                             rscheme_oc%d2rMat(n_r_loc,n_r_out) +  &
+               &      ( dLkappa(n_r_loc)+two*(dLalpha0(n_r_loc)+dLtemp0(n_r_loc)) -        &
+               &        beta(n_r_loc) +two*or1(n_r_loc) ) *                            &
+               &                             rscheme_oc%drMat(n_r_loc,n_r_out) +   &
+               & ( (dLkappa(n_r_loc)+dLalpha0(n_r_loc)+dLtemp0(n_r_loc)+two*or1(n_r_loc)) *    &
+               &        (dLalpha0(n_r_loc)+dLtemp0(n_r_loc)-beta(n_r_loc)) +               &
+               &        ddLalpha0(n_r_loc)+ddLtemp0(n_r_loc)-dbeta(n_r_loc) ) *            &
+               &                             rscheme_oc%rMat(n_r_loc,n_r_out) )
 
                ! Hydrostatic equilibrium
-               ps0Mat(n_r_p,n_r_out) = -rscheme_oc%rnorm*rho0(n_r)*BuoFac* &
-               &                        rgrav(n_r)*rscheme_oc%rMat(n_r,n_r_out)
+               ps0Mat(n_r_p,n_r_out) = -rscheme_oc%rnorm*rho0(n_r_loc)*BuoFac* &
+               &                        rgrav(n_r_loc)*rscheme_oc%rMat(n_r_loc,n_r_out)
                ps0Mat(n_r_p,n_r_out_p)= rscheme_oc%rnorm*(                     &
-               &                                rscheme_oc%drMat(n_r,n_r_out)- &
-               &                       beta(n_r)*rscheme_oc%rMat(n_r,n_r_out) )
+               &                                rscheme_oc%drMat(n_r_loc,n_r_out)- &
+               &                       beta(n_r_loc)*rscheme_oc%rMat(n_r_loc,n_r_out) )
 
             end do
          end do
@@ -2174,22 +2175,22 @@ contains
 
          do n_r_out=1,n_r_max
             n_r_out_p=n_r_out+n_r_max
-            do n_r=1,n_r_max
-               n_r_p=n_r+n_r_max
+            do n_r_loc=1,n_r_max
+               n_r_p=n_r_loc+n_r_max
 
                ! Delta T = epsc
-               ps0Mat(n_r,n_r_out)=rscheme_oc%rnorm*opr*kappa(n_r)* (        &
-               &                           rscheme_oc%d2rMat(n_r,n_r_out) +  &
-               &      ( beta(n_r)+dLtemp0(n_r)+two*or1(n_r)+dLkappa(n_r) )*  &
-               &                           rscheme_oc%drMat(n_r,n_r_out) )
-               ps0Mat(n_r,n_r_out_p)=0.0_cp
+               ps0Mat(n_r_loc,n_r_out)=rscheme_oc%rnorm*opr*kappa(n_r_loc)* (        &
+               &                           rscheme_oc%d2rMat(n_r_loc,n_r_out) +  &
+               &      ( beta(n_r_loc)+dLtemp0(n_r_loc)+two*or1(n_r_loc)+dLkappa(n_r_loc) )*  &
+               &                           rscheme_oc%drMat(n_r_loc,n_r_out) )
+               ps0Mat(n_r_loc,n_r_out_p)=0.0_cp
 
                ! Hydrostatic equilibrium
-               ps0Mat(n_r_p,n_r_out)=-rscheme_oc%rnorm*rho0(n_r)*BuoFac*   &
-               &                     rgrav(n_r)*rscheme_oc%rMat(n_r,n_r_out)
+               ps0Mat(n_r_p,n_r_out)=-rscheme_oc%rnorm*rho0(n_r_loc)*BuoFac*   &
+               &                     rgrav(n_r_loc)*rscheme_oc%rMat(n_r_loc,n_r_out)
                ps0Mat(n_r_p,n_r_out_p)= rscheme_oc%rnorm*(                 &
-               &                            rscheme_oc%drMat(n_r,n_r_out)- &
-               &                   beta(n_r)*rscheme_oc%rMat(n_r,n_r_out) )
+               &                            rscheme_oc%drMat(n_r_loc,n_r_out)- &
+               &                   beta(n_r_loc)*rscheme_oc%rMat(n_r_loc,n_r_out) )
 
             end do
          end do
@@ -2334,12 +2335,12 @@ contains
       end if
        
       !-- Renormalize:
-      do n_r=1,n_r_max
-         n_r_p=n_r+n_r_max
-         ps0Mat(n_r,1)          =rscheme_oc%boundary_fac*ps0Mat(n_r,1)
-         ps0Mat(n_r,n_r_max)    =rscheme_oc%boundary_fac*ps0Mat(n_r,n_r_max)
-         ps0Mat(n_r,n_r_max+1)  =rscheme_oc%boundary_fac*ps0Mat(n_r,n_r_max+1)
-         ps0Mat(n_r,2*n_r_max)  =rscheme_oc%boundary_fac*ps0Mat(n_r,2*n_r_max)
+      do n_r_loc=1,n_r_max
+         n_r_p=n_r_loc+n_r_max
+         ps0Mat(n_r_loc,1)          =rscheme_oc%boundary_fac*ps0Mat(n_r_loc,1)
+         ps0Mat(n_r_loc,n_r_max)    =rscheme_oc%boundary_fac*ps0Mat(n_r_loc,n_r_max)
+         ps0Mat(n_r_loc,n_r_max+1)  =rscheme_oc%boundary_fac*ps0Mat(n_r_loc,n_r_max+1)
+         ps0Mat(n_r_loc,2*n_r_max)  =rscheme_oc%boundary_fac*ps0Mat(n_r_loc,2*n_r_max)
          ps0Mat(n_r_p,1)        =rscheme_oc%boundary_fac*ps0Mat(n_r_p,1)
          ps0Mat(n_r_p,n_r_max)  =rscheme_oc%boundary_fac*ps0Mat(n_r_p,n_r_max)
          ps0Mat(n_r_p,n_r_max+1)=rscheme_oc%boundary_fac*ps0Mat(n_r_p,n_r_max+1)
@@ -2347,12 +2348,12 @@ contains
       end do
 
       ! compute the linesum of each line
-      do n_r=1,2*n_r_max
-         ps0Mat_fac(n_r)=one/maxval(abs(ps0Mat(n_r,:)))
+      do n_r_loc=1,2*n_r_max
+         ps0Mat_fac(n_r_loc)=one/maxval(abs(ps0Mat(n_r_loc,:)))
       end do
       ! now divide each line by the linesum to regularize the matrix
-      do n_r=1,2*n_r_max
-         ps0Mat(n_r,:) = ps0Mat(n_r,:)*ps0Mat_fac(n_r)
+      do n_r_loc=1,2*n_r_max
+         ps0Mat(n_r_loc,:) = ps0Mat(n_r_loc,:)*ps0Mat_fac(n_r_loc)
       end do
 
       !-- Invert matrix:
@@ -2362,9 +2363,9 @@ contains
       end if
        
       !-- Set source terms in RHS:
-      do n_r=1,n_r_max
-         rhs(n_r)        =-epsc*epscProf(n_r)*orho1(n_r)
-         rhs(n_r+n_r_max)=0.0_cp
+      do n_r_loc=1,n_r_max
+         rhs(n_r_loc)        =-epsc*epscProf(n_r_loc)*orho1(n_r_loc)
+         rhs(n_r_loc+n_r_max)=0.0_cp
       end do
        
       !-- Set boundary values:
@@ -2384,9 +2385,9 @@ contains
       call sgesl(ps0Mat,2*n_r_max,2*n_r_max,ps0Pivot,rhs)
        
       !-- Copy result to s0 and p0
-      do n_r=1,n_r_max
-         s0(n_r)=rhs(n_r)
-         p0(n_r)=rhs(n_r+n_r_max)
+      do n_r_loc=1,n_r_max
+         s0(n_r_loc)=rhs(n_r_loc)
+         p0(n_r_loc)=rhs(n_r_loc+n_r_max)
       end do
 
       !-- Set cheb-modes > rscheme_oc%n_max to zero:

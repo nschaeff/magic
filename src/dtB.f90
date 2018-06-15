@@ -20,13 +20,13 @@ module dtB_mod
        &                      dTheta1S, dTheta1A
    use logic, only: l_cond_ic, l_DTrMagSpec, l_dtBmovie
    use LMLoop_data, only: llmMag, ulmMag, llm, ulm
-   use blocking, only: lo_map, st_map, l2lmAS, lm2l, lm2m, lmP2lmPS, lmP2lmPA, &
-                       lm2lmP, nfs
+   use blocking, only: lo_map, nfs
    use radial_spectra ! rBrSpec, rBpSpec
    use fft
    use legendre_grid_to_spec, only: legTF2, legTF3
    use constants, only: two
    use radial_der, only: get_dr
+   use LMmapping, only: radial_map
  
    implicit none
  
@@ -204,7 +204,7 @@ contains
 
       !
       !  This subroutine calculates non-linear products in grid-space for radial
-      !  level n_r and returns them in arrays wnlr1-3, snlr1-3, bnlr1-3
+      !  level n_r_loc and returns them in arrays wnlr1-3, snlr1-3, bnlr1-3
       !
       !  if lvelo >0 velocities are zero only the (vxB)
       !  contributions to bnlr2-3 need to be calculated
@@ -230,7 +230,7 @@ contains
       complex(cp), intent(out) :: BtVZsn2LM(*)
     
       !-- Local variables:
-      integer :: n_theta,n_phi,n_theta_nhs
+      integer :: n_theta_loc,n_phi,n_theta_nhs
       real(cp) :: fac,facCot
       real(cp) :: BtVr(nrp,nfs),BpVr(nrp,nfs)
       real(cp) :: BrVt(nrp,nfs),BrVp(nrp,nfs)
@@ -245,86 +245,86 @@ contains
     
 #ifdef WITH_SHTNS
       !$OMP PARALLEL DO default(shared) &
-      !$OMP& private(n_theta, n_phi)    &
+      !$OMP& private(n_theta_loc, n_phi)    &
       !$OMP& private(fac, facCot, n_theta_nhs)
 #endif
-      do n_theta=1,n_theta_block ! loop over ic-points, alternating north/south
+      do n_theta_loc=1,n_theta_block ! loop over ic-points, alternating north/south
 
-         n_theta_nhs=(n_theta_start+n_theta)/2
+         n_theta_nhs=(n_theta_start+n_theta_loc)/2
          fac=osn2(n_theta_nhs)
          facCot=cosn2(n_theta_nhs)*osn1(n_theta_nhs)
-         if ( mod(n_theta,2) == 0 ) facCot=-facCot  ! SHS
+         if ( mod(n_theta_loc,2) == 0 ) facCot=-facCot  ! SHS
 
          do n_phi=1,n_phi_max
-            BtVr(n_phi,n_theta)= fac*orho1(nR)*bt(n_phi,n_theta)*vr(n_phi,n_theta)
-            BpVr(n_phi,n_theta)= fac*orho1(nR)*bp(n_phi,n_theta)*vr(n_phi,n_theta)
+            BtVr(n_phi,n_theta_loc)= fac*orho1(nR)*bt(n_phi,n_theta_loc)*vr(n_phi,n_theta_loc)
+            BpVr(n_phi,n_theta_loc)= fac*orho1(nR)*bp(n_phi,n_theta_loc)*vr(n_phi,n_theta_loc)
          end do
 #ifndef WITH_SHTNS
-         BtVr(n_phi_max+1,n_theta)=0.0_cp
-         BtVr(n_phi_max+2,n_theta)=0.0_cp
-         BpVr(n_phi_max+1,n_theta)=0.0_cp
-         BpVr(n_phi_max+2,n_theta)=0.0_cp
+         BtVr(n_phi_max+1,n_theta_loc)=0.0_cp
+         BtVr(n_phi_max+2,n_theta_loc)=0.0_cp
+         BpVr(n_phi_max+1,n_theta_loc)=0.0_cp
+         BpVr(n_phi_max+2,n_theta_loc)=0.0_cp
 #endif
 
          do n_phi=1,n_phi_max
-            BrVt(n_phi,n_theta)= fac*orho1(nR)*vt(n_phi,n_theta)*br(n_phi,n_theta)
-            BrVp(n_phi,n_theta)= fac*orho1(nR)*vp(n_phi,n_theta)*br(n_phi,n_theta)
+            BrVt(n_phi,n_theta_loc)= fac*orho1(nR)*vt(n_phi,n_theta_loc)*br(n_phi,n_theta_loc)
+            BrVp(n_phi,n_theta_loc)= fac*orho1(nR)*vp(n_phi,n_theta_loc)*br(n_phi,n_theta_loc)
          end do
 #ifndef WITH_SHTNS
-         BrVt(n_phi_max+1,n_theta)=0.0_cp
-         BrVt(n_phi_max+2,n_theta)=0.0_cp
-         BrVp(n_phi_max+1,n_theta)=0.0_cp
-         BrVp(n_phi_max+2,n_theta)=0.0_cp
+         BrVt(n_phi_max+1,n_theta_loc)=0.0_cp
+         BrVt(n_phi_max+2,n_theta_loc)=0.0_cp
+         BrVp(n_phi_max+1,n_theta_loc)=0.0_cp
+         BrVp(n_phi_max+2,n_theta_loc)=0.0_cp
 #endif
 
          vpAS=0.0_cp
          do n_phi=1,n_phi_max
-            BtVp(n_phi,n_theta)= fac*orho1(nR)*bt(n_phi,n_theta)*vp(n_phi,n_theta)
-            BpVt(n_phi,n_theta)= fac*orho1(nR)*bp(n_phi,n_theta)*vt(n_phi,n_theta)
-            vpAS=vpAS+orho1(nR)*vp(n_phi,n_theta)
+            BtVp(n_phi,n_theta_loc)= fac*orho1(nR)*bt(n_phi,n_theta_loc)*vp(n_phi,n_theta_loc)
+            BpVt(n_phi,n_theta_loc)= fac*orho1(nR)*bp(n_phi,n_theta_loc)*vt(n_phi,n_theta_loc)
+            vpAS=vpAS+orho1(nR)*vp(n_phi,n_theta_loc)
          end do
 #ifndef WITH_SHTNS
-         BtVp(n_phi_max+1,n_theta)=0.0_cp
-         BtVp(n_phi_max+2,n_theta)=0.0_cp
-         BpVt(n_phi_max+1,n_theta)=0.0_cp
-         BpVt(n_phi_max+2,n_theta)=0.0_cp
+         BtVp(n_phi_max+1,n_theta_loc)=0.0_cp
+         BtVp(n_phi_max+2,n_theta_loc)=0.0_cp
+         BpVt(n_phi_max+1,n_theta_loc)=0.0_cp
+         BpVt(n_phi_max+2,n_theta_loc)=0.0_cp
 #endif
          vpAS=vpAS/real(n_phi_max,kind=cp)
     
          !---- For toroidal terms that cancel:
          do n_phi=1,n_phi_max
-            BpVtCot(n_phi,n_theta)=facCot*orho1(nR)*bp(n_phi,n_theta)*vt(n_phi,n_theta)
-            BtVpCot(n_phi,n_theta)=facCot*orho1(nR)*bt(n_phi,n_theta)*vp(n_phi,n_theta)
-            BpVtSn2(n_phi,n_theta)=fac*fac*orho1(nR)*bp(n_phi,n_theta)*vt(n_phi,n_theta)
-            BtVpSn2(n_phi,n_theta)=fac*fac*orho1(nR)*bt(n_phi,n_theta)*vp(n_phi,n_theta)
+            BpVtCot(n_phi,n_theta_loc)=facCot*orho1(nR)*bp(n_phi,n_theta_loc)*vt(n_phi,n_theta_loc)
+            BtVpCot(n_phi,n_theta_loc)=facCot*orho1(nR)*bt(n_phi,n_theta_loc)*vp(n_phi,n_theta_loc)
+            BpVtSn2(n_phi,n_theta_loc)=fac*fac*orho1(nR)*bp(n_phi,n_theta_loc)*vt(n_phi,n_theta_loc)
+            BtVpSn2(n_phi,n_theta_loc)=fac*fac*orho1(nR)*bt(n_phi,n_theta_loc)*vp(n_phi,n_theta_loc)
          end do
 #ifndef WITH_SHTNS
-         BpVtCot(n_phi_max+1,n_theta)=0.0_cp
-         BpVtCot(n_phi_max+2,n_theta)=0.0_cp
-         BtVpCot(n_phi_max+1,n_theta)=0.0_cp
-         BtVpCot(n_phi_max+2,n_theta)=0.0_cp
-         BpVtSn2(n_phi_max+1,n_theta)=0.0_cp
-         BpVtSn2(n_phi_max+2,n_theta)=0.0_cp
-         BtVpSn2(n_phi_max+1,n_theta)=0.0_cp
-         BtVpSn2(n_phi_max+2,n_theta)=0.0_cp
+         BpVtCot(n_phi_max+1,n_theta_loc)=0.0_cp
+         BpVtCot(n_phi_max+2,n_theta_loc)=0.0_cp
+         BtVpCot(n_phi_max+1,n_theta_loc)=0.0_cp
+         BtVpCot(n_phi_max+2,n_theta_loc)=0.0_cp
+         BpVtSn2(n_phi_max+1,n_theta_loc)=0.0_cp
+         BpVtSn2(n_phi_max+2,n_theta_loc)=0.0_cp
+         BtVpSn2(n_phi_max+1,n_theta_loc)=0.0_cp
+         BtVpSn2(n_phi_max+2,n_theta_loc)=0.0_cp
 #endif
 
          !---- For omega effect:
          do n_phi=1,n_phi_max
-            BrVZ(n_phi,n_theta)=fac*br(n_phi,n_theta)*vpAS
-            BtVZ(n_phi,n_theta)=fac*bt(n_phi,n_theta)*vpAS
-            BtVZcot(n_phi,n_theta)=facCot*bt(n_phi,n_theta)*vpAS
-            BtVZsn2(n_phi,n_theta)=fac*fac*bt(n_phi,n_theta)*vpAS
+            BrVZ(n_phi,n_theta_loc)=fac*br(n_phi,n_theta_loc)*vpAS
+            BtVZ(n_phi,n_theta_loc)=fac*bt(n_phi,n_theta_loc)*vpAS
+            BtVZcot(n_phi,n_theta_loc)=facCot*bt(n_phi,n_theta_loc)*vpAS
+            BtVZsn2(n_phi,n_theta_loc)=fac*fac*bt(n_phi,n_theta_loc)*vpAS
          end do
 #ifndef WITH_SHTNS
-         BrVZ(n_phi_max+1,n_theta)=0.0_cp
-         BrVZ(n_phi_max+2,n_theta)=0.0_cp
-         BtVZ(n_phi_max+1,n_theta)=0.0_cp
-         BtVZ(n_phi_max+2,n_theta)=0.0_cp
-         BtVZCot(n_phi_max+1,n_theta)=0.0_cp
-         BtVZCot(n_phi_max+2,n_theta)=0.0_cp
-         BtVZsn2(n_phi_max+1,n_theta)=0.0_cp
-         BtVZsn2(n_phi_max+2,n_theta)=0.0_cp
+         BrVZ(n_phi_max+1,n_theta_loc)=0.0_cp
+         BrVZ(n_phi_max+2,n_theta_loc)=0.0_cp
+         BtVZ(n_phi_max+1,n_theta_loc)=0.0_cp
+         BtVZ(n_phi_max+2,n_theta_loc)=0.0_cp
+         BtVZCot(n_phi_max+1,n_theta_loc)=0.0_cp
+         BtVZCot(n_phi_max+2,n_theta_loc)=0.0_cp
+         BtVZsn2(n_phi_max+1,n_theta_loc)=0.0_cp
+         BtVZsn2(n_phi_max+2,n_theta_loc)=0.0_cp
 #endif
     
       end do
@@ -382,7 +382,7 @@ contains
       call legTF2(n_theta_start,BtVpSn2LM,BpVtSn2LM,BtVpSn2,BpVtSn2)
 #endif
       do l=0,l_max
-         lm=l2lmAS(l)
+         lm=radial_map%l2lmAS(l)
          BtVrLM(lm)   =cmplx(real(BtVrLM(lm)),   0.0_cp, kind=cp)
          BpVrLM(lm)   =cmplx(real(BpVrLM(lm)),   0.0_cp, kind=cp)
          BrVtLM(lm)   =cmplx(real(BrVtLM(lm)),   0.0_cp, kind=cp)
@@ -427,11 +427,11 @@ contains
       PstrLM_Rloc(1,nR)=0.0_cp
       PadvLM_Rloc(1,nR)=0.0_cp
       do lm=2,lm_max
-         l   =lm2l(lm)
-         m   =lm2m(lm)
-         lmP =lm2lmP(lm)
-         lmPS=lmP2lmPS(lmP)
-         lmPA=lmP2lmPA(lmP)
+         l   =radial_map%lm2l(lm)
+         m   =radial_map%lm2m(lm)
+         lmP =radial_map%lm2lmP(lm)
+         lmPS=radial_map%lmP2lmPS(lmP)
+         lmPA=radial_map%lmP2lmPA(lmP)
          if ( l > m ) then
             PstrLM_Rloc(lm,nR)=or2(nR)/dLh(lm) *   (                     &
             &    dTheta1S(lm)*BtVrLM(lmPS) - dTheta1A(lm)*BtVrLM(lmPA) + &
@@ -452,11 +452,11 @@ contains
       TstrLM_Rloc(1,nR) =0.0_cp
       TstrRLM_Rloc(1,nR)=0.0_cp
       do lm=2,lm_max
-         l   =lm2l(lm)
-         m   =lm2m(lm)
-         lmP =lm2lmP(lm)
-         lmPS=lmP2lmPS(lmP)
-         lmPA=lmP2lmPA(lmP)
+         l   =radial_map%lm2l(lm)
+         m   =radial_map%lm2m(lm)
+         lmP =radial_map%lm2lmP(lm)
+         lmPS=radial_map%lmP2lmPS(lmP)
+         lmPA=radial_map%lmP2lmPA(lmP)
          fac=or2(nR)/dLh(lm)
          if ( l > m ) then
             TstrLM_Rloc(lm,nR)=        -or2(nR)*BtVpLM(lmP)     - &
@@ -492,11 +492,11 @@ contains
       TadvLM_Rloc(1,nR) =0.0_cp
       TadvRLM_Rloc(1,nR)=0.0_cp
       do lm=2,lm_max
-         l   =lm2l(lm)
-         m   =lm2m(lm)
-         lmP =lm2lmP(lm)
-         lmPS=lmP2lmPS(lmP)
-         lmPA=lmP2lmPA(lmP)
+         l   =radial_map%lm2l(lm)
+         m   =radial_map%lm2m(lm)
+         lmP =radial_map%lm2lmP(lm)
+         lmPS=radial_map%lmP2lmPS(lmP)
+         lmPA=radial_map%lmP2lmPA(lmP)
          fac=or2(nR)/dLh(lm)
          if ( l > m ) then
             TadvLM_Rloc(lm,nR)=       -or2(nR)*BpVtLM(lmP)     - &
@@ -534,11 +534,11 @@ contains
       TomeLM_Rloc(1,nR) =0.0_cp
       TomeRLM_Rloc(1,nR)=0.0_cp
       do lm=2,lm_max
-         l  =lm2l(lm)
-         m  =lm2m(lm)
-         lmP=lm2lmP(lm)
-         lmPS=lmP2lmPS(lmP)
-         lmPA=lmP2lmPA(lmP)
+         l  =radial_map%lm2l(lm)
+         m  =radial_map%lm2m(lm)
+         lmP=radial_map%lm2lmP(lm)
+         lmPS=radial_map%lmP2lmPS(lmP)
+         lmPA=radial_map%lmP2lmPA(lmP)
          fac=or2(nR)/dLh(lm)
          if ( l > m ) then
             TomeLM_Rloc(lm,nR)=    -or2(nR)*BtVZLM(lmP)       - &
@@ -592,12 +592,12 @@ contains
             do lm=llm,ulm
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
-               PadvLMIC_LMloc(lm,nR)=-omega_ic*dPhi(st_map%lm2(l,m))*b_ic(lm,nR)
-               TadvLMIC_LMloc(lm,nR)=-omega_ic*dPhi(st_map%lm2(l,m))*aj_ic(lm,nR)
+               PadvLMIC_LMloc(lm,nR)=-omega_ic*dPhi(radial_map%lm2(l,m))*b_ic(lm,nR)
+               TadvLMIC_LMloc(lm,nR)=-omega_ic*dPhi(radial_map%lm2(l,m))*aj_ic(lm,nR)
                PdifLMIC_LMloc(lm,nR)=opm*O_sr * ( ddb_ic(lm,nR) + &
-               &    two*D_lP1(st_map%lm2(l,m))*O_r_ic(nR)*db_ic(lm,nR) )
+               &    two*D_lP1(radial_map%lm2(l,m))*O_r_ic(nR)*db_ic(lm,nR) )
                TdifLMIC_LMloc(lm,nR)=opm*O_sr * ( ddj_ic(lm,nR) + &
-               &    two*D_lP1(st_map%lm2(l,m))*O_r_ic(nR)*dj_ic(lm,nR) )
+               &    two*D_lP1(radial_map%lm2(l,m))*O_r_ic(nR)*dj_ic(lm,nR) )
             end do
          end do
       end if
@@ -606,11 +606,11 @@ contains
          do lm=llm,ulm
             l=lo_map%lm2l(lm)
             m=lo_map%lm2m(lm)
-            PdifLM_LMloc(lm,nR)= opm*lambda(nR)*hdif_B(st_map%lm2(l,m)) * &
-            &    (ddb(lm,nR)-dLh(st_map%lm2(l,m))*or2(nR)*b(lm,nR))
-            TdifLM_LMloc(lm,nR)= opm*lambda(nR)*hdif_B(st_map%lm2(l,m)) * &
+            PdifLM_LMloc(lm,nR)= opm*lambda(nR)*hdif_B(radial_map%lm2(l,m)) * &
+            &    (ddb(lm,nR)-dLh(radial_map%lm2(l,m))*or2(nR)*b(lm,nR))
+            TdifLM_LMloc(lm,nR)= opm*lambda(nR)*hdif_B(radial_map%lm2(l,m)) * &
             &    ( ddj(lm,nR) + dLlambda(nR)*dj(lm,nR) - &
-            &    dLh(st_map%lm2(l,m))*or2(nR)*aj(lm,nR) )
+            &    dLh(radial_map%lm2(l,m))*or2(nR)*aj(lm,nR) )
          end do
       end do
          

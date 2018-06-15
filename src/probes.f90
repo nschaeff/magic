@@ -18,7 +18,7 @@ module probe_mod
    use radial_functions, only: r_cmb, orho1, or1, or2, r, r_icb
    use num_param, only: vScale
    use blocking, only: nThetaBs, sizeThetaB, nfs
-   use horizontal_data, only: O_sin_theta, theta 
+   use horizontal_data, only: O_sin_theta_loc, theta 
    use output_data, only: tag
    use constants, only: pi
    use logic, only: l_save_out
@@ -67,16 +67,16 @@ contains
    end subroutine finalize_probes
 
 
-   subroutine probe_out(time,n_r,vp, n_theta_start,n_theta_block_size)
+   subroutine probe_out(time,n_r_loc,vp, n_theta_start,n_theta_block_size)
       
       real(cp), intent(in) :: time
-      integer,  intent(in) :: n_r                    ! radial grod point no.
+      integer,  intent(in) :: n_r_loc                    ! radial grod point no.
       integer,  intent(in) :: n_theta_start          ! start theta no.
       integer,  intent(in) :: n_theta_block_size     ! size of theta block
       real(cp), intent(in) :: vp(nrp,*)
 
       !-- Local variables:
-      integer  :: n_theta       ! counter for colatitude
+      integer  :: n_theta_loc       ! counter for colatitude
       integer  :: n_theta_cal   ! position of block colat in all colats
       integer  :: probe_phi_step
       integer  :: n_theta_probe
@@ -85,15 +85,15 @@ contains
       character(len=10) :: fmtstr !format string
 
       
-      if ( n_r /= rad_usr ) return
+      if ( n_r_loc /= rad_usr ) return
 
       theta_found = .false.
 
-      do n_theta=1,n_theta_block_size,2
-         n_theta_cal=n_theta_start+n_theta-1
+      do n_theta_loc=1,n_theta_block_size,2
+         n_theta_cal=n_theta_start+n_theta_loc-1
          if( n_theta_cal == n_theta_usr) then
             theta_found = .true.
-            n_theta_probe = n_theta
+            n_theta_probe = n_theta_loc
             exit
          end if
       end do   
@@ -102,8 +102,8 @@ contains
       
       probe_phi_step = n_phi_max/n_phi_probes
       
-      fac_r=or1(n_r)*vScale*orho1(n_r)
-      fac=fac_r*O_sin_theta(n_theta_cal)
+      fac_r=or1(n_r_loc)*vScale*orho1(n_r_loc)
+      fac=fac_r*O_sin_theta_loc(n_theta_cal)
       
       if (rank == 0) write(fmtstr,'(i3)') 2*n_phi_probes       ! 2*n_phi_probes columns for data
 

@@ -14,6 +14,7 @@ module legendre_spec_to_grid
    use parallel_mod, only: coord_r
    use leg_helper_mod, only: leg_helper_t
    use useful, only: abortRun
+   use LMmapping, only: radial_map
 
    implicit none
  

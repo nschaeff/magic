@@ -21,12 +21,12 @@ module courant_mod
 
 contains
 
-   subroutine courant(n_r,dtrkc,dthkc,vr,vt,vp,br,bt,bp)
+   subroutine courant(n_r_loc,dtrkc,dthkc,vr,vt,vp,br,bt,bp)
       !
       !  courant condition check: calculates Courant                      
       !  advection lengths in radial direction dtrkc                      
       !  and in horizontal direction dthkc                                
-      !  on the local radial level n_r                                   
+      !  on the local radial level n_r_loc                                   
       !                                                                   
       !  for the effective velocity, the abs. sum of fluid                
       !  velocity and Alfven velocity is taken                            
@@ -40,7 +40,7 @@ contains
       !
     
       !-- Input variable:
-      integer,  intent(in) :: n_r           ! radial level
+      integer,  intent(in) :: n_r_loc           ! radial level
       real(cp), intent(in) :: vr(n_phi_max,l_theta:u_theta)   ! radial velocity
       real(cp), intent(in) :: vt(n_phi_max,l_theta:u_theta)   ! longitudinal velocity
       real(cp), intent(in) :: vp(n_phi_max,l_theta:u_theta)   ! azimuthal velocity
@@ -54,7 +54,7 @@ contains
       real(cp), intent(inout) :: dthkc    ! Courant step based on horizontal advection
     
       !-- Local  variables:
-      integer :: n_theta       ! absolut no of theta
+      integer :: n_theta_loc       ! absolut no of theta
       integer :: n_theta_nhs   ! no of theta in NHS
       integer :: n_phi         ! no of longitude
     
@@ -65,8 +65,8 @@ contains
       real(cp) :: cf2,af2
     
       if ( l_cour_alf_damp ) then
-         valri2=(half*(one+opm))**2/delxr2(n_r)
-         valhi2=(half*(one+opm))**2/delxh2(n_r)
+         valri2=(half*(one+opm))**2/delxr2(n_r_loc)
+         valhi2=(half*(one+opm))**2/delxh2(n_r_loc)
       else
          valri2=0.0_cp
          valhi2=0.0_cp
@@ -75,31 +75,31 @@ contains
       vr2max=0.0_cp
       vh2max=0.0_cp
       cf2=courfac*courfac
-      O_r_E_4=or4(n_r)
-      O_r_E_2=or2(n_r)
+      O_r_E_4=or4(n_r_loc)
+      O_r_E_2=or2(n_r_loc)
     
     
       if ( l_mag .and. l_mag_LF .and. .not. l_mag_kin ) then
     
          af2=alffac*alffac
     
-         do n_theta=l_theta,u_theta
-            n_theta_nhs=(n_theta+1)/2 ! northern hemisphere=odd n_theta
+         do n_theta_loc=l_theta,u_theta
+            n_theta_nhs=(n_theta_loc+1)/2 ! northern hemisphere=odd n_theta_loc
     
             do n_phi=1,n_phi_max
     
-               vflr2=orho2(n_r)*vr(n_phi,n_theta)*vr(n_phi,n_theta)
-               valr =br(n_phi,n_theta)*br(n_phi,n_theta) * &
-                     LFfac*orho1(n_r)
+               vflr2=orho2(n_r_loc)*vr(n_phi,n_theta_loc)*vr(n_phi,n_theta_loc)
+               valr =br(n_phi,n_theta_loc)*br(n_phi,n_theta_loc) * &
+                     LFfac*orho1(n_r_loc)
                valr2=valr*valr/(valr+valri2)
                vr2max=max(vr2max,O_r_e_4*(cf2*vflr2+af2*valr2))
     
-               vflh2= ( vt(n_phi,n_theta)*vt(n_phi,n_theta) +  &
-                        vp(n_phi,n_theta)*vp(n_phi,n_theta) )* &
-                        osn2(n_theta_nhs)*orho2(n_r)
-               valh2= ( bt(n_phi,n_theta)*bt(n_phi,n_theta) +  &
-                        bp(n_phi,n_theta)*bp(n_phi,n_theta) )* &
-                        LFfac*osn2(n_theta_nhs)*orho1(n_r)
+               vflh2= ( vt(n_phi,n_theta_loc)*vt(n_phi,n_theta_loc) +  &
+                        vp(n_phi,n_theta_loc)*vp(n_phi,n_theta_loc) )* &
+                        osn2(n_theta_nhs)*orho2(n_r_loc)
+               valh2= ( bt(n_phi,n_theta_loc)*bt(n_phi,n_theta_loc) +  &
+                        bp(n_phi,n_theta_loc)*bp(n_phi,n_theta_loc) )* &
+                        LFfac*osn2(n_theta_nhs)*orho1(n_r_loc)
                valh2m=valh2*valh2/(valh2+valhi2)
                vh2max=max(vh2max,O_r_E_2*(cf2*vflh2+af2*valh2m))
     
@@ -109,17 +109,17 @@ contains
     
       else   ! Magnetic field ?
     
-         do n_theta=l_theta,u_theta
-            n_theta_nhs=(n_theta+1)/2 ! northern hemisphere=odd n_theta
+         do n_theta_loc=l_theta,u_theta
+            n_theta_nhs=(n_theta_loc+1)/2 ! northern hemisphere=odd n_theta_loc
     
             do n_phi=1,n_phi_max
     
-               vflr2=orho2(n_r)*vr(n_phi,n_theta)*vr(n_phi,n_theta)
+               vflr2=orho2(n_r_loc)*vr(n_phi,n_theta_loc)*vr(n_phi,n_theta_loc)
                vr2max=max(vr2max,cf2*O_r_E_4*vflr2)
     
-               vflh2= ( vt(n_phi,n_theta)*vt(n_phi,n_theta) + &
-                        vp(n_phi,n_theta)*vp(n_phi,n_theta) )* &
-                        osn2(n_theta_nhs)*orho2(n_r)
+               vflh2= ( vt(n_phi,n_theta_loc)*vt(n_phi,n_theta_loc) + &
+                        vp(n_phi,n_theta_loc)*vp(n_phi,n_theta_loc) )* &
+                        osn2(n_theta_nhs)*orho2(n_r_loc)
                vh2max=max(vh2max,cf2*O_r_E_2*vflh2)
     
             end do
@@ -128,8 +128,8 @@ contains
     
       end if   ! Magnetic field ?
     
-      if ( vr2max /= 0.0_cp ) dtrkc=min(dtrkc,sqrt(delxr2(n_r)/vr2max))
-      if ( vh2max /= 0.0_cp ) dthkc=min(dthkc,sqrt(delxh2(n_r)/vh2max))
+      if ( vr2max /= 0.0_cp ) dtrkc=min(dtrkc,sqrt(delxr2(n_r_loc)/vr2max))
+      if ( vh2max /= 0.0_cp ) dthkc=min(dthkc,sqrt(delxh2(n_r_loc)/vh2max))
     
    end subroutine courant
 !------------------------------------------------------------------------------
@@ -161,7 +161,7 @@ contains
       real(cp), intent(out) :: dt_r,dt_h
     
       !-- Local:
-      integer :: n_r
+      integer :: n_r_loc
       real(cp) :: dt_rh,dt_2
       real(cp) :: dt_fac
     
@@ -171,9 +171,9 @@ contains
       dt_fac=two
       dt_r  =1000.0_cp*dtMax
       dt_h  =dt_r
-      do n_r=l_r,u_r
-         dt_r=min(dtrkc(n_r),dt_r)
-         dt_h=min(dthkc(n_r),dt_h)
+      do n_r_loc=l_r,u_r
+         dt_r=min(dtrkc(n_r_loc),dt_r)
+         dt_h=min(dthkc(n_r_loc),dt_h)
       end do
       
 #ifdef WITH_MPI

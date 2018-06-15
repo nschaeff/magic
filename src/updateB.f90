@@ -18,7 +18,7 @@ module updateB_mod
                                  sigma_ratio, conductance_ma, ktopb, kbotb
    use init_fields, only: bpeaktop, bpeakbot
    use num_param, only: alpha
-   use blocking, only: nLMBs,st_map,lo_map,st_sub_map,lo_sub_map,lmStartB,lmStopB
+   use blocking, only: nLMBs,lo_map,st_sub_map,lo_sub_map,lmStartB,lmStopB
    use horizontal_data, only: dLh, dPhi, hdif_B, D_l, D_lP1
    use logic, only: l_cond_ic, l_LCR, l_rot_ic, l_mag_nl, l_b_nl_icb, &
        &            l_b_nl_cmb, l_update_b, l_RMS
@@ -33,6 +33,7 @@ module updateB_mod
    use radial_der_even, only: get_ddr_even
    use radial_der, only: get_dr, get_ddr
    use useful, only: abortRun
+   use LMmapping, only: radial_map
    
    implicit none
 
@@ -326,11 +327,11 @@ contains
          if ( l1 > 0 ) then
             if ( .not. lBmat(l1) ) then
 #ifdef WITH_PRECOND_BJ
-               call get_bMat(dt,l1,hdif_B(st_map%lm2(l1,0)),           &
+               call get_bMat(dt,l1,hdif_B(radial_map%lm2(l1,0)),           &
                     &        bMat(1,1,l1),bPivot(1,l1), bMat_fac(1,l1),&
                     &        jMat(1,1,l1),jPivot(1,l1), jMat_fac(1,l1))
 #else
-               call get_bMat(dt,l1,hdif_B(st_map%lm2(l1,0)), &
+               call get_bMat(dt,l1,hdif_B(radial_map%lm2(l1,0)), &
                     &        bMat(1,1,l1),bPivot(1,l1),      &
                     &        jMat(1,1,l1),jPivot(1,l1) )
 #endif
@@ -362,8 +363,8 @@ contains
                   !         Note: the CMB condition is not correct if we assume free slip
                   !         and a conducting mantle (conductance_ma>0).
                   if ( l_b_nl_cmb ) then ! finitely conducting mantle
-                     rhs1(1,lmB,threadid) =  b_nl_cmb(st_map%lm2(l1,m1))
-                     rhs2(1,lmB,threadid) = aj_nl_cmb(st_map%lm2(l1,m1))
+                     rhs1(1,lmB,threadid) =  b_nl_cmb(radial_map%lm2(l1,m1))
+                     rhs2(1,lmB,threadid) = aj_nl_cmb(radial_map%lm2(l1,m1))
                   else
                      rhs1(1,lmB,threadid) = 0.0_cp
                      rhs2(1,lmB,threadid) = 0.0_cp
@@ -499,9 +500,9 @@ contains
                         rhs2(nR,lmB,threadid)=0.0_cp
                      else
                         rhs1(nR,lmB,threadid)= ( w1*dbdt(lm1,nR)+w2*dbdtLast(lm1,nR) ) &
-                        &          + O_dt*dLh(st_map%lm2(l1,m1))*or2(nR)*b(lm1,nR)
+                        &          + O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR)*b(lm1,nR)
                         rhs2(nR,lmB,threadid)= ( w1*djdt(lm1,nR)+w2*djdtLast(lm1,nR) ) &
-                        &          + O_dt*dLh(st_map%lm2(l1,m1))*or2(nR)*aj(lm1,nR)
+                        &          + O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR)*aj(lm1,nR)
                      end if
                   end do
 
@@ -510,7 +511,7 @@ contains
                   if ( l_cond_ic ) then    ! inner core
                      rhs1(n_r_max+1,lmB,threadid)=0.0_cp
                      if ( l_b_nl_icb ) then
-                        rhs2(n_r_max+1,lmB,threadid)=aj_nl_icb(st_map%lm2(l1,m1))
+                        rhs2(n_r_max+1,lmB,threadid)=aj_nl_icb(radial_map%lm2(l1,m1))
                      else
                         rhs2(n_r_max+1,lmB,threadid)=0.0_cp
                      end if
@@ -521,17 +522,17 @@ contains
                            dbdt_ic=zero
                            djdt_ic=zero
                         else
-                           fac=-omega_ic*or2(n_r_max)*dPhi(st_map%lm2(l1,m1))* &
-                           &    dLh(st_map%lm2(l1,m1))
+                           fac=-omega_ic*or2(n_r_max)*dPhi(radial_map%lm2(l1,m1))* &
+                           &    dLh(radial_map%lm2(l1,m1))
                            dbdt_ic=fac*b_ic(lm1,nR)
                            djdt_ic=fac*aj_ic(lm1,nR)
                         end if
                         rhs1(n_r_max+nR,lmB,threadid)=                 &
                         &      ( w1*dbdt_ic + w2*dbdt_icLast(lm1,nR) ) &
-                        &      +O_dt*dLh(st_map%lm2(l1,m1))*or2(n_r_max) * b_ic(lm1,nR)
+                        &      +O_dt*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * b_ic(lm1,nR)
                         rhs2(n_r_max+nR,lmB,threadid)=                 &
                         &      ( w1*djdt_ic + w2*djdt_icLast(lm1,nR) ) &
-                        &      +O_dt*dLh(st_map%lm2(l1,m1))*or2(n_r_max) * aj_ic(lm1,nR)
+                        &      +O_dt*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * aj_ic(lm1,nR)
 
                         !--------- Store the IC non-linear terms for the usage below:
                         dbdt_icLast(lm1,nR)=dbdt_ic
@@ -716,14 +717,14 @@ contains
                   l1=lm2l(lm1)
                   m1=lm2m(lm1)
 
-                  b(lm1,nR)=(r(n_r_LCR)/r(nR))**D_l(st_map%lm2(l1,m1))*b(lm1,n_r_LCR)
-                  db(lm1,nR)=-real(D_l(st_map%lm2(l1,m1)),kind=cp)*     &
-                  &          (r(n_r_LCR))**D_l(st_map%lm2(l1,m1))/      &
-                  &          (r(nR))**(D_l(st_map%lm2(l1,m1))+1)*b(lm1,n_r_LCR)
-                  ddb(lm1,nR)=real(D_l(st_map%lm2(l1,m1)),kind=cp)*         &
-                  &           (real(D_l(st_map%lm2(l1,m1)),kind=cp)+1)      &
-                  &           *(r(n_r_LCR))**(D_l(st_map%lm2(l1,m1)))/ &
-                  &           (r(nR))**(D_l(st_map%lm2(l1,m1))+2)*b(lm1,n_r_LCR)
+                  b(lm1,nR)=(r(n_r_LCR)/r(nR))**D_l(radial_map%lm2(l1,m1))*b(lm1,n_r_LCR)
+                  db(lm1,nR)=-real(D_l(radial_map%lm2(l1,m1)),kind=cp)*     &
+                  &          (r(n_r_LCR))**D_l(radial_map%lm2(l1,m1))/      &
+                  &          (r(nR))**(D_l(radial_map%lm2(l1,m1))+1)*b(lm1,n_r_LCR)
+                  ddb(lm1,nR)=real(D_l(radial_map%lm2(l1,m1)),kind=cp)*         &
+                  &           (real(D_l(radial_map%lm2(l1,m1)),kind=cp)+1)      &
+                  &           *(r(n_r_LCR))**(D_l(radial_map%lm2(l1,m1)))/ &
+                  &           (r(nR))**(D_l(radial_map%lm2(l1,m1))+2)*b(lm1,n_r_LCR)
                   aj(lm1,nR)=zero
                   dj(lm1,nR)=zero
                   ddj(lm1,nR)=zero
@@ -745,18 +746,18 @@ contains
             l1=lm2l(lm1)
             m1=lm2m(lm1)
             dbdtLast(lm1,nR)= dbdt(lm1,nR) -                    &
-            &    coex*opm*lambda(nR)*hdif_B(st_map%lm2(l1,m1))* &
-            &                  dLh(st_map%lm2(l1,m1))*or2(nR) * &
-            &    ( ddb(lm1,nR) - dLh(st_map%lm2(l1,m1))*or2(nR)*b(lm1,nR) )
+            &    coex*opm*lambda(nR)*hdif_B(radial_map%lm2(l1,m1))* &
+            &                  dLh(radial_map%lm2(l1,m1))*or2(nR) * &
+            &    ( ddb(lm1,nR) - dLh(radial_map%lm2(l1,m1))*or2(nR)*b(lm1,nR) )
             djdtLast(lm1,nR)= djdt(lm1,nR) -                    &
-            &    coex*opm*lambda(nR)*hdif_B(st_map%lm2(l1,m1))* &
-            &                  dLh(st_map%lm2(l1,m1))*or2(nR) * &
+            &    coex*opm*lambda(nR)*hdif_B(radial_map%lm2(l1,m1))* &
+            &                  dLh(radial_map%lm2(l1,m1))*or2(nR) * &
             &    ( ddj(lm1,nR) + dLlambda(nR)*dj(lm1,nR) -      &
-            &      dLh(st_map%lm2(l1,m1))*or2(nR)*aj(lm1,nR) )
+            &      dLh(radial_map%lm2(l1,m1))*or2(nR)*aj(lm1,nR) )
             if ( lRmsNext ) then
-               dtP(lm1)=O_dt*dLh(st_map%lm2(l1,m1))*or2(nR) &
+               dtP(lm1)=O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR) &
                &             * (  b(lm1,nR)-work_LMloc(lm1,nR) )
-               dtT(lm1)=O_dt*dLh(st_map%lm2(l1,m1))*or2(nR) &
+               dtT(lm1)=O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR) &
                &             * ( aj(lm1,nR)-workB(lm1,nR) )
             end if
          end do
@@ -779,13 +780,13 @@ contains
                l1=lm2l(lm1)
                m1=lm2m(lm1)
                dbdt_icLast(lm1,nR)=dbdt_icLast(lm1,nR) -                &
-               &    coex*opm*O_sr*dLh(st_map%lm2(l1,m1))*or2(n_r_max) * &
+               &    coex*opm*O_sr*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * &
                &    (                        ddb_ic(lm1,nR) +           &
-               &    two*D_lP1(st_map%lm2(l1,m1))*O_r_ic(nR)*db_ic(lm1,nR) )
+               &    two*D_lP1(radial_map%lm2(l1,m1))*O_r_ic(nR)*db_ic(lm1,nR) )
                djdt_icLast(lm1,nR)=djdt_icLast(lm1,nR) -                &
-               &    coex*opm*O_sr*dLh(st_map%lm2(l1,m1))*or2(n_r_max) * &
+               &    coex*opm*O_sr*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * &
                &    (                        ddj_ic(lm1,nR) +           &
-               &    two*D_lP1(st_map%lm2(l1,m1))*O_r_ic(nR)*dj_ic(lm1,nR) )
+               &    two*D_lP1(radial_map%lm2(l1,m1))*O_r_ic(nR)*dj_ic(lm1,nR) )
             end do
          end do
          nR=n_r_ic_max
@@ -793,11 +794,11 @@ contains
             l1=lm2l(lm1)
             m1=lm2m(lm1)
             dbdt_icLast(lm1,nR)=dbdt_icLast(lm1,nR) -                &
-            &    coex*opm*O_sr*dLh(st_map%lm2(l1,m1))*or2(n_r_max) * &
-            &    (one+two*D_lP1(st_map%lm2(l1,m1)))*ddb_ic(lm1,nR)
+            &    coex*opm*O_sr*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * &
+            &    (one+two*D_lP1(radial_map%lm2(l1,m1)))*ddb_ic(lm1,nR)
             djdt_icLast(lm1,nR)=djdt_icLast(lm1,nR) -                &
-            &    coex*opm*O_sr*dLh(st_map%lm2(l1,m1))*or2(n_r_max) * &
-            &    (one+two*D_lP1(st_map%lm2(l1,m1)))*ddj_ic(lm1,nR)
+            &    coex*opm*O_sr*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * &
+            &    (one+two*D_lP1(radial_map%lm2(l1,m1)))*ddj_ic(lm1,nR)
          end do
          !PERFOFF
       end if
@@ -933,7 +934,7 @@ contains
          else if ( kbotb == 3 ) then
             !---------- finite conducting IC, four boundary conditions:
             !           continuity of b,j, (d b)/(d r) and (d j)/(d r)/sigma.
-            !           note: n_r=n_r_max and n_r=n_r_max+1 stand for IC radius
+            !           note: n_r_loc=n_r_max and n_r_loc=n_r_max+1 stand for IC radius
             !           here we set the outer core part of the equations.
             !           the conductivity ratio sigma_ratio is used as
             !           an additional dimensionless parameter.
@@ -1020,10 +1021,10 @@ contains
       !----- Conducting inner core:
       if ( l_cond_ic ) then
          !----- inner core implicit time step matricies for the grid
-         !      points n_r=n_r_max+1,...,n_r_max+n_r_ic
+         !      points n_r_loc=n_r_max+1,...,n_r_max+n_r_ic
          do nCheb=1,n_r_ic_max ! counts even IC cheb modes
             do nR=2,n_r_ic_max-1 ! counts IC radial grid points
-               ! n_r=1 represents ICB
+               ! n_r_loc=1 represents ICB
                !----------- poloidal field matrix for an inner core field
                !            of the radial form: (r/r_icb)**(l+1)*cheb_ic(r)
                !            where cheb_ic are even chebs only.

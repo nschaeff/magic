@@ -7,7 +7,7 @@ module RMS
    use parallel_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use blocking, only: st_map, nThetaBs, nfs, sizeThetaB, lo_map, lm2, &
+   use blocking, only: nThetaBs, nfs, sizeThetaB, lo_map, lm2, &
        &               lm2m
    use finite_differences, only: type_fd
    use chebyshev, only: type_cheb_odd
@@ -15,7 +15,7 @@ module RMS
    use geometry, only: n_r_max, n_cheb_max, n_r_maxMag, lm_max, lm_maxMag, &
        &                 l_max, n_phi_max, n_theta_max, minc, n_r_max_dtB,   &
        &                 lm_max_dtB, fd_ratio, fd_stretch, u_r, l_r, dist_r, &
-       &                 n_r
+       &                 n_r_loc
    use physical_parameters, only: ra, ek, pr, prmag, radratio
    use radial_functions, only: rscheme_oc, r, r_cmb, r_icb, alph1, alph2
    use logic, only: l_save_out, l_heat, l_conv_nl, l_mag_LF, l_conv, &
@@ -33,6 +33,7 @@ module RMS
    use dtB_mod, only: PdifLM_LMloc, TdifLM_LMloc, PstrLM_LMloc, PadvLM_LMloc, &
        &              TadvLM_LMloc, TstrLM_LMloc, TomeLM_LMloc
    use useful, only: getMSD2, abortRun
+   use LMmapping, only: radial_map
                                                                   
    implicit none
  
@@ -476,7 +477,7 @@ contains
 #ifdef WITH_MPI
     
       ! The following fields are only 1D and R distributed.
-      sendcount  = n_r*(l_max+1)
+      sendcount  = n_r_loc*(l_max+1)
       displs     = (dist_r(:,1)-1)*(l_max+1)
       recvcounts = dist_r(:,0)*(l_max+1)
       call MPI_AllgatherV(MPI_IN_PLACE,sendcount,MPI_DEF_REAL,&

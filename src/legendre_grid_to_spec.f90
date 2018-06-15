@@ -17,7 +17,7 @@ contains
 
    subroutine legTF1(nThetaStart,f1LM,f1TM)
       !
-      !  Legendre transform (n_r,n_theta,m) to (n_r,l,m)                  
+      !  Legendre transform (n_r_loc,n_theta_loc,m) to (n_r_loc,l,m)                  
       !  [grid to spectral] for 2 arrays                                  
       !  f1TM (input) to f1LM (output)                                    
       !  One call to this routine does part of the transform              
@@ -117,7 +117,7 @@ contains
 !------------------------------------------------------------------------
    subroutine legTF2(nThetaStart,f1LM,f2LM,f1TM,f2TM)
       !
-      !  Legendre transform (n_r,n_theta,m) to (n_r,l,m)                  
+      !  Legendre transform (n_r_loc,n_theta_loc,m) to (n_r_loc,l,m)                  
       !  [grid to spectral] for 2 arrays                                  
       !  f1TM,f2TM (input) to f1LM,f2LM (output)                          
       !  One call to this routine does part of the transform              
@@ -248,7 +248,7 @@ contains
 !------------------------------------------------------------------------
    subroutine legTF3(nThetaStart,f1LM,f2LM,f3LM,f1TM,f2TM,f3TM)
       !
-      !  Legendre transform (n_r,n_theta,m) to (n_r,l,m)                  
+      !  Legendre transform (n_r_loc,n_theta_loc,m) to (n_r_loc,l,m)                  
       !  [grid to spectral] for 2 arrays                                  
       !  ancl1/2/3 (input) to flm1/2/3 (output)                           
       !  One call to this routine does part of the transform              
@@ -410,8 +410,8 @@ contains
    subroutine legTF_spher_tor(nThetaStart,f1LM,f2LM,f1TM,f2TM)
       !
       !  Vector Legendre transform
-      !  vt(n_r,n_theta,m), vp(n_r,n_theta,m) to Spheroidal(n_r,l,m)
-      !  and Toroidal(n_r,l,m)
+      !  vt(n_r_loc,n_theta_loc,m), vp(n_r_loc,n_theta_loc,m) to Spheroidal(n_r_loc,l,m)
+      !  and Toroidal(n_r_loc,l,m)
       !
 
       !-- Input variables:
@@ -584,7 +584,7 @@ contains
 !------------------------------------------------------------------------
    subroutine legTFAS(flm1,ft1,lmMax,nThetaStart,sizeThetaB)
       !
-      !  Legendre transform (n_r,n_theta,m) to (n_r,l,m)                  
+      !  Legendre transform (n_r_loc,n_theta_loc,m) to (n_r_loc,l,m)                  
       !  [grid to spectral] for 2 arrays                                  
       !  ancl1/2 (input) to flm1/2 (output)                               
       !  One call to this routine does part of the transform              
@@ -637,8 +637,8 @@ contains
            
       end if
 
-      !-- Following values of n_theta=3,4,5... when n_theta_min=1
-      !   or all values of n_theta when n_theta_min > 0
+      !-- Following values of n_theta_loc=3,4,5... when n_theta_min=1
+      !   or all values of n_theta_loc when n_theta_min > 0
        
       nThetaMin=1
       If ( nThetaStart == 1 ) nThetaMin=3 ! 2 already done
@@ -674,7 +674,7 @@ contains
 !------------------------------------------------------------------------
    subroutine legTFAS2(flm1,flm2,ft1,ft2,lmMax,nThetaStart,sizeThetaB)
       !
-      !  Legendre transform (n_r,n_theta,m) to (n_r,l,m)                  
+      !  Legendre transform (n_r_loc,n_theta_loc,m) to (n_r_loc,l,m)                  
       !  [grid to spectral] for 2 arrays                                  
       !  ancl1/2 (input) to flm1/2 (output)                               
       !  One call to this routine does part of the transform              
@@ -736,8 +736,8 @@ contains
            
       end if
 
-      !-- Following values of n_theta=3,4,5... when n_theta_min=1
-      !   or all values of n_theta when n_theta_min > 0
+      !-- Following values of n_theta_loc=3,4,5... when n_theta_min=1
+      !   or all values of n_theta_loc when n_theta_min > 0
       nThetaMin=1
       if ( nThetaStart == 1 ) nThetaMin=3 ! 2 already done
 

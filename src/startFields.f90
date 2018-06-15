@@ -64,7 +64,7 @@ contains
     
       !-- Local variables:
       integer :: nR,l1m0,nLMB,l,m
-      integer :: lm, n_r
+      integer :: lm, n_r_loc
       integer :: lmStart,lmStop
       real(cp) :: coex
       real(cp) :: d_omega_ma_dt,d_omega_ic_dt
@@ -93,14 +93,14 @@ contains
             call pt_cond(s0,p0)
             
             if ( rank == 0 ) then
-               do n_r=1,n_r_max
-                  write(filehandle,'(5ES20.12)') r(n_r), osq4pi*otemp1(n_r)*&
-                  &            (s0(n_r)-ViscHeatFac*ThExpNb*alpha0(n_r)*    &
-                  &            temp0(n_r)*orho1(n_r)*p0(n_r)),              &
-                  &            osq4pi*p0(n_r), osq4pi*s0(n_r),              &
-                  &            osq4pi*alpha0(n_r)*(-rho0(n_r)*s0(n_r)+      &
-                  &            ViscHeatFac*ThExpNb*(alpha0(n_r)*temp0(n_r)  &
-                  &            +ogrun(n_r))*p0(n_r))
+               do n_r_loc=1,n_r_max
+                  write(filehandle,'(5ES20.12)') r(n_r_loc), osq4pi*otemp1(n_r_loc)*&
+                  &            (s0(n_r_loc)-ViscHeatFac*ThExpNb*alpha0(n_r_loc)*    &
+                  &            temp0(n_r_loc)*orho1(n_r_loc)*p0(n_r_loc)),              &
+                  &            osq4pi*p0(n_r_loc), osq4pi*s0(n_r_loc),              &
+                  &            osq4pi*alpha0(n_r_loc)*(-rho0(n_r_loc)*s0(n_r_loc)+      &
+                  &            ViscHeatFac*ThExpNb*(alpha0(n_r_loc)*temp0(n_r_loc)  &
+                  &            +ogrun(n_r_loc))*p0(n_r_loc))
                end do
             end if
 
@@ -132,13 +132,13 @@ contains
             call ps_cond(s0,p0)
 
             if ( rank == 0 ) then
-               do n_r=1,n_r_max
-                  write(filehandle,'(5ES20.12)') r(n_r), s0(n_r)*osq4pi, &
-                  &            p0(n_r)*osq4pi, osq4pi*temp0(n_r)*(       &
-                  &            s0(n_r)+alpha0(n_r)*orho1(n_r)*p0(n_r)*   &
-                  &            ThExpNb*ViscHeatFac), osq4pi*alpha0(n_r)* &
-                  &            ThExpNb*(-rho0(n_r)*temp0(n_r)*s0(n_r)+   &
-                  &            ViscHeatFac*ogrun(n_r)*p0(n_r))
+               do n_r_loc=1,n_r_max
+                  write(filehandle,'(5ES20.12)') r(n_r_loc), s0(n_r_loc)*osq4pi, &
+                  &            p0(n_r_loc)*osq4pi, osq4pi*temp0(n_r_loc)*(       &
+                  &            s0(n_r_loc)+alpha0(n_r_loc)*orho1(n_r_loc)*p0(n_r_loc)*   &
+                  &            ThExpNb*ViscHeatFac), osq4pi*alpha0(n_r_loc)* &
+                  &            ThExpNb*(-rho0(n_r_loc)*temp0(n_r_loc)*s0(n_r_loc)+   &
+                  &            ViscHeatFac*ogrun(n_r_loc)*p0(n_r_loc))
                end do
             end if
 

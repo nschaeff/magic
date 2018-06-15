@@ -9,7 +9,7 @@ module outPar_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: n_r_max, n_r_maxMag, l_max, lm_max, &
        &                 l_maxMag, n_r_icb, l_r, u_r, l_r_Mag, &
-       &                 u_r_Mag, n_r, dist_r
+       &                 u_r_Mag, n_r_loc, dist_r
    use blocking, only: nfs, nThetaBs, sizeThetaB, lm2m
    use logic, only: l_viscBcCalc, l_anel, l_fluxProfs, l_mag_nl, &
        &            l_perpPar, l_save_out, l_temperature_diff,   &
@@ -222,7 +222,7 @@ contains
          uhR =half* uhR ! Normalisation for the theta integration
          gradT2R =half*gradT2R ! Normalisation for the theta integration
 
-         sendcount  = n_r
+         sendcount  = n_r_loc
          recvcounts = dist_r(:,0)
          displs     = dist_r(:,1)-1
 #ifdef WITH_MPI
@@ -324,7 +324,7 @@ contains
             end do
          end if
 
-         sendcount  = n_r
+         sendcount  = n_r_loc
          displs     = dist_r(:,1)-1
          recvcounts = dist_r(:,0)
 #ifdef WITH_MPI
@@ -550,7 +550,7 @@ contains
       EperpaxiR=half*EperpaxiR ! Normalisation for the theta integration
       EparaxiR =half*EparaxiR  ! Normalisation for the theta integration
 
-      sendcount  = n_r
+      sendcount  = n_r_loc
       displs     = dist_r(:,1)-1
       recvcounts = dist_r(:,0)
 

@@ -7,7 +7,7 @@ module outRot
    use radial_functions, only: r_icb, r_cmb, r, rscheme_oc
    use physical_parameters, only: kbotv, ktopv
    use num_param, only: lScale, tScale, vScale
-   use blocking, only: lo_map,st_map,lmStartB,lmStopB, lm2
+   use blocking, only: lo_map, lmStartB,lmStopB, lm2
    use logic, only: l_AM, l_save_out, l_iner, l_SRIC, l_rot_ic, &
        &            l_SRMA, l_rot_ma, l_mag_LF, l_mag, l_drift, &
        &            l_finite_diff
@@ -19,6 +19,7 @@ module outRot
    use horizontal_data, only: cosTheta, gauss
    use special, only: BIC, lGrenoble
    use useful, only: abortRun
+   use LMmapping, only: radial_map
 
    implicit none
 
@@ -508,7 +509,7 @@ contains
       real(cp), intent(in) :: bp(n_phi_max,l_theta:u_theta)      ! array containing
       integer,  intent(in) :: nR
 
-      real(cp), intent(inout) :: lorentz_torque ! lorentz_torque for theta(1:n_theta)
+      real(cp), intent(inout) :: lorentz_torque ! lorentz_torque for theta(1:n_theta_loc)
 
 
       !-- local variables:
@@ -519,7 +520,7 @@ contains
       fac=two*pi/real(n_phi_max,cp) ! 2 pi/n_phi_max
 
       do nTheta=l_theta,u_theta
-         nThetaNHS=(nTheta+1)/2 ! northern hemisphere=odd n_theta
+         nThetaNHS=(nTheta+1)/2 ! northern hemisphere=odd n_theta_loc
          if ( lGrenoble ) then
             if ( r(nR) == r_icb ) then
                b0r=two*BIC*r_icb**2*cosTheta(nTheta)
@@ -559,7 +560,7 @@ contains
       real(cp), intent(out) :: angular_moment_ma(:)
     
       !-- local variables:
-      integer :: n_r,n
+      integer :: n_r_loc,n
       integer :: l1m0,l1m1
       real(cp) :: f(n_r_max,3)
       real(cp) :: r_E_2             ! r**2
@@ -568,16 +569,16 @@ contains
       !----- Construct radial function:
       l1m0=lm2(1,0)
       l1m1=lm2(1,1)
-      do n_r=1,n_r_max
-         r_E_2=r(n_r)*r(n_r)
+      do n_r_loc=1,n_r_max
+         r_E_2=r(n_r_loc)*r(n_r_loc)
          if ( l1m1 > 0 ) then
-            f(n_r,1)=r_E_2* real(z11(n_r))
-            f(n_r,2)=r_E_2*aimag(z11(n_r))
+            f(n_r_loc,1)=r_E_2* real(z11(n_r_loc))
+            f(n_r_loc,2)=r_E_2*aimag(z11(n_r_loc))
          else
-            f(n_r,1)=0.0_cp
-            f(n_r,2)=0.0_cp
+            f(n_r_loc,1)=0.0_cp
+            f(n_r_loc,2)=0.0_cp
          end if
-         f(n_r,3)=r_E_2*real(z10(n_r))
+         f(n_r_loc,3)=r_E_2*real(z10(n_r_loc))
       end do
     
       !----- Perform radial integral:
@@ -602,11 +603,11 @@ contains
 
    end subroutine get_angular_moment
 !-----------------------------------------------------------------------
-   subroutine sendvals_to_rank0(field,n_r,lm_vals,vals_on_rank0)
+   subroutine sendvals_to_rank0(field,n_r_loc,lm_vals,vals_on_rank0)
 
       !-- Input variables:
       complex(cp), intent(in) :: field(llm:ulm,n_r_max)
-      integer,     intent(in) :: n_r
+      integer,     intent(in) :: n_r_loc
       integer,     intent(in) :: lm_vals(:)
 
       !-- Output variables:
@@ -629,13 +630,13 @@ contains
          lm=lm_vals(ilm)
          if ( lmStartB(1) <= lm .and. lm <= lmStopB(1) ) then
             ! the value is already on coord_r 0
-            if (coord_r == 0) vals_on_rank0(ilm)=field(lm,n_r)
+            if (coord_r == 0) vals_on_rank0(ilm)=field(lm,n_r_loc)
          else
             tag=876+ilm
             ! on which process is the lm value?
 #ifdef WITH_MPI
             if (lmStartB(coord_r+1) <= lm .and. lm <= lmStopB(coord_r+1)) then
-               call MPI_Send(field(lm,n_r),1,MPI_DEF_COMPLEX,&
+               call MPI_Send(field(lm,n_r_loc),1,MPI_DEF_COMPLEX,&
                     & 0,tag,comm_r,ierr)
             end if
             if (coord_r == 0) then

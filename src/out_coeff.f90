@@ -409,7 +409,7 @@ contains
       !-- File outputs:
       character(80) :: string
       character(:), allocatable :: head
-      integer :: n_r,lm
+      integer :: n_r_loc,lm
       character(80) :: fileName
       logical :: lVB
     
@@ -430,9 +430,9 @@ contains
          allocate(workB_global(1,n_r_max))
       end if
 
-      do n_r=1,n_r_max
-         call gather_from_lo_to_rank0(b(llm,n_r),workA_global(:,n_r))
-         call gather_from_lo_to_rank0(aj(llm,n_r),workB_global(:,n_r))
+      do n_r_loc=1,n_r_max
+         call gather_from_lo_to_rank0(b(llm,n_r_loc),workA_global(:,n_r_loc))
+         call gather_from_lo_to_rank0(aj(llm,n_r_loc),workB_global(:,n_r_loc))
       end do
 
       if ( rank == 0 ) then
@@ -459,13 +459,13 @@ contains
          write(fileHandle) real(time, kind=outp)
          write(fileHandle) real(r,kind=outp), real(rho0, kind=outp)
 
-         write(fileHandle) ((cmplx(real(workA_global(lm,n_r)),         &
-         &                 aimag(workA_global(lm,n_r)),kind=outp ),    &
-         &                 lm=1,lm_max),n_r=1,n_r_max )
+         write(fileHandle) ((cmplx(real(workA_global(lm,n_r_loc)),         &
+         &                 aimag(workA_global(lm,n_r_loc)),kind=outp ),    &
+         &                 lm=1,lm_max),n_r_loc=1,n_r_max )
          if ( lVB ) then
-            write(fileHandle) ((cmplx(real(workB_global(lm,n_r)),      &
-            &                 aimag(workB_global(lm,n_r)),kind=outp ), &
-            &                 lm=1,lm_max),n_r=1,n_r_max)
+            write(fileHandle) ((cmplx(real(workB_global(lm,n_r_loc)),      &
+            &                 aimag(workB_global(lm,n_r_loc)),kind=outp ), &
+            &                 lm=1,lm_max),n_r_loc=1,n_r_max)
          end if
       end if
 
@@ -473,18 +473,18 @@ contains
       !-- Now inner core field
       if ( root(1:1) == 'B' .and. l_cond_ic ) then
 
-         do n_r=1,n_r_ic_max
-            call gather_from_lo_to_rank0(b_ic(llm,n_r),workA_global(:,n_r))
-            call gather_from_lo_to_rank0(aj_ic(llm,n_r),workB_global(:,n_r))
+         do n_r_loc=1,n_r_ic_max
+            call gather_from_lo_to_rank0(b_ic(llm,n_r_loc),workA_global(:,n_r_loc))
+            call gather_from_lo_to_rank0(aj_ic(llm,n_r_loc),workB_global(:,n_r_loc))
          end do
 
          if ( rank == 0 ) then
-            write(fileHandle) ( (cmplx( real(workA_global(lm,n_r)),    &
-            &                 aimag(workA_global(lm,n_r)), kind=outp ),&
-            &          lm=1,lm_max),n_r=1,n_r_ic_max )
-            write(fileHandle) ( (cmplx( real(workB_global(lm,n_r)),    &
-            &                 aimag(workB_global(lm,n_r)), kind=outp), &
-            &          lm=1,lm_max),n_r=1,n_r_ic_max )
+            write(fileHandle) ( (cmplx( real(workA_global(lm,n_r_loc)),    &
+            &                 aimag(workA_global(lm,n_r_loc)), kind=outp ),&
+            &          lm=1,lm_max),n_r_loc=1,n_r_ic_max )
+            write(fileHandle) ( (cmplx( real(workB_global(lm,n_r_loc)),    &
+            &                 aimag(workB_global(lm,n_r_loc)), kind=outp), &
+            &          lm=1,lm_max),n_r_loc=1,n_r_ic_max )
          end if
 
       end if

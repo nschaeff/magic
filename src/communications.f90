@@ -11,11 +11,11 @@ module communications
                            comm_m, n_ranks_theta
    use LMLoop_data, only: llm, ulm
    use geometry 
-   use blocking, only: st_map, lo_map, lmStartB, lmStopB, lm2, lmP2
+   use blocking, only: lo_map, lmStartB, lmStopB, lm2, lmP2
    use logic, only: l_mag, l_conv, l_heat, l_chemical_conv, &
        &            l_mag_kin, l_TP_form, l_double_curl
    use useful, only: abortRun
-   use LMmapping, only: dist_map
+   use LMmapping, only: dist_map, radial_map
  
    implicit none
  
@@ -69,11 +69,7 @@ module communications
    public :: get_global_sum_dist, r2lo_redist_start_dist,                  &
    &         lo2r_redist_start_dist, lo2r_redist_wait_dist
 
-#ifdef WITH_MPI
-   public :: myAllGather, slice_f, slice_Flm, slice_FlmP, gather_f, &
-             gather_FlmP, gather_Flm, transpose_m_theta, transpose_theta_m
    
-#endif
  
    ! declaration of the types for the redistribution
    type(lm2r_type), public :: lo2r_flow, lo2r_s
@@ -86,6 +82,12 @@ module communications
    complex(cp), allocatable :: temp_gather_lo(:)
    complex(cp), allocatable :: temp_r2lo(:,:)
    
+   
+   !-- Slice/gather interface
+   !   
+   !-- TODO: These are not writen for performance right now. Dunno if it will 
+   !   ever be needed.
+   !   
    interface slice_Flm
       module procedure slice_Flm_cmplx, slice_Flm_real
    end interface slice_Flm
@@ -93,7 +95,15 @@ module communications
    interface slice_FlmP
       module procedure slice_FlmP_cmplx, slice_FlmP_real
    end interface slice_FlmP
+   
+   !-- ?????????
+   !
+!    integer :: 
+   
 
+   public :: myAllGather, slice_f, slice_Flm, slice_FlmP, gather_f, &
+             gather_FlmP, gather_Flm, transpose_m_theta, transpose_theta_m
+             
 contains
   
    subroutine initialize_communications
@@ -137,7 +147,7 @@ contains
       bytes_allocated = bytes_allocated + 32*n_ranks_r*SIZEOF_INTEGER
       
       ! -- TODO:
-      !    Those were for the old code, which had n_r per rank fixed, 
+      !    Those were for the old code, which had n_r_loc per rank fixed, 
       !    except for the last rank. Now things are much more flexible.
       !    Eliminate these two variables as soon as the parallelization of the 
       !    ML Loop is completed!
@@ -562,14 +572,14 @@ contains
             do nR=1,self%dim2
                do l=0,l_max
                   do m=0,l,minc
-                     arr_full(st_map%lm2(l,m),nR) = temp_lo(lo_map%lm2(l,m),nR)
+                     arr_full(radial_map%lm2(l,m),nR) = temp_lo(lo_map%lm2(l,m),nR)
                   end do
                end do
             end do
          else
             do nR=1,self%dim2
                do l=0,l_max
-                  arr_full(st_map%lm2(l,0),nR) = temp_lo(lo_map%lm2(l,0),nR)
+                  arr_full(radial_map%lm2(l,0),nR) = temp_lo(lo_map%lm2(l,0),nR)
                end do
             end do
          end if
@@ -580,14 +590,14 @@ contains
          do nR=1,self%dim2
             do l=0,l_max
                do m=0,l,minc
-                  arr_full(st_map%lm2(l,m),nR) = arr_lo(lo_map%lm2(l,m),nR)
+                  arr_full(radial_map%lm2(l,m),nR) = arr_lo(lo_map%lm2(l,m),nR)
                end do
             end do
          end do
       else
          do nR=1,self%dim2
             do l=0,l_max
-               arr_full(st_map%lm2(l,0),nR) = arr_lo(lo_map%lm2(l,0),nR)
+               arr_full(radial_map%lm2(l,0),nR) = arr_lo(lo_map%lm2(l,0),nR)
             end do
          end do
       end if
@@ -669,12 +679,12 @@ contains
          if ( .not. l_axi ) then
             do l=0,l_max
                do m=0,l,minc
-                  arr_full(st_map%lm2(l,m)) = temp_gather_lo(lo_map%lm2(l,m))
+                  arr_full(radial_map%lm2(l,m)) = temp_gather_lo(lo_map%lm2(l,m))
                end do
             end do
          else
             do l=0,l_max
-               arr_full(st_map%lm2(l,0)) = temp_gather_lo(lo_map%lm2(l,0))
+               arr_full(radial_map%lm2(l,0)) = temp_gather_lo(lo_map%lm2(l,0))
             end do
          end if
       end if
@@ -682,12 +692,12 @@ contains
       if ( .not. l_axi ) then
          do l=0,l_max
             do m=0,l,minc
-               arr_full(st_map%lm2(l,m)) = arr_lo(lo_map%lm2(l,m))
+               arr_full(radial_map%lm2(l,m)) = arr_lo(lo_map%lm2(l,m))
             end do
          end do
       else
          do l=0,l_max
-            arr_full(st_map%lm2(l,0)) = arr_lo(lo_map%lm2(l,0))
+            arr_full(radial_map%lm2(l,0)) = arr_lo(lo_map%lm2(l,0))
          end do
       end if
 #endif
@@ -715,12 +725,12 @@ contains
          if ( .not. l_axi ) then
             do l=0,l_max
                do m=0,l,minc
-                  temp_gather_lo(lo_map%lm2(l,m)) = arr_full(st_map%lm2(l,m))
+                  temp_gather_lo(lo_map%lm2(l,m)) = arr_full(radial_map%lm2(l,m))
                end do
             end do
          else
             do l=0,l_max
-               temp_gather_lo(lo_map%lm2(l,0)) = arr_full(st_map%lm2(l,0))
+               temp_gather_lo(lo_map%lm2(l,0)) = arr_full(radial_map%lm2(l,0))
             end do
          end if
       end if
@@ -732,12 +742,12 @@ contains
       if ( .not. l_axi ) then
          do l=0,l_max
             do m=0,l,minc
-               arr_lo(lo_map%lm2(l,m)) = arr_full(st_map%lm2(l,m))
+               arr_lo(lo_map%lm2(l,m)) = arr_full(radial_map%lm2(l,m))
             end do
          end do
       else
          do l=0,l_max
-            arr_lo(lo_map%lm2(l,0)) = arr_full(st_map%lm2(l,0))
+            arr_lo(lo_map%lm2(l,0)) = arr_full(radial_map%lm2(l,0))
          end do
       end if
 #endif
@@ -831,7 +841,7 @@ contains
       !PERFON('lm2r_st')
       
       ! -- TODO:
-      !    Those were for the old code, which had n_r per rank fixed, 
+      !    Those were for the old code, which had n_r_loc per rank fixed, 
       !    except for the last rank. Now things are much more flexible.
       !    Eliminate these two variables as soon as the parallelization of the 
       !    ML Loop is completed!
@@ -996,12 +1006,12 @@ contains
 
       type(lm2r_type) :: self
       complex(cp), intent(in) :: arr_lo(llm:ulm,1:n_r_max,*)
-      complex(cp), target, intent(out) :: arr_dist(1:n_lm,l_r:u_r,*)
+      complex(cp), target, intent(out) :: arr_dist(1:n_lm_loc,l_r:u_r,*)
   
   
       PERFON('lo2r_st')
       !call lm2r_redist(arr_lo,temp_lo)
-      self%arr_Rloc(1:,l_r:,1:) => arr_dist(1:n_lm,l_r:u_r,1:self%count)
+      self%arr_Rloc(1:,l_r:,1:) => arr_dist(1:n_lm_loc,l_r:u_r,1:self%count)
       call lm2r_redist_start(self,arr_lo,self%temp_Rloc)
       PERFOFF
 
@@ -1023,7 +1033,7 @@ contains
             do nR=l_r,u_r
                do l=0,l_max
                   do m=0,l,minc
-                     self%arr_Rloc(st_map%lm2(l,m),nR,i) = &
+                     self%arr_Rloc(radial_map%lm2(l,m),nR,i) = &
                             self%temp_Rloc(lo_map%lm2(l,m),nR,i)
                   end do
                end do
@@ -1033,7 +1043,7 @@ contains
          do i=1,self%count
             do nR=l_r,u_r
                do l=0,l_max
-                  self%arr_Rloc(st_map%lm2(l,0),nR,i) = &
+                  self%arr_Rloc(radial_map%lm2(l,0),nR,i) = &
                          self%temp_Rloc(lo_map%lm2(l,0),nR,i)
                end do
             end do
@@ -1057,7 +1067,7 @@ contains
       if ( .not. l_axi ) then
          do i=1,self%count
             do nR=l_r,u_r
-               do lm=1,n_lm
+               do lm=1,n_lm_loc
                   l = dist_map%lm2l(lm)
                   m = dist_map%lm2m(lm)
                   self%arr_Rloc(lm,nR,i) = self%temp_Rloc(lo_map%lm2(l,m),nR,i)
@@ -1228,7 +1238,7 @@ contains
                do l=0,l_max
                   do m=0,l,minc
                      self%temp_Rloc(lo_map%lm2(l,m),nR,i) = & 
-                                      arr_Rloc(st_map%lm2(l,m),nR,i)
+                                      arr_Rloc(radial_map%lm2(l,m),nR,i)
                   end do
                end do
             end do
@@ -1238,7 +1248,7 @@ contains
             do nR=l_r,u_r
                do l=0,l_max
                   self%temp_Rloc(lo_map%lm2(l,0),nR,i) = & 
-                                   arr_Rloc(st_map%lm2(l,0),nR,i)
+                                   arr_Rloc(radial_map%lm2(l,0),nR,i)
                end do
             end do
          end do
@@ -1256,7 +1266,7 @@ contains
       ! 
 
       type(r2lm_type) :: self
-      complex(cp), intent(in) :: arr_dist(1:n_lm,l_r:u_r,*)
+      complex(cp), intent(in) :: arr_dist(1:n_lm_loc,l_r:u_r,*)
       complex(cp), intent(out) :: arr_lo(llm:ulm,1:n_r_max,*)
   
       ! Local variables
@@ -1271,11 +1281,11 @@ contains
       if ( .not. l_axi ) then
          do i=1,self%count
             do nR=l_r,u_r
-               call gather_Flm(arr_dist(1:n_lm,nR,i), tmp_glb(1:lm_max))
+               call gather_Flm(arr_dist(1:n_lm_loc,nR,i), tmp_glb(1:lm_max))
                self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
                do l=0,l_max
                   do m=0,l,minc
-                     self%temp_Rloc(lo_map%lm2(l,m),nR,i) = tmp_glb(st_map%lm2(l,m))
+                     self%temp_Rloc(lo_map%lm2(l,m),nR,i) = tmp_glb(radial_map%lm2(l,m))
                   end do
                end do
             end do
@@ -1284,10 +1294,10 @@ contains
       else
          do i=1,self%count
             do nR=l_r,u_r
-               call gather_Flm(arr_dist(1:n_lm,nR,i), tmp_glb(1:lm_max))
+               call gather_Flm(arr_dist(1:n_lm_loc,nR,i), tmp_glb(1:lm_max))
                self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
                do l=0,l_max
-                  self%temp_Rloc(lo_map%lm2(l,0),nR,i) = tmp_glb(st_map%lm2(l,0))
+                  self%temp_Rloc(lo_map%lm2(l,0),nR,i) = tmp_glb(radial_map%lm2(l,0))
                end do
             end do
          end do
@@ -1324,14 +1334,14 @@ contains
          do nR=1,n_r_max
             do l=0,l_max
                do m=0,l,minc
-                  arr_lo(lo_map%lm2(l,m),nR) = arr_LMloc(st_map%lm2(l,m),nR)
+                  arr_lo(lo_map%lm2(l,m),nR) = arr_LMloc(radial_map%lm2(l,m),nR)
                end do
             end do
          end do
       else
          do nR=1,n_r_max
             do l=0,l_max
-               arr_lo(lo_map%lm2(l,0),nR) = arr_LMloc(st_map%lm2(l,0),nR)
+               arr_lo(lo_map%lm2(l,0),nR) = arr_LMloc(radial_map%lm2(l,0),nR)
             end do
          end do
       end if
@@ -1354,14 +1364,14 @@ contains
          do nR=1,n_r_max
             do l=0,l_max
                do m=0,l,minc
-                  arr_LMloc(st_map%lm2(l,m),nR) = arr_lo(lo_map%lm2(l,m),nR)
+                  arr_LMloc(radial_map%lm2(l,m),nR) = arr_lo(lo_map%lm2(l,m),nR)
                end do
             end do
          end do
       else
          do nR=1,n_r_max
             do l=0,l_max
-               arr_LMloc(st_map%lm2(l,0),nR) = arr_lo(lo_map%lm2(l,0),nR)
+               arr_LMloc(radial_map%lm2(l,0),nR) = arr_lo(lo_map%lm2(l,0),nR)
             end do
          end do
       end if
@@ -1511,48 +1521,48 @@ contains
       !   Author: Rafael Lago (MPCDF) August 2017
       !
       real(cp),  intent(in)  :: f_global(n_phi_max, n_theta_max)
-      real(cp),  intent(out) :: f_local(n_phi_max, n_theta)
+      real(cp),  intent(out) :: f_local(n_phi_max, n_theta_loc)
       
       f_local = f_global(:,l_theta:u_theta)
    end subroutine slice_f
    
    !----------------------------------------------------------------------------
-   subroutine slice_Flm_cmplx(Flm_global, Fn_lmal)
+   subroutine slice_Flm_cmplx(Flm_global, Flm_local)
       !
       !   Author: Rafael Lago (MPCDF) August 2017
       !
       complex(cp),  intent(in)  :: Flm_global(lm_max)
-      complex(cp),  intent(out) :: Fn_lmal(n_lm)
+      complex(cp),  intent(out) :: Flm_local(n_lm_loc)
       
-      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
+      integer :: i, l_lm, u_lm, l_lm_g, u_lm_g, m
       
-      do i = 1, n_m
-        m_idx = lm_dist(coord_theta, i, 1)
-        lm_s  = lm_dist(coord_theta, i, 3)
-        lm_e  = lm_dist(coord_theta, i, 4)
-        lm_gs = lm2(m_idx, m_idx)
-        lm_ge = lm2(l_max, m_idx)
-        Fn_lmal(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
+      do i = 1, n_m_loc
+        m = dist_m(coord_m,i)
+        l_lm  = dist_map%lm2(m, m)
+        u_lm  = dist_map%lm2(l_max, m)
+        l_lm_g = lm2(m, m)
+        u_lm_g = lm2(l_max, m)
+        Flm_local(l_lm:u_lm) = Flm_global(l_lm_g:u_lm_g)
       end do
    end subroutine slice_Flm_cmplx
    
    !----------------------------------------------------------------------------
-   subroutine slice_Flm_real(Flm_global, Fn_lmal)
+   subroutine slice_Flm_real(Flm_global, Flm_local)
       !
       !   Author: Rafael Lago (MPCDF) August 2017
       !
       real(cp),  intent(in)  :: Flm_global(lm_max)
-      real(cp),  intent(out) :: Fn_lmal(n_lm)
+      real(cp),  intent(out) :: Flm_local(n_lm_loc)
       
-      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
+      integer :: i, l_lm, u_lm, l_lm_g, u_lm_g, m
       
-      do i = 1, n_m
-        m_idx = lm_dist(coord_theta, i, 1)
-        lm_s  = lm_dist(coord_theta, i, 3)
-        lm_e  = lm_dist(coord_theta, i, 4)
-        lm_gs = lm2(m_idx, m_idx)
-        lm_ge = lm2(l_max, m_idx)
-        Fn_lmal(lm_s:lm_e) = Flm_global(lm_gs:lm_ge)
+      do i = 1, n_m_loc
+        m = dist_m(coord_m,i)
+        l_lm  = dist_map%lm2(m, m)
+        u_lm  = dist_map%lm2(l_max, m)
+        l_lm_g = lm2(m, m)
+        u_lm_g = lm2(l_max, m)
+        Flm_local(l_lm:u_lm) = Flm_global(l_lm_g:u_lm_g)
       end do
    end subroutine slice_Flm_real
 
@@ -1562,17 +1572,17 @@ contains
       !   Author: Rafael Lago (MPCDF) August 2017
       !
       complex(cp),  intent(in)  :: FlmP_global(lmP_max)
-      complex(cp),  intent(out) :: Flm_local(n_lmP)
+      complex(cp),  intent(out) :: Flm_local(n_lmP_loc)
       
-      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
+      integer :: i, l_lm, u_lm, l_lm_g, u_lm_g, m
       
-      do i = 1, n_m
-        m_idx = lmP_dist(coord_theta, i, 1)
-        lm_s  = lmP_dist(coord_theta, i, 3)
-        lm_e  = lmP_dist(coord_theta, i, 4)
-        lm_gs = lmP2(m_idx,   m_idx)
-        lm_ge = lmP2(l_max+1, m_idx)
-        Flm_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
+      do i = 1, n_m_loc
+        m = dist_m(coord_m, i)
+        l_lm  = dist_map%lmP2(m, m)
+        u_lm  = dist_map%lmP2(l_max, m)
+        l_lm_g = lmP2(m,   m)
+        u_lm_g = lmP2(l_max+1, m)
+        Flm_local(l_lm:u_lm) = FlmP_global(l_lm_g:u_lm_g)
       end do
    end subroutine slice_FlmP_cmplx
    
@@ -1582,17 +1592,17 @@ contains
       !   Author: Rafael Lago (MPCDF) August 2017
       !
       real(cp),  intent(in)  :: FlmP_global(lmP_max)
-      real(cp),  intent(out) :: Flm_local(n_lmP)
+      real(cp),  intent(out) :: Flm_local(n_lmP_loc)
       
-      integer :: i, lm_s, lm_e, lm_gs, lm_ge, m_idx
+      integer :: i, l_lm, u_lm, l_lm_g, u_lm_g, m
       
-      do i = 1, n_m
-        m_idx = lm_dist(coord_theta, i, 1)
-        lm_s  = lm_dist(coord_theta, i, 3)
-        lm_e  = lm_dist(coord_theta, i, 4)
-        lm_gs = lmP2(m_idx,   m_idx)
-        lm_ge = lmP2(l_max+1, m_idx)
-        Flm_local(lm_s:lm_e) = FlmP_global(lm_gs:lm_ge)
+      do i = 1, n_m_loc
+        m = dist_m(coord_m, i)
+        l_lm  = dist_map%lm2(m, m)
+        u_lm  = dist_map%lm2(l_max, m)
+        l_lm_g = lmP2(m,   m)
+        u_lm_g = lmP2(l_max+1, m)
+        Flm_local(l_lm:u_lm) = FlmP_global(l_lm_g:u_lm_g)
       end do
    end subroutine slice_FlmP_real
 
@@ -1601,81 +1611,94 @@ contains
       !
       !   Author: Rafael Lago (MPCDF) August 2017
       !
-      complex(cp),  intent(in)  :: Flm_local(n_lmP)
+      complex(cp),  intent(in)  :: Flm_local(n_lmP_loc)
       complex(cp),  intent(out) :: FlmP_global(lmP_max)
       
       complex(cp) ::  buffer(lmP_max)
-      integer :: i, j, m_idx, lm_s_local, lm_e_local, lm_s_global, lm_e_global
-      integer :: pos, ilen, Rq(n_ranks_theta), ierr
+      integer :: irank, j, m, l_lm_loc, u_lm_loc, l_lm_glb, u_lm_glb
+      integer :: pos, ilen, in_m, Rq(n_ranks_m), ierr
       
       !-- buffer will receive all messages, but they are ordered by ranks,
       !   not by m.
       pos = 1
-      do i=0,n_ranks_theta-1
-         ilen = sum(lmP_dist(i,:,2))
-         if (coord_theta == i) buffer(pos:pos+ilen-1) = Flm_local(1:n_lmP)
-         CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, i, &
-                         comm_m, Rq(i+1), ierr)
+      do irank=0,n_ranks_m-1
+         in_m = dist_m(irank,0)
+         ilen = in_m*(l_max+2) - sum(dist_m(irank,1:in_m))
+         if (coord_m == irank) buffer(pos:pos+ilen-1) = Flm_local(1:n_lmP_loc)
+         CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, &
+                         irank, comm_m, Rq(irank+1), ierr)
          pos = pos + ilen
       end do
       
       CALL MPI_WAITALL(n_ranks_theta, Rq, MPI_STATUSES_IGNORE, ierr)
       
-      !-- This basically re-orders the buffer 
-      pos = 0
-      do i=0,n_ranks_theta-1
-         do j = 1, n_m_array
-            m_idx = lmP_dist(i, j, 1)
-            if (m_idx < 0) exit
-            lm_s_local  = pos + lmP_dist(i, j, 3)
-            lm_e_local  = pos + lmP_dist(i, j, 4)
-            lm_s_global = lmP2(m_idx  ,m_idx)
-            lm_e_global = lmP2(l_max+1,m_idx)
-            FlmP_global(lm_s_global:lm_e_global) = buffer(lm_s_local:lm_e_local)
+      !-- Reorders the buffer
+      l_lm_loc = 1
+      do irank=0,n_ranks_m-1
+         do j = 1, dist_m(irank,0)
+            m = dist_m(irank,j)
+            u_lm_loc = l_lm_loc + l_max+1 - m   ! (l_max+2 - m) points for lmP
+            l_lm_glb = lmP2(m  ,m)
+            u_lm_glb = lmP2(l_max+1,m)
+            FlmP_global(l_lm_glb:u_lm_glb) = buffer(l_lm_loc:u_lm_loc)
+            l_lm_loc = u_lm_loc + 1
          end do
-         pos = pos + sum(lmP_dist(i,:,2))
       end do
       
    end subroutine gather_FlmP
    
    !----------------------------------------------------------------------------
-   subroutine gather_Flm(Fn_lmal, Flm_global)
+   subroutine gather_Flm(Flm_local, Flm_global)
       !
+      !   IMPORTANT: this function will only work if the all l points are stored
+      !   locally and grouped together in "chunks". There is no requirements 
+      !   for the m's. 
+      !   
+      !   For instance, if m1 and m2 are two consecutive m points in a given
+      !   rank, then Flm must be stored such that
+      !   [(m1:l_max,m1) (m2:l_max,m2)]
+      !   are consecutive.
+      !   Notice that there is not assumptions about m1 or m2. Also, the l's do
+      !   not need to be stored in ascending or descending order. And example 
+      !   for l_max=6 and dist_m=(/5,3/) is:
+      !   [(5,3) (6,3) (3,3) (4,3) (6,5) (5,5)]
+      !   This is perfectly valid grouping.
+      !      
       !   Author: Rafael Lago (MPCDF) August 2017
       !
-      complex(cp),  intent(in)  :: Fn_lmal(n_lm)
+      complex(cp),  intent(in)  :: Flm_local(n_lm_loc)
       complex(cp),  intent(out) :: Flm_global(lm_max)
       
       complex(cp) ::  buffer(lm_max)
-      integer :: i, j, m_idx, lm_s_local, lm_e_local, lm_s_global, lm_e_global
-      integer :: pos, ilen, Rq(n_ranks_theta), ierr
+      integer :: irank, j, m, l_lm_loc, u_lm_loc, l_lm_glb, u_lm_glb
+      integer :: in_m, pos, ilen, Rq(n_ranks_m), ierr
       
-      ! buffer will receive all messages, but they are ordered by ranks,
-      ! not by m.
+      !-- The buffer will receive all messages, but they are ordered by ranks,
+      !   not by m.
       
       pos = 1
-      do i=0,n_ranks_theta-1
-         ilen = sum(lm_dist(i,:,2))
-         if (coord_theta == i) buffer(pos:pos+ilen-1) = Fn_lmal(1:n_lm)
-         CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, i, &
-                         comm_m, Rq(i+1), ierr)
+      do irank=0,n_ranks_m-1
+         in_m = dist_m(irank,0)
+         ilen = in_m*(l_max+1) - sum(dist_m(irank,1:in_m))
+         if (coord_m == irank) buffer(pos:pos+ilen-1) = Flm_local(1:n_lm_loc)
+         CALL MPI_IBCAST(buffer(pos:pos+ilen-1), ilen, MPI_DOUBLE_COMPLEX, &
+                         irank, comm_m, Rq(irank+1), ierr)
          pos = pos + ilen
       end do
       
-      CALL MPI_WAITALL(n_ranks_theta, Rq, MPI_STATUSES_IGNORE, ierr)
+      CALL MPI_WAITALL(n_ranks_m, Rq, MPI_STATUSES_IGNORE, ierr)
       
-      pos = 0
-      do i=0,n_ranks_theta-1
-         do j = 1, n_m_array
-            m_idx = lm_dist(i, j, 1)
-            if (m_idx < 0) exit
-            lm_s_local  = pos + lm_dist(i, j, 3)
-            lm_e_local  = pos + lm_dist(i, j, 4)
-            lm_s_global = lm2(m_idx , m_idx)
-            lm_e_global = lm2(l_max , m_idx)
-            Flm_global(lm_s_global:lm_e_global) = buffer(lm_s_local:lm_e_local)
+      !-- Reorders the buffer
+      l_lm_loc = 1
+      do irank=0,n_ranks_m-1
+         do j = 1, dist_m(irank, 0)
+            m = dist_m(irank, j)
+            u_lm_loc = l_lm_loc + l_max - m   ! (l_max+1 - m) points for lm
+            l_lm_glb = lm2(m , m)
+            u_lm_glb = lm2(l_max , m)
+            Flm_global(l_lm_glb:u_lm_glb) = buffer(l_lm_loc:u_lm_loc)
+            l_lm_loc = u_lm_loc + 1
          end do
-         pos = pos + sum(lm_dist(i,:,2))
       end do
       
    end subroutine gather_Flm
@@ -1708,23 +1731,24 @@ contains
    !----------------------------------------------------------------------------
    subroutine transpose_m_theta(f_m_theta, f_theta_m)
       !   
-      !   Transposition from (m_loc,θ_glb) to (θ_loc,m_glb)
+      !   Transposition from (m_loc,θ_glb) to (θ_loc,m_glb).
+      !   
       !   
       !   Author: Rafael Lago (MPCDF) August 2017
       !
       !-- TODO this with mpi_type to stride the data
       !
-      complex(cp), intent(inout) :: f_m_theta(n_m_max, n_theta)
-      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m)
+      complex(cp), intent(inout) :: f_m_theta(n_m_max, n_theta_loc)
+      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
       
-      complex(cp) :: sendbuf(n_m_max * n_theta)
-      complex(cp) :: recvbuf(n_m, n_theta_max)
+      complex(cp) :: sendbuf(n_m_max * n_theta_loc)
+      complex(cp) :: recvbuf(n_m_loc, n_theta_max)
       
       integer :: sendcount(0:n_ranks_m-1)
       integer :: recvcount(0:n_ranks_m-1)
       integer :: senddispl(0:n_ranks_m-1)
       integer :: recvdispl(0:n_ranks_m-1)
-      integer :: irank, j, itheta, m_idx, pos
+      integer :: irank, j, itheta, m, pos
       
       pos = 1
       do irank=0,n_ranks_m-1
@@ -1734,19 +1758,17 @@ contains
          !-- TODO check performance of this; implementing this with mpi_type
          !   striding the data will probably be faster
          senddispl(irank) = pos-1
-         do itheta=1,n_theta
-            do j=1,n_m_array
-               m_idx = dist_m(irank,j)
-               if (m_idx < 0) cycle
-               m_idx = m_idx/minc
-               sendbuf(pos) = f_m_theta(m_idx+1,itheta)
+         do itheta=1,n_theta_loc
+            do j=1,dist_m(irank,0)
+               m = dist_m(irank,j)/minc
+               sendbuf(pos) = f_m_theta(m+1,itheta)
                pos = pos + 1
             end do
          end do
          
          sendcount(irank) = pos - senddispl(irank) - 1
-         recvdispl(irank) = irank*n_m*dist_theta(irank,0)
-         recvcount(irank) =   n_m*dist_theta(irank,0)
+         recvdispl(irank) = irank*n_m_loc*dist_theta(irank,0)
+         recvcount(irank) =   n_m_loc*dist_theta(irank,0)
       end do
       
       call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
@@ -1765,18 +1787,18 @@ contains
       !
       !-- TODO this with mpi_type to stride the data
       !
-      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m)
-      complex(cp), intent(inout) :: f_m_theta(n_m_max, n_theta)
+      complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
+      complex(cp), intent(inout) :: f_m_theta(n_m_max, n_theta_loc)
       
-      complex(cp) :: sendbuf(n_m * n_theta_max)
-      complex(cp) :: recvbuf(n_theta,  n_m_max)
+      complex(cp) :: sendbuf(n_m_loc * n_theta_max)
+      complex(cp) :: recvbuf(n_theta_loc,  n_m_max)
       
       integer :: sendcount(0:n_ranks_theta-1)
       integer :: recvcount(0:n_ranks_theta-1)
       integer :: senddispl(0:n_ranks_theta-1)
       integer :: recvdispl(0:n_ranks_theta-1)
-      integer :: irank, j, pos, nt, st, et
-      integer :: m_idx(n_ranks_theta*n_m_array)
+      integer :: irank, j, pos, n_t, l_t, u_t
+      integer :: m_arr(n_ranks_theta*n_m_array) 
       
       recvcount = 0
       pos = 1
@@ -1785,17 +1807,17 @@ contains
          !-- TODO check performance of this; implementing this with mpi_type
          !   striding the data will probably be faster
          senddispl(irank) = pos-1
-         st = dist_theta(irank,1)
-         et = dist_theta(irank,2)
-         nt = dist_theta(irank,0)
-         do j=1, n_m
-            sendbuf(pos:pos + nt - 1) = f_theta_m(st:et,j)
-            pos = pos + nt
+         n_t = dist_theta(irank,0)
+         l_t = dist_theta(irank,1)
+         u_t = dist_theta(irank,2)
+         do j=1, n_m_loc
+            sendbuf(pos:pos + n_t - 1) = f_theta_m(l_t:u_t,j)
+            pos = pos + n_t
          end do
          
          sendcount(irank) = pos - senddispl(irank) - 1
          recvdispl(irank) = sum(recvcount)
-         recvcount(irank) = dist_m(irank,0) * nt
+         recvcount(irank) = dist_m(irank,0) * n_t
       end do
       
       call MPI_ALLTOALLV(sendbuf, sendcount, senddispl, MPI_DOUBLE_COMPLEX, &
@@ -1808,13 +1830,13 @@ contains
       !   rank 2: 2, 6, 10, 14
       !   rank 3: 3, 7, 11, 15
       !   then the columns of recvbuf are ordered as 0,4,8,12,16,1,5,9,13(...)
-      !   and so forth. m_idx will contain this ordering (+1):
-      m_idx = reshape(transpose(dist_m(:,1:)), &
+      !   and so forth. m_arr will contain this ordering (+1):
+      m_arr = reshape(transpose(dist_m(:,1:)), &
                       (/n_ranks_m*n_m_array/))/minc + 1
       j = 1
       do pos = 1, n_ranks_theta*n_m_array
-         if (m_idx(pos) < 1) cycle
-         f_m_theta(m_idx(pos),:) = recvbuf(:,j)
+         if (m_arr(pos) < 1) cycle
+         f_m_theta(m_arr(pos),:) = recvbuf(:,j)
          j = j + 1
       end do
    end subroutine transpose_theta_m

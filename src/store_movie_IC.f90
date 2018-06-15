@@ -8,7 +8,7 @@ module out_movie_IC
    use physical_parameters, only: LFfac
    use blocking, only: sizeThetaB, nThetaBs, nfs
    use horizontal_data, only: dLh, Plm, dPlm, n_theta_cal2ord, &
-       &                      O_sin_theta
+       &                      O_sin_theta_loc
    use logic, only: l_cond_ic
    use movie_data, only: frames, n_movie_field_stop, n_movie_field_start, &
        &                 n_movie_type, n_movie_const, n_movie_fields_ic,  &
@@ -140,7 +140,7 @@ contains
                               nThetaC=nThetaStart-1+nThetaR
                               nTheta=n_theta_cal2ord(nThetaC)
                               n_o=n_o_r+(nTheta-1)*n_phi_max
-                              help=O_r_ic(nR)*O_sin_theta(nThetaC)
+                              help=O_r_ic(nR)*O_sin_theta_loc(nThetaC)
                               do nPhi=1,n_phi_max
                                  frames(nPhi+n_o)=help*BtB(nPhi,nThetaR)
                               end do
@@ -150,7 +150,7 @@ contains
                               nThetaC=nThetaStart-1+nThetaR
                               nTheta=n_theta_cal2ord(nThetaC)
                               n_o=n_o_r+(nTheta-1)*n_phi_max
-                              help=O_r_ic(nR)*O_sin_theta(nThetaC)
+                              help=O_r_ic(nR)*O_sin_theta_loc(nThetaC)
                               do nPhi=1,n_phi_max
                                  frames(nPhi+n_o)=help*BpB(nPhi,nThetaR)
                               end do
@@ -162,7 +162,7 @@ contains
                               nTheta=n_theta_cal2ord(nThetaC)
                               n_o=n_o_r+(nTheta-1)*n_phi_max
                               do nPhi=1,n_phi_max
-                                 frames(nPhi+n_o)= help*O_sin_theta(nThetaC) * &
+                                 frames(nPhi+n_o)= help*O_sin_theta_loc(nThetaC) * &
                                       ( cBrB(nPhi,nThetaR)*BtB(nPhi,nThetaR) - &
                                         cBtB(nPhi,nThetaR)*BrB(nPhi,nThetaR) )
                               end do
@@ -230,7 +230,7 @@ contains
                            nThetaC=nThetaStart-1+nThetaR
                            nTheta=n_theta_cal2ord(nThetaC)
                            n_o=n_o_r+(nTheta-1)*n_phi_max
-                           help=O_r_ic(nR)*O_sin_theta(nThetaC)
+                           help=O_r_ic(nR)*O_sin_theta_loc(nThetaC)
                            do nPhi=1,n_phi_max
                               frames(nPhi+n_o)=help*BtB(nPhi,nThetaR)
                            end do
@@ -240,7 +240,7 @@ contains
                            nThetaC=nThetaStart-1+nThetaR
                            nTheta=n_theta_cal2ord(nThetaC)
                            n_o=n_o_r+(nTheta-1)*n_phi_max
-                           help=O_r_ic(nR)*O_sin_theta(nThetaC)
+                           help=O_r_ic(nR)*O_sin_theta_loc(nThetaC)
                            do nPhi=1,n_phi_max
                               frames(nPhi+n_o)=help*BpB(nPhi,nThetaR)
                            end do
@@ -301,22 +301,22 @@ contains
                            frames(nPhi+n_o)=BrB(nPhi,nThetaR)*O_r_ic2(nR)
                         end do
                      else if ( n_field_type == 2 ) then
-                        help=O_r_ic(nR)*O_sin_theta(nTheta)
+                        help=O_r_ic(nR)*O_sin_theta_loc(nTheta)
                         do nPhi=1,n_phi_max
                            frames(nPhi+n_o)=help*BtB(nPhi,nThetaR)
                         end do
                      else if ( n_field_type == 3 ) then
-                        help=O_r_ic(nR)*O_sin_theta(nTheta)
+                        help=O_r_ic(nR)*O_sin_theta_loc(nTheta)
                         do nPhi=1,n_phi_max
                            frames(nPhi+n_o)=help*BpB(nPhi,nThetaR)
                         end do
                      else if ( n_field_type == 13 ) then
-                        help=-O_r_ic(nR)*O_sin_theta(nTheta)
+                        help=-O_r_ic(nR)*O_sin_theta_loc(nTheta)
                         do nPhi=1,n_phi_max
                            frames(nPhi+n_o)=help*BtB(nPhi,nThetaR)
                         end do
                      else if ( n_field_type == 14 ) then
-                        help=-O_r_ic(nR)*O_sin_theta(nTheta)
+                        help=-O_r_ic(nR)*O_sin_theta_loc(nTheta)
                         do nPhi=1,n_phi_max
                            frames(nPhi+n_o)=help*cBtB(nPhi,nThetaR)
                         end do
@@ -399,9 +399,9 @@ contains
                               nTheta=n_theta_cal2ord(nThetaC)
                               n_o=n_o_r+nTheta
                               frames(n_o)=BtB(nPhi0,nThetaR) * &
-                                          O_r_ic(nR)*O_sin_theta(nThetaC)
+                                          O_r_ic(nR)*O_sin_theta_loc(nThetaC)
                               frames(n_o+n_field_size)=BtB(nPhi180,nThetaR) * &
-                                            O_r_ic(nR)*O_sin_theta(nThetaC)
+                                            O_r_ic(nR)*O_sin_theta_loc(nThetaC)
                           end do
                         else if ( n_field_type == 3 ) then
                             do nThetaR=1,sizeThetaB
@@ -409,9 +409,9 @@ contains
                                nTheta=n_theta_cal2ord(nThetaC)
                                n_o=n_o_r+nTheta
                                frames(n_o)=BpB(nPhi0,nThetaR) * &
-                                           O_r_ic(nR)*O_sin_theta(nThetaC)
+                                           O_r_ic(nR)*O_sin_theta_loc(nThetaC)
                                frames(n_o+n_field_size)= BpB(nPhi180,nThetaR) * &
-                                                 O_r_ic(nR)*O_sin_theta(nThetaC)
+                                                 O_r_ic(nR)*O_sin_theta_loc(nThetaC)
                            end do
                         else if ( n_field_type == 8 ) then
                            do nThetaR=1,sizeThetaB
@@ -430,7 +430,7 @@ contains
                               do nPhi=1,n_phi_max
                                  help=help+BpB(nPhi,nThetaR)
                               end do
-                              frames(n_o)=phi_norm*help*O_r_ic(nR)*O_sin_theta(nThetaC)
+                              frames(n_o)=phi_norm*help*O_r_ic(nR)*O_sin_theta_loc(nThetaC)
                            end do
                         else if ( n_field_type == 54 ) then
                            help=LFfac*O_r_ic(nR)*O_r_ic2(nR)
@@ -438,10 +438,10 @@ contains
                               nThetaC=nThetaStart-1+nThetaR
                               nTheta=n_theta_cal2ord(nThetaC)
                               n_o=n_o_r+nTheta
-                              frames(n_o)=        help*O_sin_theta(nThetaC) * &
+                              frames(n_o)=        help*O_sin_theta_loc(nThetaC) * &
                                    ( cBrB(nPhi0,nThetaR)*BtB(nPhi0,nThetaR) - &
                                      cBtB(nPhi0,nThetaR)*BrB(nPhi0,nThetaR) )
-                              frames(n_o)=            help*O_sin_theta(nThetaC) * &
+                              frames(n_o)=            help*O_sin_theta_loc(nThetaC) * &
                                    ( cBrB(nPhi180,nThetaR)*BtB(nPhi180,nThetaR) - &
                                      cBtB(nPhi180,nThetaR)*BrB(nPhi180,nThetaR) )
                            end do

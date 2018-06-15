@@ -5,7 +5,7 @@ module movie_data
    use geometry, only: n_r_max, n_theta_max, n_phi_max,      &
        &                 ldtBMem, minc, n_r_ic_max, lMovieMem, &
        &                 n_r_tot, l_r,u_r, n_r_icb, n_r_cmb,   &
-       &                 n_r, dist_r
+       &                 n_r_loc, dist_r
    use logic, only:  l_store_frame, l_save_out, l_movie, &
                      l_movie_oc, l_movie_ic, l_HTmovie,  &
                      l_dtBmovie, l_store_frame, l_save_out
@@ -387,7 +387,7 @@ contains
       character(len=80) :: string,word,stringC
       character(len=80) :: file_name
       character(len=50) :: typeStr
-      integer :: n_theta,n_phi
+      integer :: n_theta_loc,n_phi
       real(cp) :: r_movie,theta_movie,phi_movie
       real(cp) :: phi_max
       real(cp) :: rad
@@ -1035,14 +1035,14 @@ contains
     
             !------ Choose closest colatitude grid point:
             foundGridPoint=.false.
-            do n_theta=1,n_theta_max-1
-               if ( theta(n_theta)  <= theta_movie .and. &
-                    theta(n_theta+1) >= theta_movie ) then
-                  if ( theta(n_theta+1)-theta_movie < &
-                       theta_movie-theta(n_theta) ) then
-                     n_const=n_theta+1
+            do n_theta_loc=1,n_theta_max-1
+               if ( theta(n_theta_loc)  <= theta_movie .and. &
+                    theta(n_theta_loc+1) >= theta_movie ) then
+                  if ( theta(n_theta_loc+1)-theta_movie < &
+                       theta_movie-theta(n_theta_loc) ) then
+                     n_const=n_theta_loc+1
                   else
-                     n_const=n_theta
+                     n_const=n_theta_loc
                   end if
                   foundGridPoint=.true.
                   exit
@@ -1314,7 +1314,7 @@ contains
          n_surface=n_movie_surface(n_movie)
          n_const  =n_movie_const(n_movie)
          if ( n_surface == -1 ) then ! Earth Surface
-            ! theta-phi surface for n_r=1 (CMB)
+            ! theta-phi surface for n_r_loc=1 (CMB)
             ! frames is already existent on coord_r 0 with all
             ! needed values
             ! do nothing, pass to the next movie
@@ -1323,7 +1323,7 @@ contains
 
          else if ( n_surface == 0 ) then ! 3d
             ! 3d, all grid points written to frames
-            ! but only n_r=l_r:u_r on one coord_r,
+            ! but only n_r_loc=l_r:u_r on one coord_r,
             ! gather needed
             do n_field=1,n_fields
                n_start = n_movie_field_start(n_field,n_movie)
@@ -1331,7 +1331,7 @@ contains
             end do
 
          else if ( n_surface == 1 ) then ! Surface r=constant
-            ! frames is set only for one coord_r, where n_r=n_const
+            ! frames is set only for one coord_r, where n_r_loc=n_const
             ! send to coord_r 0
             n_start=n_movie_field_start(1,n_movie)
             n_stop =n_movie_field_stop(n_fields,n_movie)
@@ -1360,7 +1360,7 @@ contains
                field_length = n_stop-n_start+1
 
                local_start=n_start+(l_r-1)*n_phi_max
-               local_end  =local_start+n_r*n_phi_max-1
+               local_end  =local_start+n_r_loc*n_phi_max-1
                if (local_end > n_stop) then
                   call abortRun('local_end exceeds n_stop')
                end if
@@ -1386,7 +1386,7 @@ contains
                field_length = n_stop-n_start+1
 
                local_start=n_start+(l_r-1)*n_theta_max
-               local_end  =local_start+n_r*n_theta_max-1
+               local_end  =local_start+n_r_loc*n_theta_max-1
 
                if (local_end > n_stop) then
                   call abortRun('local_end exceeds n_stop')

@@ -5,7 +5,7 @@ module outTO_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: n_r_max, n_r_maxStr, n_theta_maxStr, l_max, &
        &                 n_theta_max, n_phi_max, minc, lStressMem,   &
-       &                 lm_max, l_r, u_r, n_r, dist_r
+       &                 lm_max, l_r, u_r, n_r_loc, dist_r
    use radial_functions, only: r_ICB, rscheme_oc, r, r_CMB, orho1, rscheme_oc
    use physical_parameters, only: ra, ek, pr, prmag, radratio, LFfac
    use torsional_oscillations, only: BpzAS_Rloc, BspdAS_Rloc, BpsdAS_Rloc, &
@@ -1524,7 +1524,7 @@ contains
       integer :: sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1)
       integer :: i,ierr
 
-      sendcount  = n_r*(l_max+1)
+      sendcount  = n_r_loc*(l_max+1)
       displs     = (dist_r(:,1)-1)*(l_max+1)
       recvcounts = dist_r(:,0)*(l_max+1)
       

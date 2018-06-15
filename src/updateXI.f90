@@ -8,7 +8,7 @@ module updateXi_mod
    use physical_parameters, only: osc, kbotxi, ktopxi
    use num_param, only: alpha
    use init_fields, only: topxi, botxi
-   use blocking, only: nLMBs,st_map,lo_map,lo_sub_map,lmStartB,lmStopB
+   use blocking, only: nLMBs,lo_map,lo_sub_map,lmStartB,lmStopB
    use horizontal_data, only: dLh, hdif_Xi
    use logic, only: l_update_xi
    use LMLoop_data, only: llm,ulm
@@ -19,6 +19,7 @@ module updateXi_mod
    use fields, only: work_LMloc
    use mem_alloc, only: bytes_allocated
    use useful, only: abortRun
+   use LMmapping, only: radial_map
 
    implicit none
 
@@ -213,10 +214,10 @@ contains
          else
             if ( .not. lXimat(l1) ) then
 #ifdef WITH_PRECOND_S
-                call get_xiMat(dt,l1,hdif_Xi(st_map%lm2(l1,0)), &
+                call get_xiMat(dt,l1,hdif_Xi(radial_map%lm2(l1,0)), &
                      xiMat(1,1,l1),xiPivot(1,l1),xiMat_fac(1,l1))
 #else
-                call get_xiMat(dt,l1,hdif_Xi(st_map%lm2(l1,0)), &
+                call get_xiMat(dt,l1,hdif_Xi(radial_map%lm2(l1,0)), &
                      xiMat(1,1,l1),xiPivot(1,l1))
 #endif
                 lXimat(l1)=.true.
@@ -340,7 +341,7 @@ contains
       !$OMP shared(xi,dxi,dxidtLast,rscheme_oc) &
       !$OMP shared(n_r_max,work_LMloc,llm,ulm) &
       !$OMP shared(n_r_cmb,n_r_icb,dxidt,coex,osc,hdif_Xi) &
-      !$OMP shared(st_map,lm2l,lm2m,beta,or1,dLh,or2)
+      !$OMP shared(radial_map,lm2l,lm2m,beta,or1,dLh,or2)
       !$OMP DO
       do iThread=0,nThreads-1
          start_lm=lmStart+iThread*per_thread
@@ -357,10 +358,10 @@ contains
       do nR=n_r_cmb+1,n_r_icb-1
          do lm1=lmStart,lmStop
             dxidtLast(lm1,nR)=dxidt(lm1,nR) &
-                 & - coex*osc*hdif_Xi(st_map%lm2(lm2l(lm1),lm2m(lm1))) * &
+                 & - coex*osc*hdif_Xi(radial_map%lm2(lm2l(lm1),lm2m(lm1))) * &
                  &   ( work_LMloc(lm1,nR) &
                  &     + ( beta(nR)+two*or1(nR) ) * dxi(lm1,nR) &
-                 &     - dLh(st_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*xi(lm1,nR) &
+                 &     - dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*xi(lm1,nR) &
                  &   )
          end do
       end do

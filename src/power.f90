@@ -5,7 +5,7 @@ module power
    use mem_alloc, only: bytes_allocated
    use geometry, only: n_r_ic_maxMag, n_r_max, n_r_ic_max, l_max, &
        &                 n_r_maxMag, n_r_icb, n_r_cmb, l_r, u_r,    &
-       &                 dist_r, n_r
+       &                 dist_r, n_r_loc
    use radial_functions, only: r_cmb, r_icb, r, rscheme_oc, chebt_ic, &
        &                       or2, O_r_ic2, lambda, temp0,           &
        &                       O_r_ic, rgrav, r_ic, dr_fac_ic,        &
@@ -13,7 +13,7 @@ module power
    use physical_parameters, only: kbotv, ktopv, opm, LFfac, BuoFac, &
        &                          ChemFac, ThExpNb, ViscHeatFac
    use num_param, only: tScale, eScale
-   use blocking, only: lo_map, st_map, lmStartB, lmStopB, nfs,      &
+   use blocking, only: lo_map, lmStartB, lmStopB, nfs,      &
        &               nThetaBs, sizeThetaB
    use horizontal_data, only: dLh, gauss
    use logic, only: l_rot_ic, l_SRIC, l_rot_ma, l_SRMA, l_save_out, &
@@ -26,6 +26,7 @@ module power
    use outRot, only: get_viscous_torque
    use constants, only: one, two, half
    use legendre_spec_to_grid, only: lmAS2pt
+   use LMmapping, only: radial_map
 
    implicit none
 
@@ -179,9 +180,9 @@ contains
          !   do lm=max(2,llm),ulm
          !      l=lo_map%lm2l(lm)
          !      m=lo_map%lm2m(lm)
-         !      laplace=dLh(st_map%lm2(l,m))*or2(ir)*w(lm,ir)-ddw(lm,ir)
-         !      curlU2_r(ir)=     curlU2_r(ir) + dLh(st_map%lm2(l,m)) * ( &
-         !           dLh(st_map%lm2(l,m))*or2(ir)*cc2real(z(lm,ir),m)  + &
+         !      laplace=dLh(radial_map%lm2(l,m))*or2(ir)*w(lm,ir)-ddw(lm,ir)
+         !      curlU2_r(ir)=     curlU2_r(ir) + dLh(radial_map%lm2(l,m)) * ( &
+         !           dLh(radial_map%lm2(l,m))*or2(ir)*cc2real(z(lm,ir),m)  + &
          !           cc2real(dz(lm,ir),m) + &
          !           cc2real(laplace,m)    )
          !   end do
@@ -192,10 +193,10 @@ contains
             do lm=max(2,llm),ulm
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
-               laplace=dLh(st_map%lm2(l,m))*or2(ir)*b(lm,ir)-ddb(lm,ir)
+               laplace=dLh(radial_map%lm2(l,m))*or2(ir)*b(lm,ir)-ddb(lm,ir)
                curlB2_r(ir)=curlB2_r(ir) +  &
-               &             dLh(st_map%lm2(l,m))*lambda(ir)*(              &
-               &             dLh(st_map%lm2(l,m))*or2(ir)*                  &
+               &             dLh(radial_map%lm2(l,m))*lambda(ir)*(              &
+               &             dLh(radial_map%lm2(l,m))*or2(ir)*                  &
                &             cc2real(aj(lm,ir),m) + cc2real(dj(lm,ir),m) + &
                &             cc2real(laplace,m)    )
             end do
@@ -208,7 +209,7 @@ contains
                   l=lo_map%lm2l(lm)
                   m=lo_map%lm2m(lm)
                   buoy_r(ir)=buoy_r(ir) +                                 &
-                  &           dLh(st_map%lm2(l,m))*BuoFac*rgrav(ir)*       &
+                  &           dLh(radial_map%lm2(l,m))*BuoFac*rgrav(ir)*       &
                   &           ( otemp1(ir)*cc22real(w(lm,ir),s(lm,ir),m) &
                   &           -ViscHeatFac*ThExpNb*alpha0(ir)*orho1(ir)*  &
                   &            cc22real(w(lm,ir),p(lm,ir),m) )
@@ -218,7 +219,7 @@ contains
                   l=lo_map%lm2l(lm)
                   m=lo_map%lm2m(lm)
                   buoy_r(ir)=buoy_r(ir) +                         &
-                  &           dLh(st_map%lm2(l,m))*BuoFac*          &
+                  &           dLh(radial_map%lm2(l,m))*BuoFac*          &
                   &           rgrav(ir)*cc22real(w(lm,ir),s(lm,ir),m)
                end do
             end if
@@ -229,7 +230,7 @@ contains
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
                buoy_chem_r(ir)=buoy_chem_r(ir) +                      &
-               &                dLh(st_map%lm2(l,m))*ChemFac*           &
+               &                dLh(radial_map%lm2(l,m))*ChemFac*           &
                &                rgrav(ir)*cc22real(w(lm,ir),xi(lm,ir),m)
             end do
          end if
@@ -250,7 +251,7 @@ contains
       !     & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 
       if ( l_conv ) then
-         sendcount  = n_r
+         sendcount  = n_r_loc
          displs     = dist_r(:,1)-1
          recvcounts = dist_r(:,0)
          call MPI_GatherV(viscHeatR, sendcount, MPI_DEF_REAL,                &
@@ -316,8 +317,8 @@ contains
                Bh=(l+one)*O_r_ic(ir)*aj_ic(lm,ir)+dj_ic(lm,ir)
                laplace=-ddb_ic(lm,ir) - two*(l+one)*O_r_ic(ir)*db_ic(lm,ir)
                curlB2_rIC(ir)=curlB2_rIC(ir) +                            &
-               &               dLh(st_map%lm2(l,m))*r_ratio**(2*l+2) *  ( &
-               &               dLh(st_map%lm2(l,m))*O_r_ic2(ir)*          &
+               &               dLh(radial_map%lm2(l,m))*r_ratio**(2*l+2) *  ( &
+               &               dLh(radial_map%lm2(l,m))*O_r_ic2(ir)*          &
                &               cc2real(aj_ic(lm,ir),m) +                  &
                &               cc2real(Bh,m) + cc2real(laplace,m)       )
             end do

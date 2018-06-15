@@ -17,7 +17,7 @@ module graphOut_mod
    use physical_parameters, only: ra, ek, pr, prmag, radratio, sigma_ratio
    use num_param, only: vScale
    use blocking, only: nThetaBs, sizeThetaB, nfs
-   use horizontal_data, only: theta_ord, dLh, Plm, dPlm, O_sin_theta
+   use horizontal_data, only: theta_ord, dLh, Plm, dPlm, O_sin_theta_loc
    use logic, only: l_mag, l_cond_ic, l_PressGraph, l_chemical_conv
 #ifdef WITH_MPI
    use output_data, only: n_graph_file, runid, graph_mpi_fh
@@ -44,25 +44,25 @@ module graphOut_mod
 
 contains
 
-   subroutine graphOut(time,n_r,vr,vt,vp,br,bt,bp,sr,prer,xir,      &
+   subroutine graphOut(time,n_r_loc,vr,vt,vp,br,bt,bp,sr,prer,xir,      &
      &              n_theta_start,n_theta_block_size,lGraphHeader)
       !
       !
       !  Output of components of velocity, magnetic field vector and
       !  entropy for graphics.
       !
-      !  * n_r: (input) for n_r = 0 a header is written.
-      !    for n_r > 0 values at radial level n_r are written
+      !  * n_r_loc: (input) for n_r_loc = 0 a header is written.
+      !    for n_r_loc > 0 values at radial level n_r_loc are written
       !
       !  * vr...sr: (input) arrays with grid-point values
       !
       !  * n_theta_start : (input) values are written for theta-points :
-      !    ``n_theta_start <= n_theta <= n_theta_start-1+n_theta_block``
+      !    ``n_theta_start <= n_theta_loc <= n_theta_start-1+n_theta_block``
       !
     
       !-- Input variables
       real(cp), intent(in) :: time
-      integer,  intent(in) :: n_r                    ! radial grod point no.
+      integer,  intent(in) :: n_r_loc                    ! radial grod point no.
       integer,  intent(in) :: n_theta_start          ! start theta no.
       integer,  intent(in) :: n_theta_block_size     ! size of theta block
       real(cp), intent(in) :: vr(nrp,*),vt(nrp,*),vp(nrp,*)
@@ -74,7 +74,7 @@ contains
       !-- Local variables:
       integer :: n_theta_stop  ! end theta no.
       integer :: n_phi         ! counter for longitude
-      integer :: n_theta       ! counter for colatitude
+      integer :: n_theta_loc       ! counter for colatitude
       integer :: n_theta_cal   ! position of block colat in all colats
     
       real(cp) :: fac,fac_r
@@ -84,7 +84,7 @@ contains
       
       if ( rank /= 0 ) return
     
-      !-- Write header & colatitudes for n_r=0:
+      !-- Write header & colatitudes for n_r_loc=0:
       if ( l_chemical_conv ) then
          if ( l_PressGraph ) then
             version='Graphout_Version_6'
@@ -113,7 +113,7 @@ contains
                              real(sigma_ratio,outp)
  
          !-------- Write colatitudes:
-         write(n_graph_file) (real(theta_ord(n_theta),outp), n_theta=1,n_theta_max)
+         write(n_graph_file) (real(theta_ord(n_theta_loc),outp), n_theta_loc=1,n_theta_max)
     
          lGraphHeader=.false.
     
@@ -127,59 +127,59 @@ contains
          !-- Determine radius and thetas in this block:
          n_theta_stop=n_theta_start+n_theta_block_size-1
     
-         write(n_graph_file) real(n_r-1,outp),real(r(n_r)/r(1),outp), &
+         write(n_graph_file) real(n_r_loc-1,outp),real(r(n_r_loc)/r(1),outp), &
                              real(n_theta_start,outp),real(n_theta_stop,outp)
     
          !-- Write entropy:
-         do n_theta=1,n_theta_block_size,2
+         do n_theta_loc=1,n_theta_block_size,2
             do n_phi=1,n_phi_max ! do loop over phis
-               dummy(n_phi,n_theta)  =real(sr(n_phi,n_theta),kind=outp)   ! NHS
-               dummy(n_phi,n_theta+1)=real(sr(n_phi,n_theta+1),kind=outp) ! SHS
+               dummy(n_phi,n_theta_loc)  =real(sr(n_phi,n_theta_loc),kind=outp)   ! NHS
+               dummy(n_phi,n_theta_loc+1)=real(sr(n_phi,n_theta_loc+1),kind=outp) ! SHS
             end do
          end do
          call graph_write(n_phi_max,n_theta_block_size,dummy,n_graph_file)
     
          !-- Calculate and write radial velocity:
-         fac=or2(n_r)*vScale*orho1(n_r)
-         do n_theta=1,n_theta_block_size,2
+         fac=or2(n_r_loc)*vScale*orho1(n_r_loc)
+         do n_theta_loc=1,n_theta_block_size,2
             do n_phi=1,n_phi_max
-               dummy(n_phi,n_theta)  =real(fac*vr(n_phi,n_theta),kind=outp)
-               dummy(n_phi,n_theta+1)=real(fac*vr(n_phi,n_theta+1),kind=outp)
+               dummy(n_phi,n_theta_loc)  =real(fac*vr(n_phi,n_theta_loc),kind=outp)
+               dummy(n_phi,n_theta_loc+1)=real(fac*vr(n_phi,n_theta_loc+1),kind=outp)
             end do
          end do
          call graph_write(n_phi_max,n_theta_block_size,dummy,n_graph_file)
     
     
          !-- Calculate and write latitudinal velocity:
-         fac_r=or1(n_r)*vScale*orho1(n_r)
-         do n_theta=1,n_theta_block_size,2
-            n_theta_cal=n_theta_start+n_theta-1
-            fac=fac_r*O_sin_theta(n_theta_cal)
+         fac_r=or1(n_r_loc)*vScale*orho1(n_r_loc)
+         do n_theta_loc=1,n_theta_block_size,2
+            n_theta_cal=n_theta_start+n_theta_loc-1
+            fac=fac_r*O_sin_theta_loc(n_theta_cal)
             do n_phi=1,n_phi_max
-               dummy(n_phi,n_theta)  =real(fac*vt(n_phi,n_theta),kind=outp)
-               dummy(n_phi,n_theta+1)=real(fac*vt(n_phi,n_theta+1),kind=outp)
+               dummy(n_phi,n_theta_loc)  =real(fac*vt(n_phi,n_theta_loc),kind=outp)
+               dummy(n_phi,n_theta_loc+1)=real(fac*vt(n_phi,n_theta_loc+1),kind=outp)
             end do
          end do
          call graph_write(n_phi_max,n_theta_block_size,dummy,n_graph_file)
     
          !-- Calculate and write longitudinal velocity:
-         fac_r=or1(n_r)*vScale*orho1(n_r)
-         do n_theta=1,n_theta_block_size,2
-            n_theta_cal=n_theta_start+n_theta-1
-            fac=fac_r*O_sin_theta(n_theta_cal)
+         fac_r=or1(n_r_loc)*vScale*orho1(n_r_loc)
+         do n_theta_loc=1,n_theta_block_size,2
+            n_theta_cal=n_theta_start+n_theta_loc-1
+            fac=fac_r*O_sin_theta_loc(n_theta_cal)
             do n_phi=1,n_phi_max
-               dummy(n_phi,n_theta)  =real(fac*vp(n_phi,n_theta),kind=outp)
-               dummy(n_phi,n_theta+1)=real(fac*vp(n_phi,n_theta+1),kind=outp)
+               dummy(n_phi,n_theta_loc)  =real(fac*vp(n_phi,n_theta_loc),kind=outp)
+               dummy(n_phi,n_theta_loc+1)=real(fac*vp(n_phi,n_theta_loc+1),kind=outp)
             end do
          end do
          call graph_write(n_phi_max,n_theta_block_size,dummy,n_graph_file)
 
          if ( version == 'Graphout_Version_5' .or. version == 'Graphout_Version_6') then
             !-- Write composition:
-            do n_theta=1,n_theta_block_size,2
+            do n_theta_loc=1,n_theta_block_size,2
                do n_phi=1,n_phi_max ! do loop over phis
-                  dummy(n_phi,n_theta)  =real(xir(n_phi,n_theta),kind=outp)   ! NHS
-                  dummy(n_phi,n_theta+1)=real(xir(n_phi,n_theta+1),kind=outp) ! SHS
+                  dummy(n_phi,n_theta_loc)  =real(xir(n_phi,n_theta_loc),kind=outp)   ! NHS
+                  dummy(n_phi,n_theta_loc+1)=real(xir(n_phi,n_theta_loc+1),kind=outp) ! SHS
                end do
             end do
             call graph_write(n_phi_max,n_theta_block_size,dummy,n_graph_file)
@@ -187,10 +187,10 @@ contains
 
          if ( version == 'Graphout_Version_6' .or. version == 'Graphout_Version_8') then
             !-- Write pressure:
-            do n_theta=1,n_theta_block_size,2
+            do n_theta_loc=1,n_theta_block_size,2
                do n_phi=1,n_phi_max ! do loop over phis
-                  dummy(n_phi,n_theta)  =real(prer(n_phi,n_theta),kind=outp)   ! NHS
-                  dummy(n_phi,n_theta+1)=real(prer(n_phi,n_theta+1),kind=outp) ! SHS
+                  dummy(n_phi,n_theta_loc)  =real(prer(n_phi,n_theta_loc),kind=outp)   ! NHS
+                  dummy(n_phi,n_theta_loc+1)=real(prer(n_phi,n_theta_loc+1),kind=outp) ! SHS
                end do
             end do
             call graph_write(n_phi_max,n_theta_block_size,dummy,n_graph_file)
@@ -199,33 +199,33 @@ contains
          if ( l_mag ) then
     
             !-- Calculate and write radial magnetic field:
-            fac=or2(n_r)
-            do n_theta=1,n_theta_block_size,2
+            fac=or2(n_r_loc)
+            do n_theta_loc=1,n_theta_block_size,2
                do n_phi=1,n_phi_max
-                  dummy(n_phi,n_theta)  =real(fac*br(n_phi,n_theta),kind=outp)
-                  dummy(n_phi,n_theta+1)=real(fac*br(n_phi,n_theta+1),kind=outp)
+                  dummy(n_phi,n_theta_loc)  =real(fac*br(n_phi,n_theta_loc),kind=outp)
+                  dummy(n_phi,n_theta_loc+1)=real(fac*br(n_phi,n_theta_loc+1),kind=outp)
                end do
             end do
             call graph_write(n_phi_max,n_theta_block_size,dummy,n_graph_file)
     
             !-- Calculate and write latitudinal magnetic field:
-            do n_theta=1,n_theta_block_size,2
-               n_theta_cal=n_theta_start+n_theta-1
-               fac=or1(n_r)*O_sin_theta(n_theta_cal)
+            do n_theta_loc=1,n_theta_block_size,2
+               n_theta_cal=n_theta_start+n_theta_loc-1
+               fac=or1(n_r_loc)*O_sin_theta_loc(n_theta_cal)
                do n_phi=1,n_phi_max
-                  dummy(n_phi,n_theta)  =real(fac*bt(n_phi,n_theta),kind=outp)
-                  dummy(n_phi,n_theta+1)=real(fac*bt(n_phi,n_theta+1),kind=outp)
+                  dummy(n_phi,n_theta_loc)  =real(fac*bt(n_phi,n_theta_loc),kind=outp)
+                  dummy(n_phi,n_theta_loc+1)=real(fac*bt(n_phi,n_theta_loc+1),kind=outp)
                end do
             end do
             call graph_write(n_phi_max,n_theta_block_size,dummy,n_graph_file)
     
             !-- Calculate and write longitudinal magnetic field:
-            do n_theta=1,n_theta_block_size,2
-               n_theta_cal=n_theta_start+n_theta-1
-               fac=or1(n_r)*O_sin_theta(n_theta_cal)
+            do n_theta_loc=1,n_theta_block_size,2
+               n_theta_cal=n_theta_start+n_theta_loc-1
+               fac=or1(n_r_loc)*O_sin_theta_loc(n_theta_cal)
                do n_phi=1,n_phi_max
-                  dummy(n_phi,n_theta)  =real(fac*bp(n_phi,n_theta),kind=outp)
-                  dummy(n_phi,n_theta+1)=real(fac*bp(n_phi,n_theta+1),kind=outp)
+                  dummy(n_phi,n_theta_loc)  =real(fac*bp(n_phi,n_theta_loc),kind=outp)
+                  dummy(n_phi,n_theta_loc+1)=real(fac*bp(n_phi,n_theta_loc+1),kind=outp)
                end do
             end do
             call graph_write(n_phi_max,n_theta_block_size,dummy,n_graph_file)
@@ -245,10 +245,10 @@ contains
 
       !-- Local variables:
       character(len=20) :: version
-      integer :: n_theta
+      integer :: n_theta_loc
     
     
-      !-- Write header & colatitudes for n_r=0:
+      !-- Write header & colatitudes for n_r_loc=0:
       if ( l_chemical_conv ) then
          if ( l_PressGraph ) then
             version='Graphout_Version_6'
@@ -275,12 +275,12 @@ contains
                           real(sigma_ratio,outp)
 
       !-------- Write colatitudes:
-      write(n_graph_file) (real(theta_ord(n_theta),outp), n_theta=1,n_theta_max)
+      write(n_graph_file) (real(theta_ord(n_theta_loc),outp), n_theta_loc=1,n_theta_max)
  
    end subroutine graphOut_header
 !-------------------------------------------------------------------------------
 #ifdef WITH_MPI
-   subroutine graphOut_mpi(time,n_r,vr,vt,vp,br,bt,bp,sr,prer,xir, &
+   subroutine graphOut_mpi(time,n_r_loc,vr,vt,vp,br,bt,bp,sr,prer,xir, &
             &              n_theta_start,n_theta_block_size,lGraphHeader)
       !
       ! MPI version of the graphOut subroutine (use of MPI_IO)
@@ -288,7 +288,7 @@ contains
 
       !-- Input variables:
       real(cp), intent(in) :: time
-      integer,  intent(in) :: n_r                      ! radial grod point no.
+      integer,  intent(in) :: n_r_loc                      ! radial grod point no.
       integer,  intent(in) :: n_theta_start            ! start theta no.
       integer,  intent(in) :: n_theta_block_size       ! size of theta block
       real(cp), intent(in) :: vr(nrp,*),vt(nrp,*),vp(nrp,*)
@@ -299,7 +299,7 @@ contains
 
       !-- Local variables:
       integer :: n_phi         ! counter for longitude
-      integer :: n_theta       ! counter for colatitude
+      integer :: n_theta_loc       ! counter for colatitude
       integer :: n_theta_cal   ! position of block colat in all colats
       integer :: n_theta_stop  ! end theta no.
 
@@ -384,7 +384,7 @@ contains
          call MPI_FILE_GET_VIEW(graph_mpi_fh,disp,etype,filetype,datarep,ierr)
 
          bytes_written = 0
-         !-- Write header & colatitudes for n_r=0:
+         !-- Write header & colatitudes for n_r_loc=0:
          if ( rank == 0 ) then
             !-------- Write parameters:
             call MPI_FILE_WRITE(graph_mpi_fh,len(version),1,MPI_INTEGER,status,ierr)
@@ -467,8 +467,8 @@ contains
                                 MPI_INTEGER,status,ierr)
             !call mpi_get_count(status,MPI_INTEGER,count,ierr)
             !bytes_written = bytes_written + count*SIZEOF_INTEGER
-            do n_theta=1,n_theta_max
-               call MPI_FILE_WRITE(graph_mpi_fh,real(theta_ord(n_theta),outp),1, &
+            do n_theta_loc=1,n_theta_max
+               call MPI_FILE_WRITE(graph_mpi_fh,real(theta_ord(n_theta_loc),outp),1, &
                                    MPI_OUT_REAL,status,ierr)
                !call mpi_get_count(status,MPI_OUT_REAL,count,ierr)
                !bytes_written = bytes_written + count*SIZEOF_OUT_REAL
@@ -491,10 +491,10 @@ contains
          call MPI_FILE_WRITE(graph_mpi_fh,4*SIZEOF_OUT_REAL,1,MPI_INTEGER,status,ierr)
          !call mpi_get_count(status,MPI_INTEGER,count,ierr)
          !bytes_written = bytes_written + count*SIZEOF_INTEGER
-         call MPI_FILE_WRITE(graph_mpi_fh,real(n_r-1,outp),1,MPI_OUT_REAL,status,ierr)
+         call MPI_FILE_WRITE(graph_mpi_fh,real(n_r_loc-1,outp),1,MPI_OUT_REAL,status,ierr)
          !call mpi_get_count(status,MPI_OUT_REAL,count,ierr)
          !bytes_written = bytes_written + count*SIZEOF_OUT_REAL
-         call MPI_FILE_WRITE(graph_mpi_fh,real(r(n_r)/r(1),outp),1, &
+         call MPI_FILE_WRITE(graph_mpi_fh,real(r(n_r_loc)/r(1),outp),1, &
               &              MPI_OUT_REAL,status,ierr)
          !call mpi_get_count(status,MPI_OUT_REAL,count,ierr)
          !bytes_written = bytes_written + count*SIZEOF_OUT_REAL
@@ -511,54 +511,54 @@ contains
          !bytes_written = bytes_written + count*SIZEOF_INTEGER
 
          !-- Write entropy:
-         do n_theta=1,n_theta_block_size,2
+         do n_theta_loc=1,n_theta_block_size,2
             do n_phi=1,n_phi_max ! do loop over phis
-               dummy(n_phi,n_theta)  =real(sr(n_phi,n_theta),kind=outp)   ! NHS
-               dummy(n_phi,n_theta+1)=real(sr(n_phi,n_theta+1),kind=outp) ! SHS
+               dummy(n_phi,n_theta_loc)  =real(sr(n_phi,n_theta_loc),kind=outp)   ! NHS
+               dummy(n_phi,n_theta_loc+1)=real(sr(n_phi,n_theta_loc+1),kind=outp) ! SHS
             end do
          end do
          call graph_write_mpi(n_phi_max,n_theta_block_size,dummy,graph_mpi_fh)
 
          !-- Calculate and write radial velocity:
-         fac=or2(n_r)*vScale*orho1(n_r)
-         do n_theta=1,n_theta_block_size,2
+         fac=or2(n_r_loc)*vScale*orho1(n_r_loc)
+         do n_theta_loc=1,n_theta_block_size,2
             do n_phi=1,n_phi_max
-               dummy(n_phi,n_theta)  =real(fac*vr(n_phi,n_theta),kind=outp)
-               dummy(n_phi,n_theta+1)=real(fac*vr(n_phi,n_theta+1),kind=outp)
+               dummy(n_phi,n_theta_loc)  =real(fac*vr(n_phi,n_theta_loc),kind=outp)
+               dummy(n_phi,n_theta_loc+1)=real(fac*vr(n_phi,n_theta_loc+1),kind=outp)
             end do
          end do
          call graph_write_mpi(n_phi_max,n_theta_block_size,dummy,graph_mpi_fh)
 
          !-- Calculate and write latitudinal velocity:
-         fac_r=or1(n_r)*vScale*orho1(n_r)
-         do n_theta=1,n_theta_block_size,2
-            n_theta_cal=n_theta_start+n_theta-1
-            fac=fac_r*O_sin_theta(n_theta_cal)
+         fac_r=or1(n_r_loc)*vScale*orho1(n_r_loc)
+         do n_theta_loc=1,n_theta_block_size,2
+            n_theta_cal=n_theta_start+n_theta_loc-1
+            fac=fac_r*O_sin_theta_loc(n_theta_cal)
             do n_phi=1,n_phi_max
-               dummy(n_phi,n_theta)  =real(fac*vt(n_phi,n_theta),kind=outp)
-               dummy(n_phi,n_theta+1)=real(fac*vt(n_phi,n_theta+1),kind=outp)
+               dummy(n_phi,n_theta_loc)  =real(fac*vt(n_phi,n_theta_loc),kind=outp)
+               dummy(n_phi,n_theta_loc+1)=real(fac*vt(n_phi,n_theta_loc+1),kind=outp)
             end do
          end do
          call graph_write_mpi(n_phi_max,n_theta_block_size,dummy,graph_mpi_fh)
 
          !-- Calculate and write longitudinal velocity:
-         fac_r=or1(n_r)*vScale*orho1(n_r)
-         do n_theta=1,n_theta_block_size,2
-            n_theta_cal=n_theta_start+n_theta-1
-            fac=fac_r*O_sin_theta(n_theta_cal)
+         fac_r=or1(n_r_loc)*vScale*orho1(n_r_loc)
+         do n_theta_loc=1,n_theta_block_size,2
+            n_theta_cal=n_theta_start+n_theta_loc-1
+            fac=fac_r*O_sin_theta_loc(n_theta_cal)
             do n_phi=1,n_phi_max
-               dummy(n_phi,n_theta)  =real(fac*vp(n_phi,n_theta),kind=outp)
-               dummy(n_phi,n_theta+1)=real(fac*vp(n_phi,n_theta+1),kind=outp)
+               dummy(n_phi,n_theta_loc)  =real(fac*vp(n_phi,n_theta_loc),kind=outp)
+               dummy(n_phi,n_theta_loc+1)=real(fac*vp(n_phi,n_theta_loc+1),kind=outp)
             end do
          end do
          call graph_write_mpi(n_phi_max,n_theta_block_size,dummy,graph_mpi_fh)
 
          !-- Write composition:
          if ( version == 'Graphout_Version_11' .or. version == 'Graphout_Version_12' ) then
-            do n_theta=1,n_theta_block_size,2
+            do n_theta_loc=1,n_theta_block_size,2
                do n_phi=1,n_phi_max ! do loop over phis
-                  dummy(n_phi,n_theta)  =real(xir(n_phi,n_theta),kind=outp)   ! NHS
-                  dummy(n_phi,n_theta+1)=real(xir(n_phi,n_theta+1),kind=outp) ! SHS
+                  dummy(n_phi,n_theta_loc)  =real(xir(n_phi,n_theta_loc),kind=outp)   ! NHS
+                  dummy(n_phi,n_theta_loc+1)=real(xir(n_phi,n_theta_loc+1),kind=outp) ! SHS
                end do
             end do
             call graph_write_mpi(n_phi_max,n_theta_block_size,dummy,graph_mpi_fh)
@@ -566,10 +566,10 @@ contains
 
          !-- Write pressure:
          if ( version == 'Graphout_Version_10' .or. version == 'Graphout_Version_12' ) then
-            do n_theta=1,n_theta_block_size,2
+            do n_theta_loc=1,n_theta_block_size,2
                do n_phi=1,n_phi_max ! do loop over phis
-                  dummy(n_phi,n_theta)  =real(prer(n_phi,n_theta),kind=outp)   ! NHS
-                  dummy(n_phi,n_theta+1)=real(prer(n_phi,n_theta+1),kind=outp) ! SHS
+                  dummy(n_phi,n_theta_loc)  =real(prer(n_phi,n_theta_loc),kind=outp)   ! NHS
+                  dummy(n_phi,n_theta_loc+1)=real(prer(n_phi,n_theta_loc+1),kind=outp) ! SHS
                end do
             end do
             call graph_write_mpi(n_phi_max,n_theta_block_size,dummy,graph_mpi_fh)
@@ -578,33 +578,33 @@ contains
          if ( l_mag ) then
 
             !-- Calculate and write radial magnetic field:
-            fac=or2(n_r)
-            do n_theta=1,n_theta_block_size,2
+            fac=or2(n_r_loc)
+            do n_theta_loc=1,n_theta_block_size,2
                do n_phi=1,n_phi_max
-                  dummy(n_phi,n_theta)  =real(fac*br(n_phi,n_theta),kind=outp)
-                  dummy(n_phi,n_theta+1)=real(fac*br(n_phi,n_theta+1),kind=outp)
+                  dummy(n_phi,n_theta_loc)  =real(fac*br(n_phi,n_theta_loc),kind=outp)
+                  dummy(n_phi,n_theta_loc+1)=real(fac*br(n_phi,n_theta_loc+1),kind=outp)
                end do
             end do
             call graph_write_mpi(n_phi_max,n_theta_block_size,dummy,graph_mpi_fh)
 
             !-- Calculate and write latitudinal magnetic field:
-            do n_theta=1,n_theta_block_size,2
-               n_theta_cal=n_theta_start+n_theta-1
-               fac=or1(n_r)*O_sin_theta(n_theta_cal)
+            do n_theta_loc=1,n_theta_block_size,2
+               n_theta_cal=n_theta_start+n_theta_loc-1
+               fac=or1(n_r_loc)*O_sin_theta_loc(n_theta_cal)
                do n_phi=1,n_phi_max
-                  dummy(n_phi,n_theta)  =real(fac*bt(n_phi,n_theta),kind=outp)
-                  dummy(n_phi,n_theta+1)=real(fac*bt(n_phi,n_theta+1),kind=outp)
+                  dummy(n_phi,n_theta_loc)  =real(fac*bt(n_phi,n_theta_loc),kind=outp)
+                  dummy(n_phi,n_theta_loc+1)=real(fac*bt(n_phi,n_theta_loc+1),kind=outp)
                end do
             end do
             call graph_write_mpi(n_phi_max,n_theta_block_size,dummy,graph_mpi_fh)
 
             !-- Calculate and write longitudinal magnetic field:
-            do n_theta=1,n_theta_block_size,2
-               n_theta_cal=n_theta_start+n_theta-1
-               fac=or1(n_r)*O_sin_theta(n_theta_cal)
+            do n_theta_loc=1,n_theta_block_size,2
+               n_theta_cal=n_theta_start+n_theta_loc-1
+               fac=or1(n_r_loc)*O_sin_theta_loc(n_theta_cal)
                do n_phi=1,n_phi_max
-                  dummy(n_phi,n_theta)  =real(fac*bp(n_phi,n_theta),kind=outp)
-                  dummy(n_phi,n_theta+1)=real(fac*bp(n_phi,n_theta+1),kind=outp)
+                  dummy(n_phi,n_theta_loc)  =real(fac*bp(n_phi,n_theta_loc),kind=outp)
+                  dummy(n_phi,n_theta_loc+1)=real(fac*bp(n_phi,n_theta_loc+1),kind=outp)
                end do
             end do
             call graph_write_mpi(n_phi_max,n_theta_block_size,dummy,graph_mpi_fh)
@@ -618,19 +618,19 @@ contains
       !$OMP END CRITICAL
    end subroutine graphOut_mpi
 !----------------------------------------------------------------------------
-   subroutine graphOut_mpi_header(time,n_r,n_theta_start,n_theta_block_size)
+   subroutine graphOut_mpi_header(time,n_r_loc,n_theta_start,n_theta_block_size)
       !
       ! Writes the header (MPI version)
       !
 
       !-- Input variables:
       real(cp), intent(in) :: time
-      integer,  intent(in) :: n_r                    ! radial grod point no.
+      integer,  intent(in) :: n_r_loc                    ! radial grod point no.
       integer,  intent(in) :: n_theta_start          ! start theta no.
       integer,  intent(in) :: n_theta_block_size     ! size of theta block
 
       !-- Local variables:
-      integer :: n_theta       ! counter for colatitude
+      integer :: n_theta_loc       ! counter for colatitude
       character(len=20) :: version
 
       !-- MPI related variables
@@ -709,7 +709,7 @@ contains
       call mpi_file_get_view(graph_mpi_fh,disp,etype,filetype,datarep,ierr)
 
       bytes_written = 0
-      !-- Write header & colatitudes for n_r=0:
+      !-- Write header & colatitudes for n_r_loc=0:
       if ( rank == 0 ) then
 
          !-------- Write parameters:
@@ -789,8 +789,8 @@ contains
                              MPI_INTEGER,status,ierr)
          !call mpi_get_count(status,MPI_INTEGER,count,ierr)
          !bytes_written = bytes_written + count*SIZEOF_INTEGER
-         do n_theta=1,n_theta_max
-            call MPI_FILE_WRITE(graph_mpi_fh,real(theta_ord(n_theta),outp),1, &
+         do n_theta_loc=1,n_theta_max
+            call MPI_FILE_WRITE(graph_mpi_fh,real(theta_ord(n_theta_loc),outp),1, &
                                 MPI_OUT_REAL,status,ierr)
             !call mpi_get_count(status,MPI_OUT_REAL,count,ierr)
             !bytes_written = bytes_written + count*SIZEOF_OUT_REAL
@@ -896,9 +896,9 @@ contains
                do nPhi=1,n_phi_max
                   Br(nPhi,nThetaC)=real(BrB(nPhi,nTheta)*O_r_ic2(nR),kind=outp)
                   Bt(nPhi,nThetaC)=real(BtB(nPhi,nTheta)*O_r_ic(nR) * &
-                       O_sin_theta(nThetaC),kind=outp)
+                       O_sin_theta_loc(nThetaC),kind=outp)
                   Bp(nPhi,nThetaC)=real(BpB(nPhi,nTheta)*O_r_ic(nR) * &
-                       O_sin_theta(nThetaC),kind=outp)
+                       O_sin_theta_loc(nThetaC),kind=outp)
                end do
             end do
     
@@ -970,12 +970,12 @@ contains
       integer,    intent(in) :: n_graph_file        ! output unit
 
       !-- Local variables:
-      integer :: n_phi,n_theta
+      integer :: n_phi,n_theta_loc
 
 
       !PERFON('gwrite')
-      do n_theta=1,n_thetas
-         write(n_graph_file) (dummy(n_phi,n_theta),n_phi=1,n_phis)
+      do n_theta_loc=1,n_thetas
+         write(n_graph_file) (dummy(n_phi,n_theta_loc),n_phi=1,n_phis)
       end do
       !PERFOFF
 
@@ -991,7 +991,7 @@ contains
       integer,    intent(in) :: graph_mpi_fh      ! mpi handle of the mpi file
 
       !-- Local variables:
-      integer :: n_theta
+      integer :: n_theta_loc
 
       !-- MPI related variables
       integer :: status(MPI_STATUS_SIZE), count
@@ -1014,17 +1014,17 @@ contains
                           MPI_INTEGER,status,ierr)
 #else
       !PERFON('gwrite_M')
-      do n_theta=1,n_thetas
+      do n_theta_loc=1,n_thetas
 
          call MPI_FILE_WRITE(graph_mpi_fh,n_phis*SIZEOF_OUT_REAL,1, &
                              MPI_INTEGER,status,ierr)
-         call MPI_FILE_WRITE(graph_mpi_fh,dummy(1,n_theta),n_phis, &
+         call MPI_FILE_WRITE(graph_mpi_fh,dummy(1,n_theta_loc),n_phis, &
                              MPI_OUT_REAL,status,ierr)
          call MPI_FILE_WRITE(graph_mpi_fh,n_phis*SIZEOF_OUT_REAL,1, &
                              MPI_INTEGER,status,ierr)
 
             !call MPI_FILE_WRITE(n_graph_file) &
-            !      (dummy(n_phi,n_theta),n_phi=1,n_phis)
+            !      (dummy(n_phi,n_theta_loc),n_phi=1,n_phis)
 
       end do
       !PERFOFF

@@ -11,7 +11,7 @@ module updateWP_mod
    use physical_parameters, only: kbotv, ktopv, ra, BuoFac, ChemFac,    &
        &                          ViscHeatFac, ThExpNb, ktopp
    use num_param, only: alpha
-   use blocking, only: nLMBs,lo_sub_map,lo_map,st_map,st_sub_map, &
+   use blocking, only: nLMBs,lo_sub_map,lo_map,st_sub_map, &
        &               lmStartB,lmStopB
    use horizontal_data, only: hdif_V, dLh
    use logic, only: l_update_v, l_chemical_conv, l_RMS, l_double_curl, &
@@ -27,6 +27,7 @@ module updateWP_mod
    use fields, only: work_LMloc
    use constants, only: zero, one, two, three, four, third, half
    use useful, only: abortRun
+   use LMmapping, only: radial_map
 
    implicit none
 
@@ -252,10 +253,10 @@ contains
             if ( .not. lWPmat(l1) ) then
                !PERFON('upWP_mat')
                if ( l_double_curl ) then
-                  call get_wMat(dt,l1,hdif_V(st_map%lm2(l1,0)), &
+                  call get_wMat(dt,l1,hdif_V(radial_map%lm2(l1,0)), &
                        &         wpMat(1,1,l1),wpPivot(1,l1),wpMat_fac(1,1,l1))
                else
-                  call get_wpMat(dt,l1,hdif_V(st_map%lm2(l1,0)), &
+                  call get_wpMat(dt,l1,hdif_V(radial_map%lm2(l1,0)), &
                        &        wpMat(1,1,l1),wpPivot(1,l1),wpMat_fac(1,1,l1))
                end if
                lWPmat(l1)=.true.
@@ -287,7 +288,7 @@ contains
                   if ( ThExpNb*ViscHeatFac /= 0 .and. ktopp==1 ) then
                      do nR=1,n_r_max
                         work(nR)=ThExpNb*alpha0(nR)*temp0(nR)*rho0(nR)*r(nR)*&
-                        &        r(nR)*real(s(st_map%lm2(0,0),nR))
+                        &        r(nR)*real(s(radial_map%lm2(0,0),nR))
                      end do
                      rhs(1)=rInt_R(work,r,rscheme_oc)
                   else
@@ -297,16 +298,16 @@ contains
                   if ( l_chemical_conv ) then
                      do nR=2,n_r_max
                         rhs(nR)=rho0(nR)*BuoFac*rgrav(nR)*    &
-                        &       real(s(st_map%lm2(0,0),nR))+  &
+                        &       real(s(radial_map%lm2(0,0),nR))+  &
                         &       rho0(nR)*ChemFac*rgrav(nR)*   &
-                        &       real(xi(st_map%lm2(0,0),nR))+ &
-                        &       real(dwdt(st_map%lm2(0,0),nR))
+                        &       real(xi(radial_map%lm2(0,0),nR))+ &
+                        &       real(dwdt(radial_map%lm2(0,0),nR))
                      end do
                   else
                      do nR=2,n_r_max
                         rhs(nR)=rho0(nR)*BuoFac*rgrav(nR)*    &
-                        &       real(s(st_map%lm2(0,0),nR))+  &
-                        &       real(dwdt(st_map%lm2(0,0),nR))
+                        &       real(s(radial_map%lm2(0,0),nR))+  &
+                        &       real(dwdt(radial_map%lm2(0,0),nR))
                      end do
                   end if
 
@@ -321,10 +322,10 @@ contains
                   if ( l_double_curl ) then
                      if ( l_chemical_conv ) then
                         do nR=2,n_r_max-1
-                           rhs1(nR,lmB,threadid)=dLh(st_map%lm2(l1,m1))*or2(nR)* (   &
+                           rhs1(nR,lmB,threadid)=dLh(radial_map%lm2(l1,m1))*or2(nR)* (   &
                            &                     -orho1(nR)*O_dt*(    ddw(lm1,nR)    &
                            &                     -beta(nR)*dw(lm1,nR)-               &
-                           &                     dLh(st_map%lm2(l1,m1))*or2(nR)*     &
+                           &                     dLh(radial_map%lm2(l1,m1))*or2(nR)*     &
                            &                                w(lm1,nR) ) +            &
                            &                     alpha*BuoFac *rgrav(nR)* s(lm1,nR)+ &
                            &                     alpha*ChemFac*rgrav(nR)*xi(lm1,nR) )&
@@ -334,10 +335,10 @@ contains
                         end do
                      else
                         do nR=2,n_r_max-1
-                           rhs1(nR,lmB,threadid)=dLh(st_map%lm2(l1,m1))*or2(nR)* (   &
+                           rhs1(nR,lmB,threadid)=dLh(radial_map%lm2(l1,m1))*or2(nR)* (   &
                            &                     -orho1(nR)*O_dt*(    ddw(lm1,nR)    &
                            &                     -beta(nR)*dw(lm1,nR)-               &
-                           &                     dLh(st_map%lm2(l1,m1))*or2(nR)*     &
+                           &                     dLh(radial_map%lm2(l1,m1))*or2(nR)*     &
                            &                                w(lm1,nR) ) +            &
                            &                     alpha*BuoFac *rgrav(nR)* s(lm1,nR) )&
                            &                     +w1*dwdt(lm1,nR) +                  &
@@ -348,27 +349,27 @@ contains
                   else
                      if ( l_chemical_conv ) then
                         do nR=2,n_r_max-1
-                           rhs1(nR,lmB,threadid)=O_dt*dLh(st_map%lm2(l1,m1))*    &
+                           rhs1(nR,lmB,threadid)=O_dt*dLh(radial_map%lm2(l1,m1))*    &
                            &                     or2(nR)*w(lm1,nR) +             &
                            &                     rho0(nR)*alpha*BuoFac*rgrav(nR)*&
                            &                     s(lm1,nR) + rho0(nR)*alpha*     &
                            &                     ChemFac*rgrav(nR)*xi(lm1,nR) +  &
                            &                     w1*dwdt(lm1,nR) +               &
                            &                     w2*dwdtLast(lm1,nR)
-                           rhs1(nR+n_r_max,lmB,threadid)=-O_dt*dLh(st_map%lm2(l1,&
+                           rhs1(nR+n_r_max,lmB,threadid)=-O_dt*dLh(radial_map%lm2(l1,&
                            &                           m1))*or2(nR)*dw(lm1,nR) + &
                            &                              w1*dpdt(lm1,nR) +      &
                            &                              w2*dpdtLast(lm1,nR)
                         end do
                      else
                         do nR=2,n_r_max-1
-                           rhs1(nR,lmB,threadid)=O_dt*dLh(st_map%lm2(l1,m1))* &
+                           rhs1(nR,lmB,threadid)=O_dt*dLh(radial_map%lm2(l1,m1))* &
                            &                     or2(nR)*w(lm1,nR) +          &
                            &                     rho0(nR)*alpha*BuoFac*       &
                            &                     rgrav(nR)*s(lm1,nR) +        & 
                            &                     w1*dwdt(lm1,nR) +            &
                            &                     w2*dwdtLast(lm1,nR)
-                           rhs1(nR+n_r_max,lmB,threadid)=-O_dt*dLh(st_map%lm2(l1,&
+                           rhs1(nR+n_r_max,lmB,threadid)=-O_dt*dLh(radial_map%lm2(l1,&
                            &                           m1))*or2(nR)*dw(lm1,nR) + &
                            &                             w1*dpdt(lm1,nR) +       &
                            &                             w2*dpdtLast(lm1,nR)
@@ -560,29 +561,29 @@ contains
                l1=lm2l(lm1)
                m1=lm2m(lm1)
 
-               Dif(lm1) = -hdif_V(st_map%lm2(l1,m1))*dLh(st_map%lm2(l1,m1))*  &
+               Dif(lm1) = -hdif_V(radial_map%lm2(l1,m1))*dLh(radial_map%lm2(l1,m1))*  &
                &          or2(nR)*visc(nR) * orho1(nR)*       ( ddddw(lm1,nR) &
                &            +two*( dLvisc(nR)-beta(nR) ) * work_LMloc(lm1,nR) &
                &        +( ddLvisc(nR)-two*dbeta(nR)+dLvisc(nR)*dLvisc(nR)+   &
                &           beta(nR)*beta(nR)-three*dLvisc(nR)*beta(nR)-two*   &
                &           or1(nR)*(dLvisc(nR)+beta(nR))-two*or2(nR)*         &
-               &           dLh(st_map%lm2(l1,m1)) ) *             ddw(lm1,nR) &
+               &           dLh(radial_map%lm2(l1,m1)) ) *             ddw(lm1,nR) &
                &        +( -ddbeta(nR)-dbeta(nR)*(two*dLvisc(nR)-beta(nR)+    &
                &           two*or1(nR))-ddLvisc(nR)*(beta(nR)+two*or1(nR))+   &
                &           beta(nR)*beta(nR)*(dLvisc(nR)+two*or1(nR))-        &
                &           beta(nR)*(dLvisc(nR)*dLvisc(nR)-two*or2(nR))-      &
                &           two*dLvisc(nR)*or1(nR)*(dLvisc(nR)-or1(nR))+       &
                &           two*(two*or1(nR)+beta(nR)-dLvisc(nR))*or2(nR)*     &
-               &           dLh(st_map%lm2(l1,m1)) ) *              dw(lm1,nR) &
-               &        + dLh(st_map%lm2(l1,m1))*or2(nR)* ( two*dbeta(nR)+    &
+               &           dLh(radial_map%lm2(l1,m1)) ) *              dw(lm1,nR) &
+               &        + dLh(radial_map%lm2(l1,m1))*or2(nR)* ( two*dbeta(nR)+    &
                &           ddLvisc(nR)+dLvisc(nR)*dLvisc(nR)-two*third*       &
                &           beta(nR)*beta(nR)+dLvisc(nR)*beta(nR)+two*or1(nR)* &
                &           (two*dLvisc(nR)-beta(nR)-three*or1(nR))+           &
-               &           dLh(st_map%lm2(l1,m1))*or2(nR) ) *       w(lm1,nR) )
+               &           dLh(radial_map%lm2(l1,m1))*or2(nR) ) *       w(lm1,nR) )
 
-               Buo(lm1) = BuoFac*dLh(st_map%lm2(l1,m1))*or2(nR)*rgrav(nR)*s(lm1,nR)
+               Buo(lm1) = BuoFac*dLh(radial_map%lm2(l1,m1))*or2(nR)*rgrav(nR)*s(lm1,nR)
                if ( l_chemical_conv ) then
-                  Buo(lm1) = Buo(lm1)+ChemFac*dLh(st_map%lm2(l1,m1))*or2(nR)*&
+                  Buo(lm1) = Buo(lm1)+ChemFac*dLh(radial_map%lm2(l1,m1))*or2(nR)*&
                   &          rgrav(nR)*xi(lm1,nR)
                end if
 
@@ -591,16 +592,16 @@ contains
                if ( l1 /= 0 .and. lPressNext ) then
                   ! In the double curl formulation, we can estimate the pressure
                   ! if required.
-                  p(lm1,nR)=-r(nR)*r(nR)/dLh(st_map%lm2(l1,m1))*dpdt(lm1,nR) &
+                  p(lm1,nR)=-r(nR)*r(nR)/dLh(radial_map%lm2(l1,m1))*dpdt(lm1,nR) &
                   &                -O_dt*(dw(lm1,nR)-dwold(lm1,nR))+         &
-                  &                 hdif_V(st_map%lm2(l1,m1))*visc(nR)*      &
+                  &                 hdif_V(radial_map%lm2(l1,m1))*visc(nR)*      &
                   &                                    ( work_LMloc(lm1,nR)  &
                   &                       - (beta(nR)-dLvisc(nR))*ddw(lm1,nR)&
-                  &               - ( dLh(st_map%lm2(l1,m1))*or2(nR)         &
+                  &               - ( dLh(radial_map%lm2(l1,m1))*or2(nR)         &
                   &                  + dLvisc(nR)*beta(nR)+ dbeta(nR)        &
                   &                  + two*(dLvisc(nR)+beta(nR))*or1(nR)     &
                   &                                           ) * dw(lm1,nR) &
-                  &               + dLh(st_map%lm2(l1,m1))*or2(nR)           &
+                  &               + dLh(radial_map%lm2(l1,m1))*or2(nR)           &
                   &                  * ( two*or1(nR)+two*third*beta(nR)      &
                   &                     +dLvisc(nR) )   *         w(lm1,nR)  &
                   &                                         ) 
@@ -610,14 +611,14 @@ contains
                   !-- In case RMS force balance is required, one needs to also
                   !-- compute the classical diffusivity that is used in the non
                   !-- double-curl version
-                  Dif(lm1) = hdif_V(st_map%lm2(l1,m1))*dLh(st_map%lm2(l1,m1))* &
+                  Dif(lm1) = hdif_V(radial_map%lm2(l1,m1))*dLh(radial_map%lm2(l1,m1))* &
                   &          or2(nR)*visc(nR) *                  ( ddw(lm1,nR) &
                   &        +(two*dLvisc(nR)-third*beta(nR))*        dw(lm1,nR) &
-                  &        -( dLh(st_map%lm2(l1,m1))*or2(nR)+four*third* (     &
+                  &        -( dLh(radial_map%lm2(l1,m1))*or2(nR)+four*third* (     &
                   &             dbeta(nR)+dLvisc(nR)*beta(nR)                  &
                   &             +(three*dLvisc(nR)+beta(nR))*or1(nR) )   )*    &
                   &                                                 w(lm1,nR)  )
-                  dtV(lm1)=O_dt*dLh(st_map%lm2(l1,m1))*or2(nR) * &
+                  dtV(lm1)=O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR) * &
                   &             ( w(lm1,nR)-workB(lm1,nR) )
                end if
             end do
@@ -636,10 +637,10 @@ contains
                l1=lm2l(lm1)
                m1=lm2m(lm1)
 
-               Dif(lm1) = hdif_V(st_map%lm2(l1,m1))*dLh(st_map%lm2(l1,m1))* &
+               Dif(lm1) = hdif_V(radial_map%lm2(l1,m1))*dLh(radial_map%lm2(l1,m1))* &
                &          or2(nR)*visc(nR) *                  ( ddw(lm1,nR) &
                &        +(two*dLvisc(nR)-third*beta(nR))*        dw(lm1,nR) &
-               &        -( dLh(st_map%lm2(l1,m1))*or2(nR)+four*third* (     &
+               &        -( dLh(radial_map%lm2(l1,m1))*or2(nR)+four*third* (     &
                &             dbeta(nR)+dLvisc(nR)*beta(nR)                  &
                &             +(three*dLvisc(nR)+beta(nR))*or1(nR) )   )*    &
                &                                                 w(lm1,nR)  )
@@ -650,21 +651,21 @@ contains
                end if
                dwdtLast(lm1,nR)=dwdt(lm1,nR) - coex*(Pre(lm1)+Buo(lm1)+Dif(lm1))
                dpdtLast(lm1,nR)= dpdt(lm1,nR) - coex*(                    &
-               &                 dLh(st_map%lm2(l1,m1))*or2(nR)*p(lm1,nR) &
-               &               + hdif_V(st_map%lm2(l1,m1))*               &
-               &                 visc(nR)*dLh(st_map%lm2(l1,m1))*or2(nR)  &
+               &                 dLh(radial_map%lm2(l1,m1))*or2(nR)*p(lm1,nR) &
+               &               + hdif_V(radial_map%lm2(l1,m1))*               &
+               &                 visc(nR)*dLh(radial_map%lm2(l1,m1))*or2(nR)  &
                &                                  * ( -work_LMloc(lm1,nR) &
                &                       + (beta(nR)-dLvisc(nR))*ddw(lm1,nR)&
-               &               + ( dLh(st_map%lm2(l1,m1))*or2(nR)         &
+               &               + ( dLh(radial_map%lm2(l1,m1))*or2(nR)         &
                &                  + dLvisc(nR)*beta(nR)+ dbeta(nR)        &
                &                  + two*(dLvisc(nR)+beta(nR))*or1(nR)     &
                &                                           ) * dw(lm1,nR) &
-               &               - dLh(st_map%lm2(l1,m1))*or2(nR)           &
+               &               - dLh(radial_map%lm2(l1,m1))*or2(nR)           &
                &                  * ( two*or1(nR)+two*third*beta(nR)      &
                &                     +dLvisc(nR) )   *         w(lm1,nR)  &
                &                                         ) )
                if ( lRmsNext ) then
-                  dtV(lm1)=O_dt*dLh(st_map%lm2(l1,m1))*or2(nR) * &
+                  dtV(lm1)=O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR) * &
                   &             ( w(lm1,nR)-workB(lm1,nR) )
                end if
             end do

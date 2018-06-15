@@ -1,5 +1,11 @@
 2018-06-12
 -------------------------------------------------------------------------------
+- [created] radial_map in LMMapping
+- [replaced] st_map by radial_map
+
+
+2018-06-12
+-------------------------------------------------------------------------------
 - [merged] distribute_theta -> LMmapping
   - initialize_mappings will allocate all mappings (instead of 
     initialize_blocking)

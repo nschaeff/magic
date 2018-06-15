@@ -45,13 +45,13 @@ contains
       complex(cp),       intent(out) :: ddf(n_f_max,n_r_max) ! second derivative of f
 
       !-- Local variables:
-      integer :: n_r,n_f
+      integer :: n_r_loc,n_f
 
 
       !-- Copy input functions:
-      do n_r=1,n_r_max
+      do n_r_loc=1,n_r_max
          do n_f=n_f_start,n_f_stop
-            work2(n_f,n_r)=f(n_f,n_r)
+            work2(n_f,n_r_loc)=f(n_f,n_r_loc)
          end do
       end do
 

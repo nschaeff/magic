@@ -2,14 +2,14 @@ module nonlinear_bcs
 
    use precision_mod
    use geometry, only: nrp, lmP_max, n_phi_max, l_axi,            &
-       &                 l_theta, u_theta, n_lmP, n_lm, &
+       &                 l_theta, u_theta, n_lmP_loc, n_lm_loc, &
        &                 n_r_cmb, n_r_icb
    use radial_data, only: 
    use radial_functions, only: r_cmb, r_icb, rho0
    use blocking, only: lm2l, lm2m, lm2lmP, lmP2lmPS, lmP2lmPA, nfs, &
        &               sizeThetaB
    use physical_parameters, only: sigma_ratio, conductance_ma, prmag
-   use horizontal_data, only: dTheta1S_loc, dTheta1A_loc, dPhi_loc, O_sin_theta, &
+   use horizontal_data, only: dTheta1S_loc, dTheta1A_loc, dPhi_loc, O_sin_theta_loc, &
        &                      dLh_loc, sn2, cosTheta
    use fft, only: fft_thetab
    use legendre_grid_to_spec, only: legTF2
@@ -38,7 +38,7 @@ contains
       !
       !  .. code-block:: fortran
       !
-      !     n_theta_min<=n_theta<=n_theta_min+n_theta_block-1        
+      !     n_theta_min<=n_theta_loc<=n_theta_min+n_theta_block-1        
       !
       !  On input br, vt and vp are given on all phi points and           
       !  thetas in the specific block.                                    
@@ -57,12 +57,12 @@ contains
     
       !-- Output variables:
       ! br*vt/(sin(theta)**2*r**2)
-      complex(cp), intent(inout) :: br_vt_lm(n_lmP)
+      complex(cp), intent(inout) :: br_vt_lm(n_lmP_loc)
       ! br*(vp/(sin(theta)**2*r**2)-omega_ma)
-      complex(cp), intent(inout) :: br_vp_lm(n_lmP)
+      complex(cp), intent(inout) :: br_vp_lm(n_lmP_loc)
     
       !-- Local variables:
-      integer :: n_theta     ! number of theta position
+      integer :: n_theta_loc     ! number of theta position
       integer :: n_theta_rel ! number of theta position in block
       integer :: n_phi       ! number of longitude
       real(cp) :: br_vt(n_phi_max,l_theta:u_theta)
@@ -76,12 +76,12 @@ contains
       ! to be reworked anyway!
     
       do n_theta_rel=l_theta,u_theta
-         fac=O_sin_theta(n_theta)*O_sin_theta(n_theta)*O_r_E_2*O_rho
+         fac=O_sin_theta_loc(n_theta_loc)*O_sin_theta_loc(n_theta_loc)*O_r_E_2*O_rho
          do n_phi=1,n_phi_max
-            br_vt(n_phi,n_theta)= fac*br(n_phi,n_theta)*vt(n_phi,n_theta)
+            br_vt(n_phi,n_theta_loc)= fac*br(n_phi,n_theta_loc)*vt(n_phi,n_theta_loc)
     
-            br_vp(n_phi,n_theta)= br(n_phi,n_theta) * &
-                                     ( fac*vp(n_phi,n_theta) - omega )
+            br_vp(n_phi,n_theta_loc)= br(n_phi,n_theta_loc) * &
+                                     ( fac*vp(n_phi,n_theta_loc) - omega )
          end do
       end do
     
@@ -112,7 +112,7 @@ contains
       !
       !  .. code-block:: fortran
       !
-      !      n_theta_min<=n_theta<=n_theta_min+n_theta_block-1        
+      !      n_theta_min<=n_theta_loc<=n_theta_min+n_theta_block-1        
       !
       ! This function has been θ-parallelized, but not fully tested yet
       ! Please delete this comment once it is certain that it works as 
@@ -120,12 +120,12 @@ contains
          
       !-- Input variables:
       character(len=3), intent(in) :: bc                 ! Distinguishes 'CMB' and 'ICB'
-      complex(cp),      intent(in) :: br_vt_lm(n_lmP)  ! [br*vt/(r**2*sin(theta)**2)]
-      complex(cp),      intent(in) :: br_vp_lm(n_lmP)  ! [br*vp/(r**2*sin(theta)**2)
+      complex(cp),      intent(in) :: br_vt_lm(n_lmP_loc)  ! [br*vt/(r**2*sin(theta)**2)]
+      complex(cp),      intent(in) :: br_vp_lm(n_lmP_loc)  ! [br*vp/(r**2*sin(theta)**2)
 
       !-- Output variables:
-      complex(cp), intent(out) :: b_nl_bc(n_lm)  ! nonlinear bc for b
-      complex(cp), intent(out) :: aj_nl_bc(n_lm) ! nonlinear bc for aj
+      complex(cp), intent(out) :: b_nl_bc(n_lm_loc)  ! nonlinear bc for b
+      complex(cp), intent(out) :: aj_nl_bc(n_lm_loc) ! nonlinear bc for aj
 
       !-- Local variables:
       integer :: l,m       ! degree and order
@@ -143,7 +143,7 @@ contains
          if (dist_map%lm2(0,0) > 0)  b_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp) 
          if (dist_map%lm2(0,0) > 0) aj_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp) 
          
-         do lm=1,n_lm
+         do lm=1,n_lm_loc
             l   =dist_map%lm2l(lm)
             m   =dist_map%lm2m(lm)
             if ((l==0) .and. (m==0)) cycle
@@ -173,7 +173,7 @@ contains
          ! if m=0 is in this rank, aj_nl_bc(1) = 1.0
          if (dist_map%lm2(0,0) > 0) aj_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp)  
          
-         do lm=1,n_lm
+         do lm=1,n_lm_loc
             l   =dist_map%lm2l(lm)
             m   =dist_map%lm2m(lm)
             if ((l==0) .and. (m==0)) cycle
@@ -244,7 +244,7 @@ contains
       nThetaCalc=l_theta-1
       do j=l_theta,u_theta
          nThetaCalc=nThetaCalc+1
-         nThetaNHS =(nThetaCalc+1)/2 ! northern hemisphere=odd n_theta
+         nThetaNHS =(nThetaCalc+1)/2 ! northern hemisphere=odd n_theta_loc
          do i=1,n_phi_max
             vrr(i,j)=0.0_cp
             vtr(i,j)=0.0_cp

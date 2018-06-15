@@ -7,12 +7,12 @@ module RMS_helpers
    use precision_mod
    use parallel_mod
    use geometry, only: l_max, lm_max_dtB, n_r_max, lm_max
-   use blocking, only: lm2, st_map
+   use blocking, only: lm2
    use radial_functions, only: or2, rscheme_oc, r
    use horizontal_data, only: osn1, Plm, dPlm, dLh
    use useful, only: cc2real
    use integration, only: rInt_R
-   use LMmapping, only: mappings
+   use LMmapping, only: mappings, radial_map
    use constants, only: vol_oc, one
 
    implicit none
@@ -101,33 +101,33 @@ contains
       real(cp) :: PolAsRms_r(n_r_max), PolAsRms_r_global(n_r_max)
       real(cp) :: TorAsRms_r(n_r_max), TorAsRms_r_global(n_r_max)
     
-      integer :: n_r,lm,l,m
+      integer :: n_r_loc,lm,l,m
       real(cp) :: fac
     
-      do n_r=1,n_r_max
+      do n_r_loc=1,n_r_max
     
-         PolRms_r(n_r)  =0.0_cp
-         TorRms_r(n_r)  =0.0_cp
-         PolAsRms_r(n_r)=0.0_cp
-         TorAsRms_r(n_r)=0.0_cp
+         PolRms_r(n_r_loc)  =0.0_cp
+         TorRms_r(n_r_loc)  =0.0_cp
+         PolAsRms_r(n_r_loc)=0.0_cp
+         TorAsRms_r(n_r_loc)=0.0_cp
     
          do lm=max(2,llm),ulm
             l=map%lm2l(lm)
             m=map%lm2m(lm)
-            PolRmsTemp= dLh(st_map%lm2(l,m)) * (                        &
-                 dLh(st_map%lm2(l,m))*or2(n_r)*cc2real(Pol(lm,n_r),m) + &
-                 cc2real(drPol(lm,n_r),m) )
-            TorRmsTemp=   dLh(st_map%lm2(l,m))*cc2real(Tor(lm,n_r),m)
+            PolRmsTemp= dLh(radial_map%lm2(l,m)) * (                        &
+                 dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(Pol(lm,n_r_loc),m) + &
+                 cc2real(drPol(lm,n_r_loc),m) )
+            TorRmsTemp=   dLh(radial_map%lm2(l,m))*cc2real(Tor(lm,n_r_loc),m)
             if ( m == 0 ) then  ! axisymmetric part
-               PolAsRms_r(n_r)=PolAsRms_r(n_r) + PolRmsTemp
-               TorAsRms_r(n_r)=TorAsRms_r(n_r) + TorRmsTemp
+               PolAsRms_r(n_r_loc)=PolAsRms_r(n_r_loc) + PolRmsTemp
+               TorAsRms_r(n_r_loc)=TorAsRms_r(n_r_loc) + TorRmsTemp
             else
-               PolRms_r(n_r)  =PolRms_r(n_r)   + PolRmsTemp
-               TorRms_r(n_r)  =TorRms_r(n_r)   + TorRmsTemp
+               PolRms_r(n_r_loc)  =PolRms_r(n_r_loc)   + PolRmsTemp
+               TorRms_r(n_r_loc)  =TorRms_r(n_r_loc)   + TorRmsTemp
             end if
          end do    ! do loop over lms in block
-         PolRms_r(n_r)=PolRms_r(n_r) + PolAsRms_r(n_r)
-         TorRms_r(n_r)=TorRms_r(n_r) + TorAsRms_r(n_r)
+         PolRms_r(n_r_loc)=PolRms_r(n_r_loc) + PolAsRms_r(n_r_loc)
+         TorRms_r(n_r_loc)=TorRms_r(n_r_loc) + TorAsRms_r(n_r_loc)
       end do    ! radial grid points
 
 #ifdef WITH_MPI
@@ -178,7 +178,7 @@ contains
       do lm=lmStart,lmStop
          l=map%lm2l(lm)
          m=map%lm2m(lm)
-         help=dLh(st_map%lm2(l,m))*cc2real(dPol(lm),m)
+         help=dLh(radial_map%lm2(l,m))*cc2real(dPol(lm),m)
          Pol2hInt(l)=Pol2hInt(l)+help
       end do
 
@@ -201,7 +201,7 @@ contains
       do lm=lmStart,lmStop
          l=map%lm2l(lm)
          m=map%lm2m(lm)
-         help=dLh(st_map%lm2(l,m))*cc2real(dPol(lm),m)
+         help=dLh(radial_map%lm2(l,m))*cc2real(dPol(lm),m)
          Pol2hInt(lm)=Pol2hInt(lm)+help
       end do
 
@@ -229,7 +229,7 @@ contains
          m=map%lm2m(lm)
          help=rE2*cc2real(Pol(lm),m)
          Pol2hInt(l)=Pol2hInt(l)+help
-         PolLMr(lm)=rE2/dLh(st_map%lm2(l,m))*Pol(lm)
+         PolLMr(lm)=rE2/dLh(radial_map%lm2(l,m))*Pol(lm)
       end do
 
    end subroutine hInt2Pol
@@ -256,7 +256,7 @@ contains
          m=map%lm2m(lm)
          help=rE2*cc2real(Pol(lm),m)
          Pol2hInt(lm)=Pol2hInt(lm)+help
-         PolLMr(lm)=rE2/dLh(st_map%lm2(l,m))*Pol(lm)
+         PolLMr(lm)=rE2/dLh(radial_map%lm2(l,m))*Pol(lm)
       end do
 
    end subroutine hInt2PolLM
@@ -328,7 +328,7 @@ contains
       do lm=lmStart,lmStop
          l=map%lm2l(lm)
          m=map%lm2m(lm)
-         help=rE4/dLh(st_map%lm2(l,m))*cc2real(Tor(lm),m)
+         help=rE4/dLh(radial_map%lm2(l,m))*cc2real(Tor(lm),m)
          Tor2hInt(l)=Tor2hInt(l)+help
       end do
     
@@ -354,7 +354,7 @@ contains
       do lm=lmStart,lmStop
          l=map%lm2l(lm)
          m=map%lm2m(lm)
-         help=rE4/dLh(st_map%lm2(l,m))*cc2real(Tor(lm),m)
+         help=rE4/dLh(radial_map%lm2(l,m))*cc2real(Tor(lm),m)
          Tor2hInt(lm)=Tor2hInt(lm)+help
       end do
     

@@ -111,48 +111,48 @@ contains
       real(cp) :: HelnaRMSN,HelnaRMSS
       real(cp) :: HelRMSN,HelRMSS,HelEA,HelRMS,HelnaRMS
     
-      integer :: n_r
+      integer :: n_r_loc
       integer :: i,sendcount,recvcounts(0:n_ranks_r-1),displs(0:n_ranks_r-1),ierr
     
     
       !------ Integration of Helicity, on input the Helicity is
       !       already axisymmetric !
-      do n_r=l_r,u_r
-         r2=r(n_r)*r(n_r)
-         HelNr(n_r) =0.0_cp
-         HelSr(n_r) =0.0_cp
-         HelnaNr(n_r) =0.0_cp
-         HelnaSr(n_r) =0.0_cp
-         HelEAr(n_r)=0.0_cp
-         Hel2Nr(n_r) =0.0_cp
-         Hel2Sr(n_r) =0.0_cp
-         Helna2Nr(n_r) =0.0_cp
-         Helna2Sr(n_r) =0.0_cp
+      do n_r_loc=l_r,u_r
+         r2=r(n_r_loc)*r(n_r_loc)
+         HelNr(n_r_loc) =0.0_cp
+         HelSr(n_r_loc) =0.0_cp
+         HelnaNr(n_r_loc) =0.0_cp
+         HelnaSr(n_r_loc) =0.0_cp
+         HelEAr(n_r_loc)=0.0_cp
+         Hel2Nr(n_r_loc) =0.0_cp
+         Hel2Sr(n_r_loc) =0.0_cp
+         Helna2Nr(n_r_loc) =0.0_cp
+         Helna2Sr(n_r_loc) =0.0_cp
  
          do n=1,nThetaBs ! Loop over theta blocks
             nTheta=(n-1)*sizeThetaB
             nThetaStart=nTheta+1
-            call lmAS2pt(HelLMr(1,n_r),Hel,nThetaStart,sizeThetaB)
-            call lmAS2pt(Hel2LMr(1,n_r),Hel2,nThetaStart,sizeThetaB)
-            call lmAS2pt(HelnaLMr(1,n_r),Helna,nThetaStart,sizeThetaB)
-            call lmAS2pt(Helna2LMr(1,n_r),Helna2,nThetaStart,sizeThetaB)
+            call lmAS2pt(HelLMr(1,n_r_loc),Hel,nThetaStart,sizeThetaB)
+            call lmAS2pt(Hel2LMr(1,n_r_loc),Hel2,nThetaStart,sizeThetaB)
+            call lmAS2pt(HelnaLMr(1,n_r_loc),Helna,nThetaStart,sizeThetaB)
+            call lmAS2pt(Helna2LMr(1,n_r_loc),Helna2,nThetaStart,sizeThetaB)
             do nThetaBlock=1,sizeThetaB
                nTheta=nTheta+1
                nThetaNHS=(nTheta+1)/2
  
                !------ Integration over theta:
                if ( mod(nTheta,2) == 1 ) then ! NHS
-                  Hel2Nr(n_r)=Hel2Nr(n_r)+gauss(nThetaNHS)*r2*Hel2(nThetaBlock)
-                  Helna2Nr(n_r)=Helna2Nr(n_r)+gauss(nThetaNHS)*r2*Helna2(nThetaBlock)
-                  HelEAr(n_r)=HelEAr(n_r)+gauss(nThetaNHS)*r2*Hel(nThetaBlock)
-                  HelNr(n_r) =HelNr(n_r)+gauss(nThetaNHS)*r2*Hel(nThetaBlock)
-                  HelnaNr(n_r) =HelnaNr(n_r)+gauss(nThetaNHS)*r2*Helna(nThetaBlock)
+                  Hel2Nr(n_r_loc)=Hel2Nr(n_r_loc)+gauss(nThetaNHS)*r2*Hel2(nThetaBlock)
+                  Helna2Nr(n_r_loc)=Helna2Nr(n_r_loc)+gauss(nThetaNHS)*r2*Helna2(nThetaBlock)
+                  HelEAr(n_r_loc)=HelEAr(n_r_loc)+gauss(nThetaNHS)*r2*Hel(nThetaBlock)
+                  HelNr(n_r_loc) =HelNr(n_r_loc)+gauss(nThetaNHS)*r2*Hel(nThetaBlock)
+                  HelnaNr(n_r_loc) =HelnaNr(n_r_loc)+gauss(nThetaNHS)*r2*Helna(nThetaBlock)
                else
-                  Hel2Sr(n_r)=Hel2Sr(n_r)+gauss(nThetaNHS)*r2*Hel2(nThetaBlock)
-                  Helna2Sr(n_r)=Helna2Sr(n_r)+gauss(nThetaNHS)*r2*Helna2(nThetaBlock)
-                  HelEAr(n_r)=HelEAr(n_r)-gauss(nThetaNHS)*r2*Hel(nThetaBlock)
-                  HelSr(n_r) =HelSr(n_r)+gauss(nThetaNHS)*r2*Hel(nThetaBlock)
-                  HelnaSr(n_r)=HelnaSr(n_r)+gauss(nThetaNHS)*r2*Helna(nThetaBlock)
+                  Hel2Sr(n_r_loc)=Hel2Sr(n_r_loc)+gauss(nThetaNHS)*r2*Hel2(nThetaBlock)
+                  Helna2Sr(n_r_loc)=Helna2Sr(n_r_loc)+gauss(nThetaNHS)*r2*Helna2(nThetaBlock)
+                  HelEAr(n_r_loc)=HelEAr(n_r_loc)-gauss(nThetaNHS)*r2*Hel(nThetaBlock)
+                  HelSr(n_r_loc) =HelSr(n_r_loc)+gauss(nThetaNHS)*r2*Hel(nThetaBlock)
+                  HelnaSr(n_r_loc)=HelnaSr(n_r_loc)+gauss(nThetaNHS)*r2*Helna(nThetaBlock)
                end if
             end do
          end do
@@ -163,7 +163,7 @@ contains
       ! the arrays: Hel2Nr,Helna2Nr,HelEAr,HelNr,HelnaNr
       ! Hel2Sr,Helna2Sr,HelSr,HelnaSr
     
-      sendcount  = n_r
+      sendcount  = n_r_loc
       recvcounts = dist_r(:,0)
       displs     = dist_r(:,1)-1
 #ifdef WITH_MPI
@@ -293,30 +293,30 @@ contains
       real(cp) :: topentropy, botentropy
       real(cp) :: topflux,botflux
       character(len=76) :: filename
-      integer :: n_r, filehandle
+      integer :: n_r_loc, filehandle
 
       if ( coord_r == 0 ) then
 
          if ( l_anelastic_liquid .or. l_TP_form ) then
-            do n_r=1,n_r_max
-               TMeanR(n_r)   = TMeanR(n_r)+timePassed*osq4pi*real(s(1,n_r))
-               PMeanR(n_r)   = PMeanR(n_r)+timePassed*osq4pi*real(p(1,n_r))
-               SMeanR(n_r)   = otemp1(n_r)*TMeanR(n_r)-ViscHeatFac*ThExpNb* &
-               &               alpha0(n_r)*orho1(n_r)*PMeanR(n_r)
-               rhoprime(n_r) = osq4pi*ThExpNb*alpha0(n_r)*( -rho0(n_r)* &
-               &               real(s(1,n_r))+ViscHeatFac*(ThExpNb*     &
-               &               alpha0(n_r)*temp0(n_r)+ogrun(n_r))*      &
-               &               real(p(1,n_r)) )
+            do n_r_loc=1,n_r_max
+               TMeanR(n_r_loc)   = TMeanR(n_r_loc)+timePassed*osq4pi*real(s(1,n_r_loc))
+               PMeanR(n_r_loc)   = PMeanR(n_r_loc)+timePassed*osq4pi*real(p(1,n_r_loc))
+               SMeanR(n_r_loc)   = otemp1(n_r_loc)*TMeanR(n_r_loc)-ViscHeatFac*ThExpNb* &
+               &               alpha0(n_r_loc)*orho1(n_r_loc)*PMeanR(n_r_loc)
+               rhoprime(n_r_loc) = osq4pi*ThExpNb*alpha0(n_r_loc)*( -rho0(n_r_loc)* &
+               &               real(s(1,n_r_loc))+ViscHeatFac*(ThExpNb*     &
+               &               alpha0(n_r_loc)*temp0(n_r_loc)+ogrun(n_r_loc))*      &
+               &               real(p(1,n_r_loc)) )
             end do
          else
-            do n_r=1,n_r_max
-               SMeanR(n_r)   = SMeanR(n_r)+timePassed*osq4pi*real(s(1,n_r))
-               PMeanR(n_r)   = PMeanR(n_r)+timePassed*osq4pi*real(p(1,n_r))
-               TMeanR(n_r)   = temp0(n_r)*SMeanR(n_r)+ViscHeatFac*ThExpNb* &
-               &               alpha0(n_r)*temp0(n_r)*orho1(n_r)*PMeanR(n_r)
-               rhoprime(n_r) = osq4pi*ThExpNb*alpha0(n_r)*( -rho0(n_r)* &
-               &               temp0(n_r)*real(s(1,n_r))+ViscHeatFac*   &
-               &               ogrun(n_r)*real(p(1,n_r)) )
+            do n_r_loc=1,n_r_max
+               SMeanR(n_r_loc)   = SMeanR(n_r_loc)+timePassed*osq4pi*real(s(1,n_r_loc))
+               PMeanR(n_r_loc)   = PMeanR(n_r_loc)+timePassed*osq4pi*real(p(1,n_r_loc))
+               TMeanR(n_r_loc)   = temp0(n_r_loc)*SMeanR(n_r_loc)+ViscHeatFac*ThExpNb* &
+               &               alpha0(n_r_loc)*temp0(n_r_loc)*orho1(n_r_loc)*PMeanR(n_r_loc)
+               rhoprime(n_r_loc) = osq4pi*ThExpNb*alpha0(n_r_loc)*( -rho0(n_r_loc)* &
+               &               temp0(n_r_loc)*real(s(1,n_r_loc))+ViscHeatFac*   &
+               &               ogrun(n_r_loc)*real(p(1,n_r_loc)) )
             end do
          end if
 
@@ -431,8 +431,8 @@ contains
 
          if ( l_chemical_conv ) then
             if ( topxicond/=0.0_cp ) then
-               do n_r=1,n_r_max
-                  XiMeanR(n_r)  = XiMeanR(n_r)+timePassed*osq4pi*real(xi(1,n_r))
+               do n_r_loc=1,n_r_max
+                  XiMeanR(n_r_loc)  = XiMeanR(n_r_loc)+timePassed*osq4pi*real(xi(1,n_r_loc))
                end do
                topxi=osq4pi*real(xi(1,n_r_cmb))
                botxi=osq4pi*real(xi(1,n_r_icb))
@@ -488,10 +488,10 @@ contains
          
             filename='heatR.'//tag
             open(newunit=filehandle, file=filename, status='unknown')
-            do n_r=1,n_r_max
+            do n_r_loc=1,n_r_max
               write(filehandle, '(ES20.10,5ES15.7)' ) &
-              &      r(n_r),SMeanR(n_r),TMeanR(n_r),  &
-              &      PMeanR(n_r),rhoprime(n_r),XiMeanR(n_r)
+              &      r(n_r_loc),SMeanR(n_r_loc),TMeanR(n_r_loc),  &
+              &      PMeanR(n_r_loc),rhoprime(n_r_loc),XiMeanR(n_r_loc)
             end do
          
             close(filehandle)

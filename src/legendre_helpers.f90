@@ -2,7 +2,7 @@ module leg_helper_mod
 
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use geometry, only: lm_max, l_max, n_m_max, l_axi, n_lm,      &
+   use geometry, only: lm_max, l_max, n_m_max, l_axi, n_lm_loc,      &
        &                 n_r_icb, n_r_cmb
    use radial_functions, only: or2
    use torsional_oscillations, only: ddzASL
@@ -144,13 +144,13 @@ contains
       if ( l_conv .or. l_mag_kin ) then
 
          if ( l_heat ) then
-            do lm=1,n_lm
+            do lm=1,n_lm_loc
                this%sR(lm) =s_Rdist(lm,nR)   
                this%dsR(lm)=ds_Rdist(lm,nR)  ! used for plotting and Rms
             end do
          end if
          if ( l_chemical_conv ) then
-            do lm=1,n_lm
+            do lm=1,n_lm_loc
                this%xiR(lm)=xi_Rdist(lm,nR) 
             end do
          end if
@@ -159,7 +159,7 @@ contains
             !>@TODO This will only happen in one rank in comm_theta ! i.e. the one which 
             !>      contains coord_theta=0. I need to check if this needs to be broadcast
             !>      or if just coord_theta=0 needs this information.
-            do lm=1,n_lm
+            do lm=1,n_lm_loc
                l=dist_map%lm2l(lm)
                m=dist_map%lm2m(lm)
                if ( l <= l_max .and. m == 0 ) then
@@ -170,13 +170,13 @@ contains
             end do
          end if
          if ( lPressCalc ) then
-            do lm=1,n_lm
+            do lm=1,n_lm_loc
                this%preR(lm)= p_Rdist(lm,nR) ! used for Rms in get_td (anelastic)
                this%dpR(lm) =dp_Rdist(lm,nR) ! used for Rms in get_td
             end do
          end if
          if ( l_mag .and. l_frame .and. l_movie_oc .and. nR == n_r_cmb ) then
-            do lm=1,n_lm
+            do lm=1,n_lm_loc
                this%bCMB(lm)=b_Rdist(lm,nR)  ! used for movie output of surface field
             end do
             if (lm_zero > 0) then
@@ -185,7 +185,7 @@ contains
          end if
 
          if ( nBc /= 2 ) then ! nBc=2 is flag for fixed boundary
-            do lm=1,n_lm 
+            do lm=1,n_lm_loc 
                this%dLhw(lm)=dLh_loc(lm)*w_Rdist(lm,nR)
                this%vhG(lm) =dw_Rdist(lm,nR) - &
                     cmplx(-aimag(z_Rdist(lm,nR)),real(z_Rdist(lm,nR)),kind=cp)
@@ -198,7 +198,7 @@ contains
                this%vhC(lm_zero) =zero
             end if
          else if ( lRmsCalc ) then
-            do lm=1,n_lm
+            do lm=1,n_lm_loc
                this%dLhw(lm)=zero
                this%vhG(lm) =zero
                this%vhC(lm) =zero
@@ -206,7 +206,7 @@ contains
          end if
 
          if ( lDeriv ) then
-            do lm=1,n_lm
+            do lm=1,n_lm_loc
                this%dLhz(lm)  =dLh_loc(lm)*z_Rdist(lm,nR)
                this%dLhdw(lm) =dLh_loc(lm)*dw_Rdist(lm,nR)
                this%dvhdrG(lm)=ddw_Rdist(lm,nR) - &
@@ -227,7 +227,7 @@ contains
       if ( l_mag .or. l_mag_LF ) then
          !PRINT*,"aj: ",SUM(ABS(aj(:,nR))),SUM(ABS(dLh_loc))
          !PRINT*,"dj: ",SUM(ABS(dj(:,nR)))
-         do lm=1,n_lm
+         do lm=1,n_lm_loc
             this%dLhb(lm)=dLh_loc(lm)*b_Rdist(lm,nR)
             this%bhG(lm) =db_Rdist(lm,nR) - &
                  cmplx(-aimag(aj_Rdist(lm,nR)),real(aj_Rdist(lm,nR)),kind=cp)
@@ -245,7 +245,7 @@ contains
             this%bhC(lm_grenoble) =this%bhC(lm_grenoble)+db0(nR)
          end if
          if ( lDeriv ) then
-            do lm=1,n_lm
+            do lm=1,n_lm_loc
                this%dLhj(lm)=dLh_loc(lm)*aj_Rdist(lm,nR)
                dbd     =or2(nR)*this%dLhb(lm)-ddb_Rdist(lm,nR)
                this%cbhG(lm)=dj_Rdist(lm,nR)-cmplx(-aimag(dbd),real(dbd),kind=cp)

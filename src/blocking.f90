@@ -528,6 +528,7 @@ contains
          !if ( m == 0 ) l2lmPAS(l)=lmP
          map%lmP2lm(lmP)=-1
       end do
+      
       if ( lm /= map%lm_max ) then
          write(*,"(2(A,I6))") 'Wrong lm=',lm," != map%lm_max = ",map%lm_max
          call abortRun('Stop run in blocking')

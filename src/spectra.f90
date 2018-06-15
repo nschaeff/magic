@@ -9,7 +9,7 @@ module spectra
        &                       rscheme_oc, or2, r_icb, dr_fac_ic
    use physical_parameters, only: LFfac
    use num_param, only: eScale, tScale
-   use blocking, only: lo_map, st_map
+   use blocking, only: lo_map
    use horizontal_data, only: dLh
    use logic, only: l_mag, l_anel, l_cond_ic, l_heat, l_save_out, &
        &            l_energy_modes
@@ -18,6 +18,7 @@ module spectra
    use useful, only: cc2real, cc22real, abortRun
    use integration, only: rInt_R, rIntIC
    use constants, only: pi, vol_oc, half, one, four
+   use LMmapping, only: radial_map
 
    implicit none
   
@@ -172,10 +173,10 @@ contains
             do lm=max(llm,2),ulm
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
-               e_p_temp= orho1(nR) * dLh(st_map%lm2(l,m)) * (               &
-                    &      dLh(st_map%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
+               e_p_temp= orho1(nR) * dLh(radial_map%lm2(l,m)) * (               &
+                    &      dLh(radial_map%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
                     &      + cc2real(db(lm,nR),m) )
-               e_t_temp=orho1(nR)*dLh(st_map%lm2(l,m))*cc2real(aj(lm,nR),m)
+               e_t_temp=orho1(nR)*dLh(radial_map%lm2(l,m))*cc2real(aj(lm,nR),m)
                e_p_r_l(nR,l)=e_p_r_l(nR,l)+e_p_temp
                e_t_r_l(nR,l)=e_t_r_l(nR,l)+e_t_temp
                e_p_r_m(nR,m)=e_p_r_m(nR,m)+e_p_temp
@@ -195,10 +196,10 @@ contains
             do lm=max(2,llm),ulm
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
-               e_p_temp=  dLh(st_map%lm2(l,m)) * (                           &
-                    &       dLh(st_map%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
+               e_p_temp=  dLh(radial_map%lm2(l,m)) * (                           &
+                    &       dLh(radial_map%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
                     &       + cc2real(db(lm,nR),m) )
-               e_t_temp=dLh(st_map%lm2(l,m))*cc2real(aj(lm,nR),m)
+               e_t_temp=dLh(radial_map%lm2(l,m))*cc2real(aj(lm,nR),m)
                e_p_r_l(nR,l)=e_p_r_l(nR,l)+e_p_temp
                e_t_r_l(nR,l)=e_t_r_l(nR,l)+e_t_temp
                e_p_r_m(nR,m)=e_p_r_m(nR,m)+e_p_temp
@@ -433,7 +434,7 @@ contains
       !-- local:
       character(len=14) :: string
       character(len=72) :: mag_spec_file,kin_spec_file,u2_spec_file
-      integer :: n_r,lm,ml,l,mc,m,n_const
+      integer :: n_r_loc,lm,ml,l,mc,m,n_const
     
       real(cp) :: r_ratio,O_r_icb_E_2
       real(cp) :: e_mag_p_temp,e_mag_t_temp
@@ -470,31 +471,31 @@ contains
     
       eCMB=0.0_cp
     
-      do n_r=1,n_r_max
+      do n_r_loc=1,n_r_max
     
          do l=1,l_max
             if ( l_mag ) then
-               e_mag_p_r_l(n_r,l)=0.0_cp
-               e_mag_t_r_l(n_r,l)=0.0_cp
+               e_mag_p_r_l(n_r_loc,l)=0.0_cp
+               e_mag_t_r_l(n_r_loc,l)=0.0_cp
             end if
             if ( l_anel ) then
-               u2_p_r_l(n_r,l)=0.0_cp
-               u2_t_r_l(n_r,l)=0.0_cp
+               u2_p_r_l(n_r_loc,l)=0.0_cp
+               u2_t_r_l(n_r_loc,l)=0.0_cp
             end if
-            e_kin_p_r_l(n_r,l)=0.0_cp
-            e_kin_t_r_l(n_r,l)=0.0_cp
+            e_kin_p_r_l(n_r_loc,l)=0.0_cp
+            e_kin_t_r_l(n_r_loc,l)=0.0_cp
          end do
          do mc=1,l_max+1
             if ( l_mag ) then
-               e_mag_p_r_m(n_r,mc)=0.0_cp
-               e_mag_t_r_m(n_r,mc)=0.0_cp
+               e_mag_p_r_m(n_r_loc,mc)=0.0_cp
+               e_mag_t_r_m(n_r_loc,mc)=0.0_cp
             end if
             if ( l_anel ) then
-               u2_p_r_m(n_r,mc)=0.0_cp
-               u2_t_r_m(n_r,mc)=0.0_cp
+               u2_p_r_m(n_r_loc,mc)=0.0_cp
+               u2_t_r_m(n_r_loc,mc)=0.0_cp
             end if
-            e_kin_p_r_m(n_r,mc)=0.0_cp
-            e_kin_t_r_m(n_r,mc)=0.0_cp
+            e_kin_p_r_m(n_r_loc,mc)=0.0_cp
+            e_kin_t_r_m(n_r_loc,mc)=0.0_cp
          end do
     
          !do lm=2,lm_max
@@ -505,46 +506,46 @@ contains
             mc=m+1
     
             if ( l_mag ) then
-               e_mag_p_temp= dLh(st_map%lm2(l,m)) * ( &
-                    &          dLh(st_map%lm2(l,m))*or2(n_r)*cc2real(b(lm,n_r),m) + &
-                    &          cc2real(db(lm,n_r),m) )
-               e_mag_t_temp=dLh(st_map%lm2(l,m))*cc2real(aj(lm,n_r),m)
+               e_mag_p_temp= dLh(radial_map%lm2(l,m)) * ( &
+                    &          dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(b(lm,n_r_loc),m) + &
+                    &          cc2real(db(lm,n_r_loc),m) )
+               e_mag_t_temp=dLh(radial_map%lm2(l,m))*cc2real(aj(lm,n_r_loc),m)
             end if
             if ( l_anel ) then
-               u2_p_temp=  orho2(n_r)*dLh(st_map%lm2(l,m)) *  ( &
-                    &        dLh(st_map%lm2(l,m))*or2(n_r)*cc2real(w(lm,n_r),m) + &
-                    &        cc2real(dw(lm,n_r),m) )
-               u2_t_temp=orho2(n_r)*dLh(st_map%lm2(l,m))*cc2real(z(lm,n_r),m)
+               u2_p_temp=  orho2(n_r_loc)*dLh(radial_map%lm2(l,m)) *  ( &
+                    &        dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
+                    &        cc2real(dw(lm,n_r_loc),m) )
+               u2_t_temp=orho2(n_r_loc)*dLh(radial_map%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
             end if
-            e_kin_p_temp= orho1(n_r)*dLh(st_map%lm2(l,m)) *  ( &
-                 &          dLh(st_map%lm2(l,m))*or2(n_r)*cc2real(w(lm,n_r),m) + &
-                 &          cc2real(dw(lm,n_r),m) )
-            e_kin_t_temp=orho1(n_r)*dLh(st_map%lm2(l,m))*cc2real(z(lm,n_r),m)
+            e_kin_p_temp= orho1(n_r_loc)*dLh(radial_map%lm2(l,m)) *  ( &
+                 &          dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
+                 &          cc2real(dw(lm,n_r_loc),m) )
+            e_kin_t_temp=orho1(n_r_loc)*dLh(radial_map%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
     
             !----- l-spectra:
             if ( l_mag ) then
-               e_mag_p_r_l(n_r,l) = e_mag_p_r_l(n_r,l) + e_mag_p_temp
-               e_mag_t_r_l(n_r,l) = e_mag_t_r_l(n_r,l) + e_mag_t_temp
-               if ( m == 0 .and. n_r == n_r_cmb ) eCMB(l)=e_mag_p_temp
+               e_mag_p_r_l(n_r_loc,l) = e_mag_p_r_l(n_r_loc,l) + e_mag_p_temp
+               e_mag_t_r_l(n_r_loc,l) = e_mag_t_r_l(n_r_loc,l) + e_mag_t_temp
+               if ( m == 0 .and. n_r_loc == n_r_cmb ) eCMB(l)=e_mag_p_temp
             end if
             if ( l_anel ) then
-               u2_p_r_l(n_r,l) = u2_p_r_l(n_r,l) + u2_p_temp
-               u2_t_r_l(n_r,l) = u2_t_r_l(n_r,l) + u2_t_temp
+               u2_p_r_l(n_r_loc,l) = u2_p_r_l(n_r_loc,l) + u2_p_temp
+               u2_t_r_l(n_r_loc,l) = u2_t_r_l(n_r_loc,l) + u2_t_temp
             end if
-            e_kin_p_r_l(n_r,l) = e_kin_p_r_l(n_r,l) + e_kin_p_temp
-            e_kin_t_r_l(n_r,l) = e_kin_t_r_l(n_r,l) + e_kin_t_temp
+            e_kin_p_r_l(n_r_loc,l) = e_kin_p_r_l(n_r_loc,l) + e_kin_p_temp
+            e_kin_t_r_l(n_r_loc,l) = e_kin_t_r_l(n_r_loc,l) + e_kin_t_temp
     
             !----- m-spectra:
             if ( l_mag ) then
-               e_mag_p_r_m(n_r,mc) = e_mag_p_r_m(n_r,mc) + e_mag_p_temp
-               e_mag_t_r_m(n_r,mc) = e_mag_t_r_m(n_r,mc) + e_mag_t_temp
+               e_mag_p_r_m(n_r_loc,mc) = e_mag_p_r_m(n_r_loc,mc) + e_mag_p_temp
+               e_mag_t_r_m(n_r_loc,mc) = e_mag_t_r_m(n_r_loc,mc) + e_mag_t_temp
             end if
             if ( l_anel ) then
-               u2_p_r_m(n_r,mc) = u2_p_r_m(n_r,mc) + u2_p_temp
-               u2_t_r_m(n_r,mc) = u2_t_r_m(n_r,mc) + u2_t_temp
+               u2_p_r_m(n_r_loc,mc) = u2_p_r_m(n_r_loc,mc) + u2_p_temp
+               u2_t_r_m(n_r_loc,mc) = u2_t_r_m(n_r_loc,mc) + u2_t_temp
             end if
-            e_kin_p_r_m(n_r,mc)=e_kin_p_r_m(n_r,mc) + e_kin_p_temp
-            e_kin_t_r_m(n_r,mc)=e_kin_t_r_m(n_r,mc) + e_kin_t_temp
+            e_kin_p_r_m(n_r_loc,mc)=e_kin_p_r_m(n_r_loc,mc) + e_kin_p_temp
+            e_kin_t_r_m(n_r_loc,mc)=e_kin_t_r_m(n_r_loc,mc) + e_kin_t_temp
     
          end do    ! do loop over lms in block
     
@@ -614,12 +615,12 @@ contains
     
       ! Getting appropriate radius index for e_kin_nearSurf spectra
       nearSurfR = r_icb+0.99_cp
-      do n_r=2,n_r_max
-         if ( r(n_r-1) > nearSurfR .and. r(n_r)  <= nearSurfR ) then
-            if ( r(n_r-1)-nearSurfR < nearSurfR-r(n_r) ) then
-               n_const=n_r-1
+      do n_r_loc=2,n_r_max
+         if ( r(n_r_loc-1) > nearSurfR .and. r(n_r_loc)  <= nearSurfR ) then
+            if ( r(n_r_loc-1)-nearSurfR < nearSurfR-r(n_r_loc) ) then
+               n_const=n_r_loc-1
             else
-               n_const=n_r
+               n_const=n_r_loc
             end if
          end if
       end do
@@ -686,38 +687,38 @@ contains
       if ( l_cond_ic ) then
     
          O_r_icb_E_2=one/(r_ic(1)*r_ic(1))
-         do n_r=1,n_r_ic_max
-            r_ratio=r_ic(n_r)/r_ic(1)
+         do n_r_loc=1,n_r_ic_max
+            r_ratio=r_ic(n_r_loc)/r_ic(1)
             do mc=1,l_max+1
-               e_mag_p_ic_r_m(n_r,mc)=0.0_cp
-               e_mag_t_ic_r_m(n_r,mc)=0.0_cp
+               e_mag_p_ic_r_m(n_r_loc,mc)=0.0_cp
+               e_mag_t_ic_r_m(n_r_loc,mc)=0.0_cp
             end do
             do l=1,l_max
-               e_mag_p_ic_r_l(n_r,l)=0.0_cp
-               e_mag_t_ic_r_l(n_r,l)=0.0_cp
+               e_mag_p_ic_r_l(n_r_loc,l)=0.0_cp
+               e_mag_t_ic_r_l(n_r_loc,l)=0.0_cp
             end do
             !do lm=2,lm_max
             do lm=max(llm,2),ulm
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
                mc=m+1
-               r_dr_b=r_ic(n_r)*db_ic(lm,n_r)
+               r_dr_b=r_ic(n_r_loc)*db_ic(lm,n_r_loc)
     
                e_mag_p_temp=                                        &
-                    dLh(st_map%lm2(l,m))*O_r_icb_E_2*r_ratio**(2*l) * ( &
-                    real((2*l+1)*(l+1),cp)*cc2real(b_ic(lm,n_r),m)   + &
-                    real(2*(l+1),cp)*cc22real(b_ic(lm,n_r),r_dr_b,m) + &
+                    dLh(radial_map%lm2(l,m))*O_r_icb_E_2*r_ratio**(2*l) * ( &
+                    real((2*l+1)*(l+1),cp)*cc2real(b_ic(lm,n_r_loc),m)   + &
+                    real(2*(l+1),cp)*cc22real(b_ic(lm,n_r_loc),r_dr_b,m) + &
                     cc2real(r_dr_b,m) )
-               e_mag_t_temp= dLh(st_map%lm2(l,m))*r_ratio**(2*l+2) * &
-                    cc2real(aj_ic(lm,n_r),m)
+               e_mag_t_temp= dLh(radial_map%lm2(l,m))*r_ratio**(2*l+2) * &
+                    cc2real(aj_ic(lm,n_r_loc),m)
     
-               e_mag_p_ic_r_l(n_r,l)=e_mag_p_ic_r_l(n_r,l) + &
+               e_mag_p_ic_r_l(n_r_loc,l)=e_mag_p_ic_r_l(n_r_loc,l) + &
                     e_mag_p_temp
-               e_mag_t_ic_r_l(n_r,l)=e_mag_t_ic_r_l(n_r,l) + &
+               e_mag_t_ic_r_l(n_r_loc,l)=e_mag_t_ic_r_l(n_r_loc,l) + &
                     e_mag_t_temp
-               e_mag_p_ic_r_m(n_r,mc)=e_mag_p_ic_r_m(n_r,mc) + &
+               e_mag_p_ic_r_m(n_r_loc,mc)=e_mag_p_ic_r_m(n_r_loc,mc) + &
                     e_mag_p_temp
-               e_mag_t_ic_r_m(n_r,mc)=e_mag_t_ic_r_m(n_r,mc) + &
+               e_mag_t_ic_r_m(n_r_loc,mc)=e_mag_t_ic_r_m(n_r_loc,mc) + &
                     e_mag_t_temp
             end do  ! loop over lm's
          end do ! loop over radial levels
@@ -896,7 +897,7 @@ contains
 
       !-- Local:
       character(len=72) :: outFile
-      integer :: n_r,lm,l,m,lc
+      integer :: n_r_loc,lm,l,m,lc
       real(cp) :: T_temp
       real(cp) :: dT_temp
       real(cp) :: surf_ICB
@@ -915,9 +916,9 @@ contains
       T_ICB_l =0.0_cp
       dT_ICB_l=0.0_cp
 
-      do n_r=1,n_r_max
+      do n_r_loc=1,n_r_max
          do l=1,l_max+1
-            T_r_l(n_r,l)=0.0_cp
+            T_r_l(n_r_loc,l)=0.0_cp
             comp(l) = 0.0_cp
          end do
          do lm=llm,ulm
@@ -925,7 +926,7 @@ contains
             m =lo_map%lm2m(lm)
             lc=l+1
 
-            T_temp=sqrt(cc2real(s(lm,n_r),m))/or2(n_r)
+            T_temp=sqrt(cc2real(s(lm,n_r_loc),m))/or2(n_r_loc)
 
             !local_sum = 0.0_cp
             !c = 0.0_cp          !A running compensation for lost low-order bits.
@@ -938,15 +939,15 @@ contains
             !end do
 #if 0
             y = T_temp - comp(lc)
-            t = T_r_l(n_r,lc) + y
-            comp(lc) = (t-T_r_l(n_r,lc)) - y
-            T_r_l(n_r,lc) = t
+            t = T_r_l(n_r_loc,lc) + y
+            comp(lc) = (t-T_r_l(n_r_loc,lc)) - y
+            T_r_l(n_r_loc,lc) = t
 #else
-            T_r_l(n_r,lc) =T_r_l(n_r,lc) +  T_temp
+            T_r_l(n_r_loc,lc) =T_r_l(n_r_loc,lc) +  T_temp
 #endif
 
-            if ( n_r == n_r_icb ) then
-               dT_temp=sqrt(cc2real(ds(lm,n_r),m))/or2(n_r)
+            if ( n_r_loc == n_r_icb ) then
+               dT_temp=sqrt(cc2real(ds(lm,n_r_loc),m))/or2(n_r_loc)
                T_ICB_l(lc) =  T_ICB_l(lc) +  T_temp
                dT_ICB_l(lc)= dT_ICB_l(lc) + dT_temp
             end if
@@ -1061,7 +1062,7 @@ contains
       !-- Local variables
       character(len=14) :: string
       character(len=72) :: spec_file
-      integer :: n_r,lm,ml,l,mc,m,lc
+      integer :: n_r_loc,lm,ml,l,mc,m,lc
       real(cp) :: T_temp
       real(cp) :: dT_temp
       real(cp) :: surf_ICB
@@ -1080,13 +1081,13 @@ contains
          dT_ICB_m(l)=0.0_cp
       end do
 
-      do n_r=1,n_r_max
+      do n_r_loc=1,n_r_max
 
          do l=1,l_max+1
-            T_r_l(n_r,l)=0.0_cp
+            T_r_l(n_r_loc,l)=0.0_cp
             T_ICB_l(l)  =0.0_cp
             dT_ICB_l(l) =0.0_cp
-            T_r_m(n_r,l)=0.0_cp
+            T_r_m(n_r_loc,l)=0.0_cp
             T_ICB_m(l)  =0.0_cp
             dT_ICB_m(l) =0.0_cp
          end do
@@ -1097,15 +1098,15 @@ contains
             lc=l+1
             mc=m+1
 
-            T_temp=sqrt(cc2real(s(lm,n_r),m))/or2(n_r)
-            dT_temp=sqrt(cc2real(ds(lm,n_r),m))/or2(n_r)
+            T_temp=sqrt(cc2real(s(lm,n_r_loc),m))/or2(n_r_loc)
+            dT_temp=sqrt(cc2real(ds(lm,n_r_loc),m))/or2(n_r_loc)
             !----- l-spectra:
-            T_r_l(n_r,lc) =T_r_l(n_r,lc) +  T_temp
+            T_r_l(n_r_loc,lc) =T_r_l(n_r_loc,lc) +  T_temp
             !----- m-spectra:
-            T_r_m(n_r,mc)=T_r_m(n_r,mc) + T_temp
+            T_r_m(n_r_loc,mc)=T_r_m(n_r_loc,mc) + T_temp
 
             !----- ICB spectra:
-            if ( n_r == n_r_icb ) then
+            if ( n_r_loc == n_r_icb ) then
                T_ICB_l(lc) =T_ICB_l(lc) +T_temp
                T_ICB_m(mc)=T_ICB_m(mc)+T_temp
                dT_ICB_l(lc) =dT_ICB_l(lc) +dT_temp
@@ -1186,7 +1187,7 @@ contains
       real(cp) :: e_kin_p_m(0:l_max),e_kin_t_m(0:l_max)
 
       !-- Local variables:
-      integer :: n_r,lm,l,m
+      integer :: n_r_loc,lm,l,m
 
       real(cp) :: e_mag_p_temp,e_mag_t_temp
       real(cp) :: e_kin_p_temp,e_kin_t_temp
@@ -1197,15 +1198,15 @@ contains
       real(cp) :: e_kin_p_r_m(n_r_max,0:l_max),e_kin_p_r_m_global(n_r_max,0:l_max)
       real(cp) :: e_kin_t_r_m(n_r_max,0:l_max),e_kin_t_r_m_global(n_r_max,0:l_max)
 
-      do n_r=1,n_r_max
+      do n_r_loc=1,n_r_max
 
          do m=0,l_max
             if ( l_mag ) then
-               e_mag_p_r_m(n_r,m)=0.0_cp
-               e_mag_t_r_m(n_r,m)=0.0_cp
+               e_mag_p_r_m(n_r_loc,m)=0.0_cp
+               e_mag_t_r_m(n_r_loc,m)=0.0_cp
             end if
-            e_kin_p_r_m(n_r,m)=0.0_cp
-            e_kin_t_r_m(n_r,m)=0.0_cp
+            e_kin_p_r_m(n_r_loc,m)=0.0_cp
+            e_kin_t_r_m(n_r_loc,m)=0.0_cp
          end do
 
          do lm=max(llm,2),ulm
@@ -1214,24 +1215,24 @@ contains
             m  =lo_map%lm2m(lm)
 
             if ( l_mag ) then
-               e_mag_p_temp= dLh(st_map%lm2(l,m)) * ( &
-                       & dLh(st_map%lm2(l,m))*or2(n_r)*cc2real(b(lm,n_r),m) + &
-                       & cc2real(db(lm,n_r),m) )
-               e_mag_t_temp=dLh(st_map%lm2(l,m))*cc2real(aj(lm,n_r),m)     
+               e_mag_p_temp= dLh(radial_map%lm2(l,m)) * ( &
+                       & dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(b(lm,n_r_loc),m) + &
+                       & cc2real(db(lm,n_r_loc),m) )
+               e_mag_t_temp=dLh(radial_map%lm2(l,m))*cc2real(aj(lm,n_r_loc),m)     
             end if
 
-            e_kin_p_temp= orho1(n_r)*dLh(st_map%lm2(l,m)) *  ( &
-                   &      dLh(st_map%lm2(l,m))*or2(n_r)*cc2real(w(lm,n_r),m) + &
-                   &      cc2real(dw(lm,n_r),m) )
-            e_kin_t_temp=orho1(n_r)*dLh(st_map%lm2(l,m))*cc2real(z(lm,n_r),m)
+            e_kin_p_temp= orho1(n_r_loc)*dLh(radial_map%lm2(l,m)) *  ( &
+                   &      dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
+                   &      cc2real(dw(lm,n_r_loc),m) )
+            e_kin_t_temp=orho1(n_r_loc)*dLh(radial_map%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
 
             !----- m-spectra:
             if ( l_mag ) then
-               e_mag_p_r_m(n_r,m)=e_mag_p_r_m(n_r,m)+e_mag_p_temp
-               e_mag_t_r_m(n_r,m)=e_mag_t_r_m(n_r,m)+e_mag_t_temp
+               e_mag_p_r_m(n_r_loc,m)=e_mag_p_r_m(n_r_loc,m)+e_mag_p_temp
+               e_mag_t_r_m(n_r_loc,m)=e_mag_t_r_m(n_r_loc,m)+e_mag_t_temp
             end if
-            e_kin_p_r_m(n_r,m)=e_kin_p_r_m(n_r,m)+e_kin_p_temp                 
-            e_kin_t_r_m(n_r,m)=e_kin_t_r_m(n_r,m)+e_kin_t_temp      
+            e_kin_p_r_m(n_r_loc,m)=e_kin_p_r_m(n_r_loc,m)+e_kin_p_temp                 
+            e_kin_t_r_m(n_r_loc,m)=e_kin_t_r_m(n_r_loc,m)+e_kin_t_temp      
 
          end do    ! do loop over lms in block 
 
