@@ -18,7 +18,7 @@ module spectra
    use useful, only: cc2real, cc22real, abortRun
    use integration, only: rInt_R, rIntIC
    use constants, only: pi, vol_oc, half, one, four
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
 
    implicit none
   
@@ -173,10 +173,10 @@ contains
             do lm=max(llm,2),ulm
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
-               e_p_temp= orho1(nR) * dLh(radial_map%lm2(l,m)) * (               &
-                    &      dLh(radial_map%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
+               e_p_temp= orho1(nR) * dLh(map_glbl_st%lm2(l,m)) * (               &
+                    &      dLh(map_glbl_st%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
                     &      + cc2real(db(lm,nR),m) )
-               e_t_temp=orho1(nR)*dLh(radial_map%lm2(l,m))*cc2real(aj(lm,nR),m)
+               e_t_temp=orho1(nR)*dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,nR),m)
                e_p_r_l(nR,l)=e_p_r_l(nR,l)+e_p_temp
                e_t_r_l(nR,l)=e_t_r_l(nR,l)+e_t_temp
                e_p_r_m(nR,m)=e_p_r_m(nR,m)+e_p_temp
@@ -196,10 +196,10 @@ contains
             do lm=max(2,llm),ulm
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
-               e_p_temp=  dLh(radial_map%lm2(l,m)) * (                           &
-                    &       dLh(radial_map%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
+               e_p_temp=  dLh(map_glbl_st%lm2(l,m)) * (                           &
+                    &       dLh(map_glbl_st%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
                     &       + cc2real(db(lm,nR),m) )
-               e_t_temp=dLh(radial_map%lm2(l,m))*cc2real(aj(lm,nR),m)
+               e_t_temp=dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,nR),m)
                e_p_r_l(nR,l)=e_p_r_l(nR,l)+e_p_temp
                e_t_r_l(nR,l)=e_t_r_l(nR,l)+e_t_temp
                e_p_r_m(nR,m)=e_p_r_m(nR,m)+e_p_temp
@@ -506,21 +506,21 @@ contains
             mc=m+1
     
             if ( l_mag ) then
-               e_mag_p_temp= dLh(radial_map%lm2(l,m)) * ( &
-                    &          dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(b(lm,n_r_loc),m) + &
+               e_mag_p_temp= dLh(map_glbl_st%lm2(l,m)) * ( &
+                    &          dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(b(lm,n_r_loc),m) + &
                     &          cc2real(db(lm,n_r_loc),m) )
-               e_mag_t_temp=dLh(radial_map%lm2(l,m))*cc2real(aj(lm,n_r_loc),m)
+               e_mag_t_temp=dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,n_r_loc),m)
             end if
             if ( l_anel ) then
-               u2_p_temp=  orho2(n_r_loc)*dLh(radial_map%lm2(l,m)) *  ( &
-                    &        dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
+               u2_p_temp=  orho2(n_r_loc)*dLh(map_glbl_st%lm2(l,m)) *  ( &
+                    &        dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
                     &        cc2real(dw(lm,n_r_loc),m) )
-               u2_t_temp=orho2(n_r_loc)*dLh(radial_map%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
+               u2_t_temp=orho2(n_r_loc)*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
             end if
-            e_kin_p_temp= orho1(n_r_loc)*dLh(radial_map%lm2(l,m)) *  ( &
-                 &          dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
+            e_kin_p_temp= orho1(n_r_loc)*dLh(map_glbl_st%lm2(l,m)) *  ( &
+                 &          dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
                  &          cc2real(dw(lm,n_r_loc),m) )
-            e_kin_t_temp=orho1(n_r_loc)*dLh(radial_map%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
+            e_kin_t_temp=orho1(n_r_loc)*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
     
             !----- l-spectra:
             if ( l_mag ) then
@@ -705,11 +705,11 @@ contains
                r_dr_b=r_ic(n_r_loc)*db_ic(lm,n_r_loc)
     
                e_mag_p_temp=                                        &
-                    dLh(radial_map%lm2(l,m))*O_r_icb_E_2*r_ratio**(2*l) * ( &
+                    dLh(map_glbl_st%lm2(l,m))*O_r_icb_E_2*r_ratio**(2*l) * ( &
                     real((2*l+1)*(l+1),cp)*cc2real(b_ic(lm,n_r_loc),m)   + &
                     real(2*(l+1),cp)*cc22real(b_ic(lm,n_r_loc),r_dr_b,m) + &
                     cc2real(r_dr_b,m) )
-               e_mag_t_temp= dLh(radial_map%lm2(l,m))*r_ratio**(2*l+2) * &
+               e_mag_t_temp= dLh(map_glbl_st%lm2(l,m))*r_ratio**(2*l+2) * &
                     cc2real(aj_ic(lm,n_r_loc),m)
     
                e_mag_p_ic_r_l(n_r_loc,l)=e_mag_p_ic_r_l(n_r_loc,l) + &
@@ -1215,16 +1215,16 @@ contains
             m  =lo_map%lm2m(lm)
 
             if ( l_mag ) then
-               e_mag_p_temp= dLh(radial_map%lm2(l,m)) * ( &
-                       & dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(b(lm,n_r_loc),m) + &
+               e_mag_p_temp= dLh(map_glbl_st%lm2(l,m)) * ( &
+                       & dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(b(lm,n_r_loc),m) + &
                        & cc2real(db(lm,n_r_loc),m) )
-               e_mag_t_temp=dLh(radial_map%lm2(l,m))*cc2real(aj(lm,n_r_loc),m)     
+               e_mag_t_temp=dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,n_r_loc),m)     
             end if
 
-            e_kin_p_temp= orho1(n_r_loc)*dLh(radial_map%lm2(l,m)) *  ( &
-                   &      dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
+            e_kin_p_temp= orho1(n_r_loc)*dLh(map_glbl_st%lm2(l,m)) *  ( &
+                   &      dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
                    &      cc2real(dw(lm,n_r_loc),m) )
-            e_kin_t_temp=orho1(n_r_loc)*dLh(radial_map%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
+            e_kin_t_temp=orho1(n_r_loc)*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
 
             !----- m-spectra:
             if ( l_mag ) then

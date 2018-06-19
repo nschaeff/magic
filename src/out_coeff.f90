@@ -11,12 +11,12 @@ module out_coeff
    use radial_functions, only: r, rho0
    use physical_parameters, only: ra, ek, pr, prmag, radratio, sigma_ratio
    use parallel_mod, only: rank, coord_r
-   use blocking, only: lm2
    use geometry, only: lm_max, l_max, minc, n_r_max, n_r_ic_max, minc
    use communications, only: gather_from_lo_to_rank0
    use LMLoop_data, only: llm, ulm
    use output_data, only: tag
    use constants, only: two, half
+   use LMmapping, only: map_glbl_st
 
    implicit none
 
@@ -125,7 +125,7 @@ contains
 
          !--- Axisymmetric part: (m=0) only real part stored
          do l=1,l_max_cmb
-            lm=lm2(l,0)
+            lm=map_glbl_st%lm2(l,0)
             n_out=n_out+1
             out(n_out)=real(work(lm))
          end do
@@ -133,7 +133,7 @@ contains
          !--- Non-axisymmetric part: store real and imag part
          do m=minc,l_max_cmb,minc
             do l=m,l_max_cmb
-               lm=lm2(l,m)
+               lm=map_glbl_st%lm2(l,m)
                n_out=n_out+1
                out(n_out)=real(work(lm))
                n_out=n_out+1
@@ -244,7 +244,7 @@ contains
          if ( nVBS == 3 ) then
             !--- Axisymmetric part of s: (m=0) only real part stored
             do l=0,l_max ! start with l=0
-               lm=lm2(l,0)
+               lm=map_glbl_st%lm2(l,0)
                if ( l <= l_max_r ) then
                   n_out=n_out+1
                   out(n_out)=real(work(lm))
@@ -253,7 +253,7 @@ contains
          else
             !--- Axisymmetric part of w: (m=0) only real part stored
             do l=1,l_max ! start with l=1
-               lm=lm2(l,0)
+               lm=map_glbl_st%lm2(l,0)
                if ( l <= l_max_r ) then
                   n_out=n_out+1
                   out(n_out)=real(work(lm))
@@ -264,7 +264,7 @@ contains
          !--- Non-axisymmetric part of w: store real and imag part
          do m=minc,l_max_r,minc
             do l=m,l_max
-               lm=lm2(l,m)
+               lm=map_glbl_st%lm2(l,m)
                if ( l <= l_max_r ) then
                   n_out=n_out+1
                   out(n_out)=real(work(lm))
@@ -283,7 +283,7 @@ contains
             !-- Now output for flow or magnetic field only:
             !--- Axisymmetric part of dw: (m=0) only real part stored
             do l=1,l_max
-               lm=lm2(l,0)
+               lm=map_glbl_st%lm2(l,0)
                if ( l <= l_max_r ) then
                   n_out=n_out+1
                   out(n_out)=real(work(lm))
@@ -292,7 +292,7 @@ contains
             !--- Non-axisymmetric part of dv: store real and imag part
             do m=minc,l_max_r,minc
                do l=m,l_max
-                  lm=lm2(l,m)
+                  lm=map_glbl_st%lm2(l,m)
                   if ( l <= l_max_r ) then
                      n_out=n_out+1
                      out(n_out)=real(work(lm))
@@ -308,7 +308,7 @@ contains
          if ( coord_r == 0 ) then
             !--- Axisymmetric part of z: (m=0) only real part stored
             do l=1,l_max
-               lm=lm2(l,0)
+               lm=map_glbl_st%lm2(l,0)
                if ( l <= l_max_r ) then
                   n_out=n_out+1
                   out(n_out)=real(work(lm))
@@ -317,7 +317,7 @@ contains
             !--- Non-axisymmetric part of z: store real and imag part
             do m=minc,l_max_r,minc
                do l=m,l_max
-                  lm=lm2(l,m)
+                  lm=map_glbl_st%lm2(l,m)
                   if ( l <= l_max_r ) then
                      n_out=n_out+1
                      out(n_out)=real(work(lm))
@@ -338,7 +338,7 @@ contains
          if ( coord_r == 0 ) then
             !--- Axisymmetric part of ddw: (m=0) only real part stored
             do l=1,l_max
-               lm=lm2(l,0)
+               lm=map_glbl_st%lm2(l,0)
                if ( l <= l_max_r ) then
                   n_out=n_out+1
                   out(n_out)=real(work(lm))
@@ -347,7 +347,7 @@ contains
             !--- Non-axisymmetric part of ddw: store real and imag part
             do m=minc,l_max_r,minc
                do l=m,l_max
-                  lm=lm2(l,m)
+                  lm=map_glbl_st%lm2(l,m)
                   if ( l <= l_max_r ) then
                      n_out=n_out+1
                      out(n_out)=real(work(lm))

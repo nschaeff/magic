@@ -33,7 +33,7 @@ module updateB_mod
    use radial_der_even, only: get_ddr_even
    use radial_der, only: get_dr, get_ddr
    use useful, only: abortRun
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
    
    implicit none
 
@@ -327,11 +327,11 @@ contains
          if ( l1 > 0 ) then
             if ( .not. lBmat(l1) ) then
 #ifdef WITH_PRECOND_BJ
-               call get_bMat(dt,l1,hdif_B(radial_map%lm2(l1,0)),           &
+               call get_bMat(dt,l1,hdif_B(map_glbl_st%lm2(l1,0)),           &
                     &        bMat(1,1,l1),bPivot(1,l1), bMat_fac(1,l1),&
                     &        jMat(1,1,l1),jPivot(1,l1), jMat_fac(1,l1))
 #else
-               call get_bMat(dt,l1,hdif_B(radial_map%lm2(l1,0)), &
+               call get_bMat(dt,l1,hdif_B(map_glbl_st%lm2(l1,0)), &
                     &        bMat(1,1,l1),bPivot(1,l1),      &
                     &        jMat(1,1,l1),jPivot(1,l1) )
 #endif
@@ -363,8 +363,8 @@ contains
                   !         Note: the CMB condition is not correct if we assume free slip
                   !         and a conducting mantle (conductance_ma>0).
                   if ( l_b_nl_cmb ) then ! finitely conducting mantle
-                     rhs1(1,lmB,threadid) =  b_nl_cmb(radial_map%lm2(l1,m1))
-                     rhs2(1,lmB,threadid) = aj_nl_cmb(radial_map%lm2(l1,m1))
+                     rhs1(1,lmB,threadid) =  b_nl_cmb(map_glbl_st%lm2(l1,m1))
+                     rhs2(1,lmB,threadid) = aj_nl_cmb(map_glbl_st%lm2(l1,m1))
                   else
                      rhs1(1,lmB,threadid) = 0.0_cp
                      rhs2(1,lmB,threadid) = 0.0_cp
@@ -500,9 +500,9 @@ contains
                         rhs2(nR,lmB,threadid)=0.0_cp
                      else
                         rhs1(nR,lmB,threadid)= ( w1*dbdt(lm1,nR)+w2*dbdtLast(lm1,nR) ) &
-                        &          + O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR)*b(lm1,nR)
+                        &          + O_dt*dLh(map_glbl_st%lm2(l1,m1))*or2(nR)*b(lm1,nR)
                         rhs2(nR,lmB,threadid)= ( w1*djdt(lm1,nR)+w2*djdtLast(lm1,nR) ) &
-                        &          + O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR)*aj(lm1,nR)
+                        &          + O_dt*dLh(map_glbl_st%lm2(l1,m1))*or2(nR)*aj(lm1,nR)
                      end if
                   end do
 
@@ -511,7 +511,7 @@ contains
                   if ( l_cond_ic ) then    ! inner core
                      rhs1(n_r_max+1,lmB,threadid)=0.0_cp
                      if ( l_b_nl_icb ) then
-                        rhs2(n_r_max+1,lmB,threadid)=aj_nl_icb(radial_map%lm2(l1,m1))
+                        rhs2(n_r_max+1,lmB,threadid)=aj_nl_icb(map_glbl_st%lm2(l1,m1))
                      else
                         rhs2(n_r_max+1,lmB,threadid)=0.0_cp
                      end if
@@ -522,17 +522,17 @@ contains
                            dbdt_ic=zero
                            djdt_ic=zero
                         else
-                           fac=-omega_ic*or2(n_r_max)*dPhi(radial_map%lm2(l1,m1))* &
-                           &    dLh(radial_map%lm2(l1,m1))
+                           fac=-omega_ic*or2(n_r_max)*dPhi(map_glbl_st%lm2(l1,m1))* &
+                           &    dLh(map_glbl_st%lm2(l1,m1))
                            dbdt_ic=fac*b_ic(lm1,nR)
                            djdt_ic=fac*aj_ic(lm1,nR)
                         end if
                         rhs1(n_r_max+nR,lmB,threadid)=                 &
                         &      ( w1*dbdt_ic + w2*dbdt_icLast(lm1,nR) ) &
-                        &      +O_dt*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * b_ic(lm1,nR)
+                        &      +O_dt*dLh(map_glbl_st%lm2(l1,m1))*or2(n_r_max) * b_ic(lm1,nR)
                         rhs2(n_r_max+nR,lmB,threadid)=                 &
                         &      ( w1*djdt_ic + w2*djdt_icLast(lm1,nR) ) &
-                        &      +O_dt*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * aj_ic(lm1,nR)
+                        &      +O_dt*dLh(map_glbl_st%lm2(l1,m1))*or2(n_r_max) * aj_ic(lm1,nR)
 
                         !--------- Store the IC non-linear terms for the usage below:
                         dbdt_icLast(lm1,nR)=dbdt_ic
@@ -717,14 +717,14 @@ contains
                   l1=lm2l(lm1)
                   m1=lm2m(lm1)
 
-                  b(lm1,nR)=(r(n_r_LCR)/r(nR))**D_l(radial_map%lm2(l1,m1))*b(lm1,n_r_LCR)
-                  db(lm1,nR)=-real(D_l(radial_map%lm2(l1,m1)),kind=cp)*     &
-                  &          (r(n_r_LCR))**D_l(radial_map%lm2(l1,m1))/      &
-                  &          (r(nR))**(D_l(radial_map%lm2(l1,m1))+1)*b(lm1,n_r_LCR)
-                  ddb(lm1,nR)=real(D_l(radial_map%lm2(l1,m1)),kind=cp)*         &
-                  &           (real(D_l(radial_map%lm2(l1,m1)),kind=cp)+1)      &
-                  &           *(r(n_r_LCR))**(D_l(radial_map%lm2(l1,m1)))/ &
-                  &           (r(nR))**(D_l(radial_map%lm2(l1,m1))+2)*b(lm1,n_r_LCR)
+                  b(lm1,nR)=(r(n_r_LCR)/r(nR))**D_l(map_glbl_st%lm2(l1,m1))*b(lm1,n_r_LCR)
+                  db(lm1,nR)=-real(D_l(map_glbl_st%lm2(l1,m1)),kind=cp)*     &
+                  &          (r(n_r_LCR))**D_l(map_glbl_st%lm2(l1,m1))/      &
+                  &          (r(nR))**(D_l(map_glbl_st%lm2(l1,m1))+1)*b(lm1,n_r_LCR)
+                  ddb(lm1,nR)=real(D_l(map_glbl_st%lm2(l1,m1)),kind=cp)*         &
+                  &           (real(D_l(map_glbl_st%lm2(l1,m1)),kind=cp)+1)      &
+                  &           *(r(n_r_LCR))**(D_l(map_glbl_st%lm2(l1,m1)))/ &
+                  &           (r(nR))**(D_l(map_glbl_st%lm2(l1,m1))+2)*b(lm1,n_r_LCR)
                   aj(lm1,nR)=zero
                   dj(lm1,nR)=zero
                   ddj(lm1,nR)=zero
@@ -746,18 +746,18 @@ contains
             l1=lm2l(lm1)
             m1=lm2m(lm1)
             dbdtLast(lm1,nR)= dbdt(lm1,nR) -                    &
-            &    coex*opm*lambda(nR)*hdif_B(radial_map%lm2(l1,m1))* &
-            &                  dLh(radial_map%lm2(l1,m1))*or2(nR) * &
-            &    ( ddb(lm1,nR) - dLh(radial_map%lm2(l1,m1))*or2(nR)*b(lm1,nR) )
+            &    coex*opm*lambda(nR)*hdif_B(map_glbl_st%lm2(l1,m1))* &
+            &                  dLh(map_glbl_st%lm2(l1,m1))*or2(nR) * &
+            &    ( ddb(lm1,nR) - dLh(map_glbl_st%lm2(l1,m1))*or2(nR)*b(lm1,nR) )
             djdtLast(lm1,nR)= djdt(lm1,nR) -                    &
-            &    coex*opm*lambda(nR)*hdif_B(radial_map%lm2(l1,m1))* &
-            &                  dLh(radial_map%lm2(l1,m1))*or2(nR) * &
+            &    coex*opm*lambda(nR)*hdif_B(map_glbl_st%lm2(l1,m1))* &
+            &                  dLh(map_glbl_st%lm2(l1,m1))*or2(nR) * &
             &    ( ddj(lm1,nR) + dLlambda(nR)*dj(lm1,nR) -      &
-            &      dLh(radial_map%lm2(l1,m1))*or2(nR)*aj(lm1,nR) )
+            &      dLh(map_glbl_st%lm2(l1,m1))*or2(nR)*aj(lm1,nR) )
             if ( lRmsNext ) then
-               dtP(lm1)=O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR) &
+               dtP(lm1)=O_dt*dLh(map_glbl_st%lm2(l1,m1))*or2(nR) &
                &             * (  b(lm1,nR)-work_LMloc(lm1,nR) )
-               dtT(lm1)=O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR) &
+               dtT(lm1)=O_dt*dLh(map_glbl_st%lm2(l1,m1))*or2(nR) &
                &             * ( aj(lm1,nR)-workB(lm1,nR) )
             end if
          end do
@@ -780,13 +780,13 @@ contains
                l1=lm2l(lm1)
                m1=lm2m(lm1)
                dbdt_icLast(lm1,nR)=dbdt_icLast(lm1,nR) -                &
-               &    coex*opm*O_sr*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * &
+               &    coex*opm*O_sr*dLh(map_glbl_st%lm2(l1,m1))*or2(n_r_max) * &
                &    (                        ddb_ic(lm1,nR) +           &
-               &    two*D_lP1(radial_map%lm2(l1,m1))*O_r_ic(nR)*db_ic(lm1,nR) )
+               &    two*D_lP1(map_glbl_st%lm2(l1,m1))*O_r_ic(nR)*db_ic(lm1,nR) )
                djdt_icLast(lm1,nR)=djdt_icLast(lm1,nR) -                &
-               &    coex*opm*O_sr*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * &
+               &    coex*opm*O_sr*dLh(map_glbl_st%lm2(l1,m1))*or2(n_r_max) * &
                &    (                        ddj_ic(lm1,nR) +           &
-               &    two*D_lP1(radial_map%lm2(l1,m1))*O_r_ic(nR)*dj_ic(lm1,nR) )
+               &    two*D_lP1(map_glbl_st%lm2(l1,m1))*O_r_ic(nR)*dj_ic(lm1,nR) )
             end do
          end do
          nR=n_r_ic_max
@@ -794,11 +794,11 @@ contains
             l1=lm2l(lm1)
             m1=lm2m(lm1)
             dbdt_icLast(lm1,nR)=dbdt_icLast(lm1,nR) -                &
-            &    coex*opm*O_sr*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * &
-            &    (one+two*D_lP1(radial_map%lm2(l1,m1)))*ddb_ic(lm1,nR)
+            &    coex*opm*O_sr*dLh(map_glbl_st%lm2(l1,m1))*or2(n_r_max) * &
+            &    (one+two*D_lP1(map_glbl_st%lm2(l1,m1)))*ddb_ic(lm1,nR)
             djdt_icLast(lm1,nR)=djdt_icLast(lm1,nR) -                &
-            &    coex*opm*O_sr*dLh(radial_map%lm2(l1,m1))*or2(n_r_max) * &
-            &    (one+two*D_lP1(radial_map%lm2(l1,m1)))*ddj_ic(lm1,nR)
+            &    coex*opm*O_sr*dLh(map_glbl_st%lm2(l1,m1))*or2(n_r_max) * &
+            &    (one+two*D_lP1(map_glbl_st%lm2(l1,m1)))*ddj_ic(lm1,nR)
          end do
          !PERFOFF
       end if

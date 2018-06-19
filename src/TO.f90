@@ -11,12 +11,13 @@ module torsional_oscillations
    use radial_functions, only: r, or1, or2, or3, or4, beta, orho1, &
        &                       dbeta
    use physical_parameters, only: CorFac, kbotv, ktopv
-   use blocking, only: nfs, lm2
+   use blocking, only: nfs
    use horizontal_data, only: sinTheta, cosTheta, hdif_V, dTheta1A, dTheta1S, & 
        &                      dLh
    use constants, only: one, two
    use logic, only: lVerbose, l_mag
    use legendre_grid_to_spec, only: legTFAS2
+   use LMMapping, only: map_glbl_st
 
    implicit none
 
@@ -358,7 +359,7 @@ contains
 
          dzddVpLMr_Rloc(1,nR)=0.0_cp
          do l=1,l_max
-            lm=lm2(l,0)
+            lm=map_glbl_st%lm2(l,0)
             dzddVpLMr_Rloc(l+1,nR)=zAS(l+1)
          end do
 
@@ -398,7 +399,7 @@ contains
             dzdVpLMr_Rloc(1,nR) =0.0_cp
             dzddVpLMr_Rloc(1,nR)=0.0_cp
             do l=1,l_max
-               lm=lm2(l,0)
+               lm=map_glbl_st%lm2(l,0)
                dzdVpLMr_Rloc(l+1,nR) = zAS(l+1)
                dzddVpLMr_Rloc(l+1,nR)= ( dzddVpLMr_Rloc(l+1,nR) - &
                &                  ((dtLast+dt)/dt)*zAS(l+1) )/dtLast
@@ -441,7 +442,7 @@ contains
       do l=1,l_max
          lS=(l-1)+1
          lA=(l+1)+1
-         lm=lm2(l,0)
+         lm=map_glbl_st%lm2(l,0)
          dzStrLMr_Rloc(l+1,nR)= hdif_V(lm) * (                 &
          &                                        ddzAS(l+1) - &
          &                               beta(nR)* dzAS(l+1) - &

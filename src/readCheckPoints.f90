@@ -13,7 +13,7 @@ module readCheckPoints
        &                 minc,lMagMem, n_r_icb, n_r_cmb
    use logic, only: l_rot_ma,l_rot_ic,l_SRIC,l_SRMA,l_cond_ic,l_heat,l_mag, &
        &            l_mag_LF, l_chemical_conv, l_AB1
-   use blocking, only: lo_map,lmStartB,lmStopB,nLMBs,lm2l,lm2m
+   use blocking, only: lo_map,lmStartB,lmStopB,nLMBs
    use init_fields, only: start_file,inform,tOmega_ic1,tOmega_ic2,             &
        &                  tOmega_ma1,tOmega_ma2,omega_ic1,omegaOsz_ic1,        &
        &                  omega_ic2,omegaOsz_ic2,omega_ma1,omegaOsz_ma1,       &
@@ -30,6 +30,7 @@ module readCheckPoints
    use cosine_transform_odd, only: costf_odd_t
    use useful, only: polynomial_interpolation, abortRun
    use constants, only: one
+   use LMmapping, only: map_glbl_st
 
 
    implicit none
@@ -1458,8 +1459,8 @@ contains
 
       if ( .not. l_axi_old ) then
          do lm=1,lm_max
-            l=lm2l(lm)
-            m=lm2m(lm)
+            l=map_glbl_st%lm2l(lm)
+            m=map_glbl_st%lm2m(lm)
             lm2lmo(lm)=-1 ! -1 means that there is no data in the startfile
             lmo=0
             do mo=0,l_max_old,minc_old
@@ -1474,8 +1475,8 @@ contains
          end do
       else
          do lm=1,lm_max
-            l=lm2l(lm)
-            m=lm2m(lm)
+            l=map_glbl_st%lm2l(lm)
+            m=map_glbl_st%lm2m(lm)
             lm2lmo(lm)=-1 ! -1 means that there is no data in the startfile
             lmo=0
             do lo=0,l_max_old

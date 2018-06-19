@@ -34,15 +34,6 @@ module blocking
    !integer, parameter :: nChunk=512
    !integer :: nThreadsMax
    ! nthreads > 1
-   integer, public, pointer :: lm2(:,:),lm2l(:),lm2m(:)
-   integer, public, pointer :: lm2mc(:),l2lmAS(:)
-   integer, public, pointer :: lm2lmS(:),lm2lmA(:)
- 
-   integer, public, pointer :: lmP2(:,:),lmP2l(:)
-   integer, public, pointer :: lmP2lmPS(:),lmP2lmPA(:)
- 
-   integer, public, pointer :: lm2lmP(:),lmP2lm(:)
- 
    
    type(mappings), public, target :: st_map
    type(mappings), public, target :: lo_map
@@ -226,21 +217,6 @@ contains
          end if
       end if
       
-      ! set the standard ordering as default
-      lm2(0:,0:) => st_map%lm2
-      lm2l(1:lm_max) => st_map%lm2l
-      lm2m(1:lm_max) => st_map%lm2m
-      lm2mc(1:lm_max)=> st_map%lm2mc
-      l2lmAS(0:l_max)=> st_map%l2lmAS
-      lm2lmS(1:lm_max) => st_map%lm2lmS
-      lm2lmA(1:lm_max) => st_map%lm2lmA     ! I don't get why lo_map also sets lm2lmA, since it is absolutely never used - Lago
-      lmP2(0:,0:) => st_map%lmP2
-      lmP2l(1:lmP_max) => st_map%lmP2l
-      lmP2lmPS(1:lmP_max) => st_map%lmP2lmPS
-      lmP2lmPA(1:lmP_max) => st_map%lmP2lmPA
-      lm2lmP(1:lm_max) => st_map%lm2lmP
-      lmP2lm(1:lmP_max) => st_map%lmP2lm
-
       call allocate_subblocks_mappings(st_sub_map,st_map,nLMBs,l_max,&
            &                           lmStartB,lmStopB,l_axi)
       call allocate_subblocks_mappings(lo_sub_map,lo_map,nLMBs,l_max,&
@@ -264,36 +240,10 @@ contains
 
       !-- Calculate blocking parameters for blocking loops over theta:
 
-#ifdef WITH_SHTNS
       sizeThetaB = n_theta_max
       nfs = sizeThetaB
       nThetaBs = 1
-#else
-      if (nThreads == 1) then
-#ifdef OLD_THETA_BLOCKING    
-         nfs=(sizeThetaBI/(n_phi_tot+nBSave)+1) * nBDown
-         sizeThetaB=min(n_theta_max,nfs)
-         nThetaBs  =n_theta_max/sizeThetaB
-         if ( nThetaBs*sizeThetaB /= n_theta_max ) then
-            write(*,*)
-            write(*,*) '! n_theta_max is not multiple of nfs!'
-            write(*,*) '! n_theta_max    =',n_theta_max
-            write(*,*) '! nfs            =',nfs
-            write(*,*) '! n_theta_max/nfs=',n_theta_max/nfs
-            write(*,*) '! Please decrease sizeThetaBI or nBDown in m_blocking.F90!'
-            call abortRun('Stop run in blocking')
-         end if
-#else
-         call get_theta_blocking_cache(n_theta_max,nrp,cacheblock_size_in_B, &
-                                       nThetaBs,sizeThetaB)
-         nfs=sizeThetaB
-#endif
-      else
-         call get_theta_blocking_OpenMP(n_theta_max,nThreads, nThetaBs,sizeThetaB)
-         nfs=sizeThetaB
-      end if
-
-#endif
+      
       ! sizeThetaB = n_theta_max
       ! nfs = sizeThetaB
       ! nThetaBs = 1

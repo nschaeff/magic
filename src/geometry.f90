@@ -69,7 +69,7 @@ module geometry
    integer :: lm_max      ! number of l/m combinations
    integer :: lmP_max     ! number of l/m combination if l runs to l_max+1
    integer :: lm_max_real ! number of l/m combination for real representation (cos/sin)
-   integer :: nrp,ncp     ! dimension of phi points in for real/complex arrays
+   integer :: nrp         ! dimension of phi points in for real arrays
    integer :: n_r_tot     ! total number of radial grid points
  
    !-- Now quantities for magnetic fields:
@@ -156,26 +156,41 @@ module geometry
    !          Set the extra dist_m(i,1:n_m_loc) to the points in rank i and the 
    !          remaining dist_m(i,n_m_loc+1:n_m_array) to a negative number. 
    !   
-   !-- Tricks to get number n_lm and n_lmP from other ranks:
-   !   This sould not be needed very often (so far, only happens in 
-   !   communication.f90) but in case it is, here is the trick. First of all, 
-   !   dist_m(irank,0) gives how many m points are stored in irank, whereas
-   !   dist_m(irank,1:dist_m(irank,0)) contains the m points themselves.
-   !   
-   !   In the current implementation, all l points are local, meaning that for 
-   !   each m, all m:l_max lm-points must be locally stored. For each m, we have
-   !   l_max+1-m lm-points stored. So, for any irank, we have
-   !   > n_lm = Σ(l_max+1 - m)
-   !   or
-   !   > n_lm = sum(l_max+1 - dist_m(irank,1:dist_m(irank,0)))
-   !   lm-points stored. 
-   !   
+   !        allocatable, protected :: dist_r(:,:) => same as dist_r from Grid Space
    integer, allocatable, protected :: dist_m(:,:)
+   integer, allocatable, protected :: dist_n_lm(:)
+   integer, allocatable, protected :: dist_n_lmP(:)
    integer, protected :: n_m_loc, n_lm_loc, n_lmP_loc
    integer, protected :: n_m_array
    
    !-- Distributed ML-Space
+   !   
+   !   The key variable here is dist_mlo. It contains the tuplets associated
+   !   with each rank.
+   !   
+   !   dist_mlo(irank,j,1) = value of m in the j-th tuplet in irank.
+   !   dist_mlo(irank,j,2) = value of l in the j-th tuplet in irank.
+   !   
+   !   Everything should be written such that the tuplets given in this array
+   !   are respected. The code should be agnostic to what order or what criteria
+   !   was chosen to build this variable. n_mlo_array gives the length of the 
+   !   second dimension of this array.
+   !   
+   !-- TODO: none of the code uses dist_mlo so far. This is the next step
+   !-- TODO: dist_mlo is created in distribute_mlo, but this is rather poorly
+   !   optimized. I'm afraid that a reasonable distribution would require a very
+   !   complex routine which deals with graphs and trees.
+   !
+   integer, allocatable, protected :: dist_mlo(:,:,:)
+   integer, allocatable, protected :: dist_n_mlo(:)
+   integer, protected :: n_mo_loc, n_lo_loc, n_mlo_loc
+   integer, protected :: n_mlo_array
    
+   private :: distribute_gs, distribute_lm, distribute_mlo, &
+              distribute_contiguous_first, distribute_contiguous_last, &
+              distribute_discontiguous_roundrobin, &
+              distribute_discontiguous_snake, &
+              print_contiguous_distribution, print_discontiguous_distribution
    
 contains
    
@@ -221,7 +236,6 @@ contains
 #else
       nrp=n_phi_max+2
 #endif
-      ncp=nrp/2
 
       ! total number of radial grid points
       n_r_tot=n_r_max+n_r_ic_max
@@ -263,8 +277,14 @@ contains
       call print_contiguous_distribution(dist_r, n_ranks_r, 'r')
       
       call distribute_lm
-      call print_discontiguous_distribution(dist_m, n_m_array, n_ranks_theta, 'm')
+      call print_discontiguous_distribution(dist_m, n_m_array, n_ranks_m, 'm')
       
+      call distribute_mlo
+      call print_mlo_distribution_summary
+      call print_mlo_distribution
+      
+      stop
+
    end subroutine initialize_distributed_geometry
    
    !----------------------------------------------------------------------------
@@ -282,6 +302,10 @@ contains
       
       !-- Finalize distributed lm
       deallocate(dist_m)
+      
+      !-- Finalize distributed mlo
+      deallocate(dist_mlo)
+      deallocate(dist_n_mlo)
       
    end subroutine finalize_geometry
    
@@ -347,6 +371,8 @@ contains
       
       n_m_array = ceiling(real(n_m_max) / real(n_ranks_m))
       allocate(dist_m(0:n_ranks_m-1, 0:n_m_array))
+      allocate(dist_n_lm(0:n_ranks_m-1))
+      allocate(dist_n_lmP(0:n_ranks_m-1))
       
       call distribute_discontiguous_snake(dist_m, n_m_array, n_m_max, n_ranks_m)
       
@@ -359,13 +385,16 @@ contains
       dist_m(:,0) = count(dist_m(:,1:) >= 0, 2)
       
       !-- Formula for the number of lm-points in each rank:
-      !   n_lm = Σ(l_max+1 - m)
+      !   n_lm = Σ(l_max+1 - m) = (l_max+1)*n_m - Σm
       !   for every m in the specified rank. Read the
       !   comment in "Distributed LM-Space" section at the beginning of this 
       !   module for more details on that
+      dist_n_lm = (l_max+1)*dist_m(:,0) - sum(dist_m(:,1:), dim=2, mask=dist_m(:,1:)>=0)
+      dist_n_lmP = dist_n_lm + dist_m(:,0)       
+      
       n_m_loc   = dist_m(coord_m,0)
-      n_lm_loc  = sum(l_max+1 - dist_m(coord_m,1:n_m_loc))
-      n_lmP_loc = sum(l_max+2 - dist_m(coord_m,1:n_m_loc))
+      n_lm_loc  = dist_n_lm(coord_m)
+      n_lmP_loc = dist_n_lmP(coord_m)
       
       n_lmMag_loc = 1
       n_lmChe_loc = 1
@@ -376,99 +405,185 @@ contains
       if (l_TP_form      ) n_lmTP_loc  = n_lm_loc
       if (l_double_curl  ) n_lmDC_loc  = n_lm_loc
       
-   end subroutine distribute_lm   
+   end subroutine distribute_lm
+   
+   !----------------------------------------------------------------------------
+   subroutine distribute_mlo
+      !   
+      !   Distributes the l's and the m's from the ML-space. Every r point is 
+      !   local.
+      !   
+      !   This function will keep the m's distribution untouched. Only the l's
+      !   will be shuffled around. In this framework, we will always have:
+      !   
+      !   coord_m [m in (l,m,r) coordinates] = coord_mo [m in (r,m,l) coordinates]
+      !   
+      !   1) Splits n_lm(coord_m=coord_mo) amongst n_rank_r = n_rank_lo ranks.
+      !   
+      !   Author: Rafael Lago, MPCDF, June 2018
+      !   
+      integer :: tmp(0:n_ranks_r-1,0:2)
+      integer :: icoord_mlo, icoord_mo, icoord_lo
+      integer :: m_idx, l_idx, mlo_idx
+      integer :: l, m
+      
+      allocate(dist_n_mlo(0:n_ranks-1))
+      dist_n_mlo = 0
+      
+      !-- Compute how many ml-pairs will be store in each rank
+      !
+      do icoord_mo=0,n_ranks_m-1
+         tmp = 0
+         call distribute_contiguous_last(tmp, dist_n_lm(icoord_mo), n_ranks_lo)
+         
+         !-- We have split all the n_lm poitns of coord_m=coord_mo into
+         !   n_rank_lo parts. Now we just need to copy this amount into each
+         !   coord_lo
+         do icoord_lo=0,n_ranks_lo-1
+            icoord_mlo = mlo2rank(icoord_mo, icoord_lo)
+            dist_n_mlo(icoord_mlo) = tmp(icoord_lo,2) - tmp(icoord_lo,1) + 1
+         end do
+      end do
+      
+      !-- Assign the (m,l) pairs to each rank, according to the count of 
+      !   ml-pairs in dist_n_mlo
+      n_mlo_array = maxval(dist_n_mlo)
+      allocate(dist_mlo(0:n_ranks-1, n_mlo_array, 2))
+      call distribute_mlo_mfirst(dist_mlo, dist_n_mlo)
+      
+  
+      !-- Count how many different l's this rank has
+      n_lo_loc = 0
+      do l=0,l_max
+         if (any(dist_mlo(coord_mlo,:,2)==l)) n_lo_loc = n_lo_loc + 1
+      end do
+      
+      !-- Count how many different m's this rank has
+      n_mo_loc = 0
+      do m=0,l_max
+         if (any(dist_mlo(coord_mlo,:,1)==m)) n_mo_loc = n_mo_loc + 1
+      end do
+      
+      !-- Count how many (m,l) pairs this rank has (in case it differs from 
+      !   the original estimation of the dist_n_mlo variable)
+      dist_n_mlo = count(dist_mlo(:,:,1)>=0, dim=2)
+      
+      if (sum(dist_n_mlo) /= lm_max) then
+         print *, "Something went wrong while distributing mlo. Aborting!"
+         print *, "sum(dist_n_mlo) = ", sum(dist_n_mlo), ", lm_max=", lm_max
+         stop
+      end if
+      
+   end subroutine distribute_mlo
+   
+   !----------------------------------------------------------------------------   
+   subroutine distribute_mlo_mfirst(mlo,n_mlo)
+      !
+      !   This loop will now distribute the (m,l) pairs amongst all the 
+      !   rank_mlo. It will make sure that each coord_mo will only keep the 
+      !   (m,l) pairs whose m is in coord_m. This is aimed at reducing 
+      !   communication. It will also follow the number of (m,l) points 
+      !   that we saved in n_mlo input variable.
+      !   
+      !   This subroutine will minimize the number of l's in each rank by 
+      !   looping over m first, and then over l while distributing the pairs.
+      !   
+      !   This distribution is far from being optimal and should work just as 
+      !   a placeholder.
+      !   
+      !   Author: Rafael Lago, MPCDF, June 2018
+      !
+      integer, intent(in)    :: n_mlo(0:n_ranks-1)
+      integer, intent(inout) :: mlo(0:n_ranks-1, n_mlo_array, 2)
+      integer :: icoord_mo, icoord_lo, icoord_mlo
+      integer :: l, m, m_idx, mlo_idx
+      integer :: taken(0:m_max, 0:l_max)
+      
+      
+      taken = -1
+      do m=0,l_max
+         taken(m,m:l_max) = (/m:l_max/)
+      end do
+      
+      mlo = -1
+      
+      do icoord_mo=0,n_ranks_mo-1
+         
+         l = 0
+         m_idx = 1
+         do icoord_lo=0,n_ranks_lo-1
+            icoord_mlo = mlo2rank(icoord_mo, icoord_lo)
+            
+            mlo_idx = 1
+            do while (mlo_idx<=n_mlo(icoord_mlo))
+               if (m_idx>dist_m(icoord_mo,0)) then
+                  m_idx = 1
+                  l = l + 1
+               end if
+               
+               m = dist_m(icoord_mo, m_idx)
+               
+               if (l<m) then
+                  m_idx = m_idx + 1
+                  cycle
+               end if
+               
+               mlo(icoord_mlo, mlo_idx, 1) = m
+               mlo(icoord_mlo, mlo_idx, 2) = l
+               mlo_idx = mlo_idx + 1
+               m_idx = m_idx + 1
+            end do
+            
+         end do
+      end do
+      
+   end subroutine distribute_mlo_mfirst
+   
+   !----------------------------------------------------------------------------   
+   subroutine distribute_mlo_lfirst(mlo,n_mlo)
+      !
+      !   This loop will now distribute the (m,l) pairs amongst all the 
+      !   rank_mlo. It will make sure that each coord_mo will only keep the 
+      !   (m,l) pairs whose m is in coord_m. This is aimed at reducing 
+      !   communication. It will also follow the number of (m,l) points 
+      !   that we saved in n_mlo input variable.
+      !   
+      !   This subroutine will minimize the number of m's in each rank by 
+      !   looping over l first, and then over m while distributing the pairs.
+      !   
+      !   This is probably not what you want. This subroutine is here mostly
+      !   for academic purposes and tests!
+      !
+      !   Author: Rafael Lago, MPCDF, June 2018
+      !
+      integer, intent(in)    :: n_mlo(0:n_ranks-1)
+      integer, intent(inout) :: mlo(0:n_ranks-1, n_mlo_array, 2)
+      integer :: icoord_mo, icoord_lo, icoord_mlo
+      integer :: l, m, m_idx, mlo_idx
+      
+      mlo = -1
+      do icoord_mo=0,n_ranks_mo-1
+         m_idx = 1
+         m = dist_m(icoord_mo, 1)
+         l = m-1
+         
+         do icoord_lo=0,n_ranks_lo-1
+            icoord_mlo = mlo2rank(icoord_mo, icoord_lo)
+            
+            do mlo_idx=1,n_mlo(icoord_mlo)
+               l = l + 1
+               if (l>l_max) then
+                  m_idx = m_idx + 1
+                  m = dist_m(icoord_mo, m_idx)
+                  l = m
+               end if
+               mlo(icoord_mlo, mlo_idx, 1) = m
+               mlo(icoord_mlo, mlo_idx, 2) = l
+            end do
+         end do
+      end do
+   end subroutine distribute_mlo_lfirst
 
-   !----------------------------------------------------------------------------   
-   subroutine distribute_round_robin(idx_dist, l_max, m_max, minc)
-      !
-      !   This will try to create a balanced workload, by assigning to each 
-      !   rank  non-consecutive m points. For instance, if we have m_max=16, minc=1 and 
-      !   n_ranks_theta=4, we will have:
-      !   
-      !   rank 0: 0, 4,  8, 12, 16
-      !   rank 1: 1, 5,  9, 13
-      !   rank 2: 2, 6, 10, 14
-      !   rank 3: 3, 7, 11, 15
-      !   
-      !   This is not optimal, but seem to be a decent compromise.
-      ! 
-      !   Author: Rafael Lago, MPCDF, December 2017
-      !
-      integer, intent(inout) :: idx_dist(0:n_ranks_theta-1, n_m_array, 4)
-      integer, intent(in)    :: l_max, m_max, minc
-      
-      integer :: m_idx, proc_idx, row_idx
-      
-      idx_dist        = -minc
-      idx_dist(:,:,2) =  0
-      idx_dist(:,1,3) =  1
-      
-      m_idx=0
-      row_idx = 1
-      do while (m_idx <= m_max)
-         do proc_idx=0, n_ranks_theta-1
-            idx_dist(proc_idx, row_idx, 1) = m_idx
-            idx_dist(proc_idx, row_idx, 2) = l_max - m_idx + 1
-            if (row_idx > 1) idx_dist(proc_idx, row_idx, 3) = &
-                             idx_dist(proc_idx, row_idx-1, 4) + 1
-            idx_dist(proc_idx, row_idx, 4) = idx_dist(proc_idx, row_idx, 3) &
-                                           + l_max - m_idx
-            
-            m_idx = m_idx + minc
-            if (m_idx > m_max) exit
-         end do
-         row_idx = row_idx + 1
-      end do
-     
-   end subroutine distribute_round_robin
-   
-   !----------------------------------------------------------------------------   
-   subroutine distribute_snake_old(idx_dist, l_max, m_max, minc)
-      !   
-      !   Same as above but for Snake Ordering
-      !   
-      !   Author: Rafael Lago, MPCDF, December 2017
-      !
-      integer, intent(inout) :: idx_dist(0:n_ranks_theta-1, n_m_array, 4)
-      integer, intent(in)    :: l_max, m_max, minc
-      
-      integer :: m_idx, proc_idx, row_idx
-      
-      idx_dist        = -minc
-      idx_dist(:,:,2) =  0
-      idx_dist(:,1,3) =  1
-      
-      m_idx=0
-      row_idx = 1
-      do while (m_idx <= m_max)
-         do proc_idx=0, n_ranks_theta-1
-            idx_dist(proc_idx, row_idx, 1) = m_idx
-            idx_dist(proc_idx, row_idx, 2) = l_max - m_idx + 1
-            if (row_idx > 1) idx_dist(proc_idx, row_idx, 3) = &
-                             idx_dist(proc_idx, row_idx-1, 4) + 1
-            idx_dist(proc_idx, row_idx, 4) = idx_dist(proc_idx, row_idx, 3) &
-                                           + l_max - m_idx
-            m_idx = m_idx + minc
-            if (m_idx > m_max) exit
-         end do
-         row_idx = row_idx + 1
-         do proc_idx=n_ranks_theta-1,0,-1
-            if (m_idx > m_max) exit
-            idx_dist(proc_idx, row_idx, 1) = m_idx
-            idx_dist(proc_idx, row_idx, 2) = l_max - m_idx + 1
-            if (row_idx > 1) idx_dist(proc_idx, row_idx, 3) = &
-                             idx_dist(proc_idx, row_idx-1, 4) + 1
-            idx_dist(proc_idx, row_idx, 4) = idx_dist(proc_idx, row_idx, 3) &
-                                           + l_max - m_idx
-            
-            m_idx = m_idx + minc
-         end do
-         row_idx = row_idx + 1
-      end do
-      
-     
-   end subroutine distribute_snake_old
-   
    !----------------------------------------------------------------------------
    subroutine check_geometry
       !
@@ -679,5 +794,75 @@ contains
          write (*, '(A,I0,A)') "  (",dist(i,0)," pts)"
       end do
    end subroutine print_discontiguous_distribution
+   
+   !----------------------------------------------------------------------------
+   subroutine print_mlo_distribution
+      !   
+      !   Because this is a very special kind of distribution, it has its own
+      !   print routine
+      !   
+      !   Author: Rafael Lago, MPCDF, June 2018
+      !
+      integer :: icoord_mlo, mlo_idx
+      integer :: l, m
+      logical :: lfirst
+      
+      if (rank/=0) return
+      
+      do icoord_mlo=0,n_ranks-1
+         write (*,'(A,I0,A)') ' !  Distribution rank_mlo ',icoord_mlo,' :'
 
+         do m=0,m_max
+            if (.not. any(dist_mlo(icoord_mlo,:,1)==m)) cycle
+            write (*,'(A,I0,A)', ADVANCE='NO') ' !                            m=',m,', l=['
+            lfirst = .true.
+            do mlo_idx=1,dist_n_mlo(icoord_mlo)
+               if (dist_mlo(icoord_mlo,mlo_idx,1)/=m) cycle
+               l = dist_mlo(icoord_mlo,mlo_idx,2)
+               if (lfirst) then
+                  write (*,'(I0)', ADVANCE='NO') l
+                  lfirst = .false.
+               else
+                  write (*,'(A,I0)', ADVANCE='NO') ',',l
+               end if
+            end do
+            write (*,'(A)', ADVANCE='NO') "]"//NEW_LINE("a")
+         end do
+      end do
+      
+   end subroutine print_mlo_distribution
+   
+   !----------------------------------------------------------------------------
+   subroutine print_mlo_distribution_summary
+      !   
+      !   Summarized version of print_mlo_distribution
+      !   
+      !   Author: Rafael Lago, MPCDF, June 2018
+      !
+      integer :: icoord_mlo, m_count, l_count
+      integer :: l, m
+      
+      if (rank/=0) return
+      
+      do icoord_mlo=0,n_ranks-1
+         if (icoord_mlo==0) write (*,'(A,I0,A)', ADVANCE='NO') ' !   # points in rank_mlo ',icoord_mlo,' :'
+         if (icoord_mlo/=0) write (*,'(A,I0,A)', ADVANCE='NO') ' !               rank_mlo ',icoord_mlo,' :'
+         
+         !-- Count how many different l's
+         l_count = 0
+         do l=0,l_max
+            if (any(dist_mlo(icoord_mlo,:,2)==l)) l_count = l_count + 1
+         end do
+         
+         !-- Count how many different m's
+         m_count = 0
+         do m=0,l_max
+            if (any(dist_mlo(icoord_mlo,:,1)==m)) m_count = m_count + 1
+         end do
+         
+         write (*,'(I0,A,I0,A,I0,A)') m_count, " m, ", l_count, " l (", dist_n_mlo(icoord_mlo), " total)"
+      end do
+      
+   end subroutine print_mlo_distribution_summary
+   
 end module geometry

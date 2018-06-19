@@ -22,7 +22,7 @@ module magnetic_energy
    use useful, only: cc2real,cc22real
    use plms_theta, only: plm_theta
    use communications, only: gather_from_lo_to_rank0
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
  
    implicit none
  
@@ -283,10 +283,10 @@ contains
             l=lo_map%lm2l(lm)
             m=lo_map%lm2m(lm)
 
-            e_p_temp= dLh(radial_map%lm2(l,m))*( dLh(radial_map%lm2(l,m))*    &
+            e_p_temp= dLh(map_glbl_st%lm2(l,m))*( dLh(map_glbl_st%lm2(l,m))*    &
             &                            or2(nR)*cc2real( b(lm,nR),m) &
             &                                  + cc2real(db(lm,nR),m) )
-            e_t_temp= dLh(radial_map%lm2(l,m)) * cc2real(aj(lm,nR),m)
+            e_t_temp= dLh(map_glbl_st%lm2(l,m)) * cc2real(aj(lm,nR),m)
 
             if ( m == 0 ) then  ! axisymmetric part 
                e_p_as_r(nR)=e_p_as_r(nR) + e_p_temp
@@ -562,11 +562,11 @@ contains
                m=lo_map%lm2m(lm)
                r_dr_b=r_ic(nR)*db_ic(lm,nR)
 
-               e_p_temp=     dLh(radial_map%lm2(l,m))*O_r_icb_E_2*r_ratio**(2*l) * (     &
+               e_p_temp=     dLh(map_glbl_st%lm2(l,m))*O_r_icb_E_2*r_ratio**(2*l) * (     &
                     &           real((l+1)*(2*l+1),cp)*cc2real(b_ic(lm,nR),m)     +  &
                     &           real(2*(l+1),cp)*cc22real(b_ic(lm,nR),r_dr_b,m)   +  &
                     &                                 cc2real(r_dr_b,m)            )
-               e_t_temp=  dLh(radial_map%lm2(l,m))*r_ratio**(2*l+2) *                  &
+               e_t_temp=  dLh(map_glbl_st%lm2(l,m))*r_ratio**(2*l+2) *                  &
                     &                             cc2real(aj_ic(lm,nR),m)
 
                if ( m == 0 ) then  ! axisymmetric part
@@ -910,7 +910,7 @@ contains
          lm1 = 1
          do m=0,l_max_comp,minc
             do l=m,l_max_comp
-               lm=radial_map%lm2(l,m)
+               lm=map_glbl_st%lm2(l,m)
                fac = (-one)**(m)*l*sqrt(two*l+one)*osq4pi
                if ( m > 0 ) fac = fac*sqrt(two)
                glm =  fac*real(bCMB(lm))

@@ -49,7 +49,7 @@ module init_fields
    use algebra, only: sgesl, sgefa, cgesl
    use legendre_grid_to_spec, only: legTF1
    use cosine_transform_odd
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
 
    implicit none
 
@@ -210,17 +210,17 @@ contains
             !        additional application of r**2/(l*(l+1)) then yields
             !        the axisymmetric toriodal flow contribution:
             do lm=2,lm_max
-               l   =radial_map%lm2l(lm)
-               m   =radial_map%lm2m(lm)
-               st_lmP=radial_map%lm2lmP(lm)
+               l   =map_glbl_st%lm2l(lm)
+               m   =map_glbl_st%lm2m(lm)
+               st_lmP=map_glbl_st%lm2lmP(lm)
                if ( l > m ) then
                   z_Rloc(lm,nR)=z_Rloc(lm,nR) + r(nR)**2/dLh(lm) * ( &
-                  &    dTheta1S(lm)*omeLM(radial_map%lmP2lmPS(st_lmP))   &
-                  &   -dTheta1A(lm)*omeLM(radial_map%lmP2lmPA(st_lmP)) )
+                  &    dTheta1S(lm)*omeLM(map_glbl_st%lmP2lmPS(st_lmP))   &
+                  &   -dTheta1A(lm)*omeLM(map_glbl_st%lmP2lmPA(st_lmP)) )
                else if ( l == m ) then
                   if ( dLh(lm) /= 0.0_cp ) then 
                      z_Rloc(lm,nR)=z_Rloc(lm,nR) - r(nR)**2/dLh(lm) *  &
-                     &    dTheta1A(lm)*omeLM(radial_map%lmP2lmPA(st_lmP))
+                     &    dTheta1A(lm)*omeLM(map_glbl_st%lmP2lmPA(st_lmP))
                   end if
                end if
             end do
@@ -280,18 +280,18 @@ contains
             !             additional application of r**2/(l*(l+1)) then yields
             !             the axisymmetric toriodal flow contribution:
             do lm=2,lm_max
-               l   =radial_map%lm2l(lm)
-               m   =radial_map%lm2m(lm)
-               st_lmP=radial_map%lm2lmP(radial_map%lm2(l,m))
+               l   =map_glbl_st%lm2l(lm)
+               m   =map_glbl_st%lm2m(lm)
+               st_lmP=map_glbl_st%lm2lmP(map_glbl_st%lm2(l,m))
                if ( l > m ) then
                   z_Rloc(lm,nR)=z_Rloc(lm,nR) + &
                   &    r(nR)**2/dLh(lm) * ( &
-                  &    dTheta1S(lm)*omeLM(radial_map%lmP2lmPS(st_lmP)) &
-                  &    - dTheta1A(lm)*omeLM(radial_map%lmP2lmPA(st_lmP)) )
+                  &    dTheta1S(lm)*omeLM(map_glbl_st%lmP2lmPS(st_lmP)) &
+                  &    - dTheta1A(lm)*omeLM(map_glbl_st%lmP2lmPA(st_lmP)) )
                else if ( l == m ) then
                   if ( dLh(lm) /= 0.0_cp ) then 
                       z_Rloc(lm,nR)=z_Rloc(lm,nR) - r(nR)**2/dLh(lm) * &
-                      &    dTheta1A(lm)*omeLM(radial_map%lmP2lmPA(st_lmP))
+                      &    dTheta1A(lm)*omeLM(map_glbl_st%lmP2lmPA(st_lmP))
                   end if
                end if
             end do
@@ -674,7 +674,7 @@ contains
       !--- sFac describes the linear dependence of the (l=0,m=0) mode
       !    on the amplitude peakS, SQRT(4*pi) is a normalisation factor
       !    according to the spherical harmonic function form chosen here.
-         sFac(nS)=real(sLM(radial_map%lm2(0,0)))*osq4pi
+         sFac(nS)=real(sLM(map_glbl_st%lm2(0,0)))*osq4pi
 
       end do ! Loop over peak
 
@@ -759,7 +759,7 @@ contains
       !    for example by setting: s_top= 0 0 -1 0
       do m=0,l_max,minc
          do l=m,l_max
-            lm=radial_map%lmP2(l,m)
+            lm=map_glbl_st%lmP2(l,m)
             if ( l <= l_max .and. l > 0 ) tops(l,m)=tops(l,m)+sLM(lm)
          end do
       end do
@@ -992,7 +992,7 @@ contains
       !--- xiFac describes the linear dependence of the (l=0,m=0) mode
       !    on the amplitude peakXi, sqrt(4*pi) is a normalisation factor
       !    according to the spherical harmonic function form chosen here.
-         xiFac(nXi)=real(xiLM(radial_map%lm2(0,0)))*osq4pi
+         xiFac(nXi)=real(xiLM(map_glbl_st%lm2(0,0)))*osq4pi
 
       end do ! Loop over peak
 
@@ -1076,7 +1076,7 @@ contains
       !    for example by setting: s_top= 0 0 -1 0
       do m=0,l_max,minc
          do l=m,l_max
-            lm=radial_map%lmP2(l,m)
+            lm=map_glbl_st%lmP2(l,m)
             if ( l <= l_max .and. l > 0 ) topxi(l,m)=topxi(l,m)+xiLM(lm)
          end do
       end do

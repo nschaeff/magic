@@ -18,7 +18,7 @@ module out_movie
        &                       r_surface, r_cmb, r, r_ic
    use physical_parameters, only: LFfac, radratio, ra, ek, pr, prmag
    use num_param, only: vScale, tScale
-   use blocking, only: nfs, lm2l, lm2
+   use blocking, only: nfs
    use horizontal_data, only: O_sin_theta_loc, sinTheta, cosTheta,        &
        &                      n_theta_cal2ord, O_sin_theta_E2, Plm,   &
        &                      dLh, dPlm, osn1, D_l, dPhi, phi, theta_ord
@@ -29,6 +29,7 @@ module out_movie
    use out_dtB_frame, only: write_dtB_frame
    use output_data, only: runid
    use useful, only: abortRun
+   use LMMapping, only: map_glbl_st
 
    implicit none
 
@@ -1578,8 +1579,8 @@ contains
       cs1(1)=zero
       cs2(1)=zero
       do lm=2,lm_max
-         cs1(lm) = bCMB(lm)*dLh(lm)*r_dep(lm2l(lm))
-         cs2(lm)= -bCMB(lm)*D_l(lm)*r_dep(lm2l(lm))
+         cs1(lm) = bCMB(lm)*dLh(lm)*r_dep(map_glbl_st%lm2l(lm))
+         cs2(lm)= -bCMB(lm)*D_l(lm)*r_dep(map_glbl_st%lm2l(lm))
       end do
         
 
@@ -1603,7 +1604,7 @@ contains
             b_p_s=zero
 
             do l=m,l_max
-               lm=lm2(l,m)
+               lm=map_glbl_st%lm2(l,m)
                sign=-sign
 
                b_r_1=         cs1(lm)*Plm(lm,n_theta_nhs)

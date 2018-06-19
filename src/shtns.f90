@@ -278,8 +278,8 @@ contains
       !-- Now do the Legendre transform using the new function in a loop
       do i = 1, n_m_loc
         m = dist_m(coord_m, i)
-        l_lm = dist_map%lmP2(m, m)
-        u_lm = dist_map%lmP2(l_max, m)
+        l_lm = map_dist_st%lmP2(m, m)
+        u_lm = map_dist_st%lmP2(l_max, m)
         call shtns_spat_to_sh_ml(m/minc,QlP_loc(:,i),Qn_lmP_loc(l_lm:u_lm),l_max+1)
       end do
       
@@ -325,8 +325,8 @@ contains
       !-- Now do the Legendre transform using the new function in a loop
       do i = 1, n_m_loc
         m = dist_m(coord_m, i)
-        l_lm  = dist_map%lmP2(m, m)
-        u_lm  = dist_map%lmP2(l_max, m)
+        l_lm  = map_dist_st%lmP2(m, m)
+        u_lm  = map_dist_st%lmP2(l_max, m)
         call shtns_spat_to_sphtor_ml(m/minc,SlP_loc(:,i), TlP_loc(:,i), &
                            Sn_lmP_loc(l_lm:u_lm),Tn_lmP_loc(l_lm:u_lm), l_max+1)
       end do
@@ -355,8 +355,8 @@ contains
       
       do i = 1, n_m_loc
         m = dist_m(coord_m, i)
-        l_lm = dist_map%lm2(m, m)
-        u_lm = dist_map%lm2(l_max, m)
+        l_lm = map_dist_st%lm2(m, m)
+        u_lm = map_dist_st%lm2(l_max, m)
         call shtns_sh_to_spat_ml(m/minc, Qn_lm_loc(l_lm:u_lm), Ql_loc(:,i), &
                                  l_max)
       end do
@@ -397,8 +397,8 @@ contains
       
       do i = 1, n_m_loc
         m = dist_m(coord_m, i)
-        l_lm  = dist_map%lm2(m, m)
-        u_lm  = dist_map%lm2(l_max, m)
+        l_lm  = map_dist_st%lm2(m, m)
+        u_lm  = map_dist_st%lm2(l_max, m)
         call shtns_sph_to_spat_ml(m/minc, Sn_lm_loc(l_lm:u_lm), &
                                          Sl_t(:,i), Sl_p(:,i), l_max)
       end do
@@ -446,8 +446,8 @@ contains
       
       do i = 1, n_m_loc
         m = dist_m(coord_m, i)
-        l_lm  = dist_map%lm2(m, m)
-        u_lm  = dist_map%lm2(l_max, m)
+        l_lm  = map_dist_st%lm2(m, m)
+        u_lm  = map_dist_st%lm2(l_max, m)
         call shtns_qst_to_spat_ml(m/minc, Qn_lm_loc(l_lm:u_lm), Sn_lm_loc(l_lm:u_lm), &
                                   Tn_lm_loc(l_lm:u_lm), Ql_loc(:,i), &
                                   Sl_loc(:,i), Tl_loc(:,i), l_max)
@@ -581,8 +581,8 @@ contains
       
       do i = 1, n_m_loc
         m = dist_m(coord_m, i)
-        l_lm = dist_map%lm2(m, m)
-        u_lm = dist_map%lm2(l_max, m)
+        l_lm = map_dist_st%lm2(m, m)
+        u_lm = map_dist_st%lm2(l_max, m)
         call shtns_sphtor_to_spat_ml(m/minc, Sn_lm_loc(l_lm:u_lm), Tn_lm_loc(l_lm:u_lm), &
                                      Sl_loc(:,i), Tl_loc(:,i), l_max)
       end do

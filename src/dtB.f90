@@ -26,7 +26,7 @@ module dtB_mod
    use legendre_grid_to_spec, only: legTF2, legTF3
    use constants, only: two
    use radial_der, only: get_dr
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
  
    implicit none
  
@@ -382,7 +382,7 @@ contains
       call legTF2(n_theta_start,BtVpSn2LM,BpVtSn2LM,BtVpSn2,BpVtSn2)
 #endif
       do l=0,l_max
-         lm=radial_map%l2lmAS(l)
+         lm=map_glbl_st%l2lmAS(l)
          BtVrLM(lm)   =cmplx(real(BtVrLM(lm)),   0.0_cp, kind=cp)
          BpVrLM(lm)   =cmplx(real(BpVrLM(lm)),   0.0_cp, kind=cp)
          BrVtLM(lm)   =cmplx(real(BrVtLM(lm)),   0.0_cp, kind=cp)
@@ -427,11 +427,11 @@ contains
       PstrLM_Rloc(1,nR)=0.0_cp
       PadvLM_Rloc(1,nR)=0.0_cp
       do lm=2,lm_max
-         l   =radial_map%lm2l(lm)
-         m   =radial_map%lm2m(lm)
-         lmP =radial_map%lm2lmP(lm)
-         lmPS=radial_map%lmP2lmPS(lmP)
-         lmPA=radial_map%lmP2lmPA(lmP)
+         l   =map_glbl_st%lm2l(lm)
+         m   =map_glbl_st%lm2m(lm)
+         lmP =map_glbl_st%lm2lmP(lm)
+         lmPS=map_glbl_st%lmP2lmPS(lmP)
+         lmPA=map_glbl_st%lmP2lmPA(lmP)
          if ( l > m ) then
             PstrLM_Rloc(lm,nR)=or2(nR)/dLh(lm) *   (                     &
             &    dTheta1S(lm)*BtVrLM(lmPS) - dTheta1A(lm)*BtVrLM(lmPA) + &
@@ -452,11 +452,11 @@ contains
       TstrLM_Rloc(1,nR) =0.0_cp
       TstrRLM_Rloc(1,nR)=0.0_cp
       do lm=2,lm_max
-         l   =radial_map%lm2l(lm)
-         m   =radial_map%lm2m(lm)
-         lmP =radial_map%lm2lmP(lm)
-         lmPS=radial_map%lmP2lmPS(lmP)
-         lmPA=radial_map%lmP2lmPA(lmP)
+         l   =map_glbl_st%lm2l(lm)
+         m   =map_glbl_st%lm2m(lm)
+         lmP =map_glbl_st%lm2lmP(lm)
+         lmPS=map_glbl_st%lmP2lmPS(lmP)
+         lmPA=map_glbl_st%lmP2lmPA(lmP)
          fac=or2(nR)/dLh(lm)
          if ( l > m ) then
             TstrLM_Rloc(lm,nR)=        -or2(nR)*BtVpLM(lmP)     - &
@@ -492,11 +492,11 @@ contains
       TadvLM_Rloc(1,nR) =0.0_cp
       TadvRLM_Rloc(1,nR)=0.0_cp
       do lm=2,lm_max
-         l   =radial_map%lm2l(lm)
-         m   =radial_map%lm2m(lm)
-         lmP =radial_map%lm2lmP(lm)
-         lmPS=radial_map%lmP2lmPS(lmP)
-         lmPA=radial_map%lmP2lmPA(lmP)
+         l   =map_glbl_st%lm2l(lm)
+         m   =map_glbl_st%lm2m(lm)
+         lmP =map_glbl_st%lm2lmP(lm)
+         lmPS=map_glbl_st%lmP2lmPS(lmP)
+         lmPA=map_glbl_st%lmP2lmPA(lmP)
          fac=or2(nR)/dLh(lm)
          if ( l > m ) then
             TadvLM_Rloc(lm,nR)=       -or2(nR)*BpVtLM(lmP)     - &
@@ -534,11 +534,11 @@ contains
       TomeLM_Rloc(1,nR) =0.0_cp
       TomeRLM_Rloc(1,nR)=0.0_cp
       do lm=2,lm_max
-         l  =radial_map%lm2l(lm)
-         m  =radial_map%lm2m(lm)
-         lmP=radial_map%lm2lmP(lm)
-         lmPS=radial_map%lmP2lmPS(lmP)
-         lmPA=radial_map%lmP2lmPA(lmP)
+         l  =map_glbl_st%lm2l(lm)
+         m  =map_glbl_st%lm2m(lm)
+         lmP=map_glbl_st%lm2lmP(lm)
+         lmPS=map_glbl_st%lmP2lmPS(lmP)
+         lmPA=map_glbl_st%lmP2lmPA(lmP)
          fac=or2(nR)/dLh(lm)
          if ( l > m ) then
             TomeLM_Rloc(lm,nR)=    -or2(nR)*BtVZLM(lmP)       - &
@@ -592,12 +592,12 @@ contains
             do lm=llm,ulm
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
-               PadvLMIC_LMloc(lm,nR)=-omega_ic*dPhi(radial_map%lm2(l,m))*b_ic(lm,nR)
-               TadvLMIC_LMloc(lm,nR)=-omega_ic*dPhi(radial_map%lm2(l,m))*aj_ic(lm,nR)
+               PadvLMIC_LMloc(lm,nR)=-omega_ic*dPhi(map_glbl_st%lm2(l,m))*b_ic(lm,nR)
+               TadvLMIC_LMloc(lm,nR)=-omega_ic*dPhi(map_glbl_st%lm2(l,m))*aj_ic(lm,nR)
                PdifLMIC_LMloc(lm,nR)=opm*O_sr * ( ddb_ic(lm,nR) + &
-               &    two*D_lP1(radial_map%lm2(l,m))*O_r_ic(nR)*db_ic(lm,nR) )
+               &    two*D_lP1(map_glbl_st%lm2(l,m))*O_r_ic(nR)*db_ic(lm,nR) )
                TdifLMIC_LMloc(lm,nR)=opm*O_sr * ( ddj_ic(lm,nR) + &
-               &    two*D_lP1(radial_map%lm2(l,m))*O_r_ic(nR)*dj_ic(lm,nR) )
+               &    two*D_lP1(map_glbl_st%lm2(l,m))*O_r_ic(nR)*dj_ic(lm,nR) )
             end do
          end do
       end if
@@ -606,11 +606,11 @@ contains
          do lm=llm,ulm
             l=lo_map%lm2l(lm)
             m=lo_map%lm2m(lm)
-            PdifLM_LMloc(lm,nR)= opm*lambda(nR)*hdif_B(radial_map%lm2(l,m)) * &
-            &    (ddb(lm,nR)-dLh(radial_map%lm2(l,m))*or2(nR)*b(lm,nR))
-            TdifLM_LMloc(lm,nR)= opm*lambda(nR)*hdif_B(radial_map%lm2(l,m)) * &
+            PdifLM_LMloc(lm,nR)= opm*lambda(nR)*hdif_B(map_glbl_st%lm2(l,m)) * &
+            &    (ddb(lm,nR)-dLh(map_glbl_st%lm2(l,m))*or2(nR)*b(lm,nR))
+            TdifLM_LMloc(lm,nR)= opm*lambda(nR)*hdif_B(map_glbl_st%lm2(l,m)) * &
             &    ( ddj(lm,nR) + dLlambda(nR)*dj(lm,nR) - &
-            &    dLh(radial_map%lm2(l,m))*or2(nR)*aj(lm,nR) )
+            &    dLh(map_glbl_st%lm2(l,m))*or2(nR)*aj(lm,nR) )
          end do
       end do
          

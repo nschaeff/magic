@@ -34,9 +34,9 @@ module parallel_mod
    !   - comm_r: same as above
    !   - comm_m: copy of comm_theta
    ! 
-   ! - comm_ml: cartesian grid for (r, m, l) used in the MLloop
-   !   - comm_ml_m: only the m direction of comm_ml_space
-   !   - comm_ml_l: only the l direction of comm_ml_space
+   ! - comm_mlo: cartesian grid for (r, m, l) used in the MLloop
+   !   - comm_mo: only the m direction of comm_mlo_space
+   !   - comm_lo: only the l direction of comm_mlo_space
    ! 
    ! The duplications kinda make the code more readable, however.
    ! 
@@ -57,8 +57,8 @@ module parallel_mod
    integer :: n_ranks_r, n_ranks_theta
    integer ::   coord_r,   coord_theta
    integer, allocatable :: gs2rank(:,:), &
-                                      rank2theta(:), &
-                                      rank2r(:)
+                           rank2theta(:), &
+                           rank2r(:)
    
    !   LM-Space (radial Loop)
    !   Those will be just copies of variables above for theta
@@ -67,19 +67,20 @@ module parallel_mod
    integer :: n_ranks_m
    integer ::   coord_m
    integer, allocatable :: lm2rank(:,:), &
-                                      rank2m(:)
+                           rank2m(:)
    
    !   ML-Space (ML Loop)
-   integer ::    comm_ml
-   integer ::    comm_ml_l,    comm_ml_m
-   integer :: n_ranks_ml_l, n_ranks_ml_m
-   integer ::   coord_ml_l,   coord_ml_m
-   integer, allocatable :: ml2rank(:,:), &
-                                      rank2ml_m(:), &
-                                      rank2ml_l(:)
+   integer ::   comm_mlo
+   integer ::    comm_lo,    comm_mo
+   integer :: n_ranks_lo, n_ranks_mo
+   integer ::   coord_lo,   coord_mo, coord_mlo
+   integer, allocatable :: mlo2rank(:,:), &
+                           rank2mo(:), &
+                           rank2lo(:)
+   
+   !   Others (Cosmetic)
    
    !   Others (might be deprecated)
-   integer :: nR_per_rank,nR_on_last_rank
    integer :: nThreads
    integer :: nLMBs_per_rank
    integer :: rank_with_l1m0
@@ -117,8 +118,8 @@ contains
       if (rank == 0) then
          write(*,*) '! MPI Domain Decomposition Info: '
          write(*,'(A,I0,A,I0)') ' ! Grid Space (θ,r): ', n_ranks_theta, "x", n_ranks_r
-         write(*,'(A,I0,A,I0)') ' !   LM Space (m,r): ', n_ranks_m, "x", n_ranks_r
-         write(*,'(A,I0,A,I0)') ' !   ML Space (l,m): ', n_ranks_ml_l, "x", n_ranks_ml_m
+         write(*,'(A,I0,A,I0)') ' !   LM Space (m,r): ', n_ranks_m,  "x", n_ranks_r
+         write(*,'(A,I0,A,I0)') ' !   ML Space (l,m): ', n_ranks_lo, "x", n_ranks_mo
          write(*,'(A,I0)')      ' !      Total Ranks: ', n_ranks
       end if
       call check_decomposition
@@ -162,6 +163,7 @@ contains
       end do
       
       !-- LM Space (radial Loop)
+      !   
       !   This is just a copy
       !   
       !   PS: is it a problem that I'm using a periodic communicator for 
@@ -179,37 +181,23 @@ contains
       
       !-- ML Space (ML Loop)
       !   
-      dims    = (/n_ranks_ml_m, n_ranks_ml_l/)
-      periods = (/.false., .false./)
-            
-      call MPI_Cart_Create(MPI_COMM_WORLD, 2, dims, periods, .true., comm_ml, ierr)
-      call check_MPI_error(ierr)
+      !   
+      n_ranks_mo  = n_ranks_m
+      n_ranks_lo  = n_ranks_r
+      coord_mo    = coord_m
+      coord_lo    = coord_r
+      coord_mlo   = rank
       
-      call MPI_Comm_Rank(comm_ml, irank, ierr) 
-      call check_MPI_error(ierr)
+      comm_mlo = MPI_COMM_WORLD
       
-      call MPI_Cart_Coords(comm_ml, irank, 2, coords, ierr)
-      call check_MPI_error(ierr)
+      allocate(rank2mo(0:n_ranks-1))
+      allocate(rank2lo(0:n_ranks-1))
+      allocate(mlo2rank(0:n_ranks_mo-1,0:n_ranks_lo-1))
       
-      call MPI_Comm_Split(comm_ml, coords(2), irank, comm_ml_m, ierr)
-      call check_MPI_error(ierr)
-      call MPI_Comm_Rank(comm_ml_m, coord_ml_m, ierr) 
-      call check_MPI_error(ierr)
+      rank2lo  = rank2r
+      rank2mo  = rank2m
+      mlo2rank = gs2rank
       
-      call MPI_Comm_Split(comm_ml, coords(1), irank, comm_ml_l, ierr)
-      call MPI_Comm_Rank(comm_ml_l, coord_ml_l, ierr) 
-      call check_MPI_error(ierr)
-      
-      allocate(rank2ml_m(0:n_ranks-1))
-      allocate(rank2ml_l(0:n_ranks-1))
-      allocate(ml2rank(0:n_ranks_ml_l-1,0:n_ranks_ml_m-1))
-      
-      do i=0,n_ranks-1
-         call mpi_cart_coords(comm_ml, i, 2, coords, ierr)
-         rank2ml_l(i) = coords(2)
-         rank2ml_m(i) = coords(1)
-         ml2rank(coords(2),coords(1)) = i
-      end do
       
    end subroutine initialize_mpi_decomposition
    
@@ -231,17 +219,17 @@ contains
    !------------------------------------------------------------------------------
    subroutine finalize_mpi_decomposition
 
-      call MPI_Comm_Free(comm_gs,   ierr) 
-      call MPI_Comm_Free(comm_r, ierr) 
+      call MPI_Comm_Free(comm_gs,    ierr) 
+      call MPI_Comm_Free(comm_r,     ierr) 
       call MPI_Comm_Free(comm_theta, ierr) 
       
-      call MPI_Comm_Free(comm_ml,   ierr)
-      call MPI_Comm_Free(comm_ml_m, ierr)
-      call MPI_Comm_Free(comm_ml_l, ierr)
+!       call MPI_Comm_Free(comm_mlo, ierr)
+!       call MPI_Comm_Free(comm_mo,  ierr)
+!       call MPI_Comm_Free(comm_lo,  ierr)
       
       deallocate(rank2theta, rank2r, gs2rank)
       deallocate(rank2m, lm2rank)
-      deallocate(rank2ml_m, rank2ml_l, ml2rank)
+      deallocate(rank2mo, rank2lo, mlo2rank)
    end subroutine finalize_mpi_decomposition
 
    !------------------------------------------------------------------------------
@@ -271,8 +259,8 @@ contains
       
       n_ranks_m = n_ranks_theta
          
-      n_ranks_ml_m = n_ranks_r
-      n_ranks_ml_l = n_ranks_theta
+      n_ranks_mo = n_ranks_r
+      n_ranks_lo = n_ranks_theta
       
    end subroutine optimize_decomposition_simple
    
@@ -289,9 +277,9 @@ contains
                  '* n_ranks_m equals the number of available processes!'
         stop
       end if
-      if (n_ranks_ml_l * n_ranks_ml_m .NE. n_ranks) then
-        print *, '! Invalid parallelization partition! Make sure that n_ranks_ml_l'//&
-                 '* n_ranks_ml_m equals the number of available processes!'
+      if (n_ranks_lo * n_ranks_mo .NE. n_ranks) then
+        print *, '! Invalid parallelization partition! Make sure that n_ranks_lo'//&
+                 '* n_ranks_mo equals the number of available processes!'
         stop
       end if
 

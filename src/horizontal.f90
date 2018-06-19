@@ -2,6 +2,10 @@ module horizontal_data
    !
    !  Module containing functions depending on longitude 
    !  and latitude plus help arrays depending on degree and order
+   !  
+   !-- TODO: several variables from here have already been parallelized. 
+   !   However, they are still computed for the full space and then trimmed
+   !   afterwards. This must be changed but is not a priority now.
    !
 
    use geometry, only: l_max, lmP_max, n_theta_max, n_phi_max, &
@@ -10,7 +14,6 @@ module horizontal_data
    use radial_functions, only: r_cmb
    use physical_parameters, only: ek
    use num_param, only: difeta, difnu, difkap, ldif, ldifexp, difchem
-   use blocking, only: lmP2l, lmP2lm, lm2l, lm2m
    use logic, only: l_non_rot, l_RMS
    use plms_theta, only: plm_theta
    use fft
@@ -18,6 +21,7 @@ module horizontal_data
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use parallel_mod
+   use LMMapping, only: map_glbl_st
  
    implicit none
 
@@ -218,9 +222,9 @@ contains
          call plm_theta(colat,l_max+1,m_max,minc, &
                         plma,dtheta_plma,lmP_max,norm)
          do lmP=1,lmP_max
-            l=lmP2l(lmP)
+            l=map_glbl_st%lmP2l(lmP)
             if ( l <= l_max ) then
-               lm=lmP2lm(lmP)
+               lm=map_glbl_st%lmP2lm(lmP)
                Plm(lm,n_theta_loc) =plma(lmP)
                dPlm(lm,n_theta_loc)=dtheta_plma(lmP)
             end if
@@ -278,8 +282,8 @@ contains
       end do
 
       do lm=1,lm_max
-         l=lm2l(lm)
-         m=lm2m(lm)
+         l=map_glbl_st%lm2l(lm)
+         m=map_glbl_st%lm2m(lm)
 
          !-- Help arrays:
          D_l(lm)  =real(l,cp)

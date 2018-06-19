@@ -54,8 +54,8 @@ contains
       integer :: runHours,runMinutes,runSeconds
       
       namelist/parallel/n_ranks_r,n_ranks_theta,  &
-         & n_ranks_r, n_ranks_m, n_ranks_ml_l,        &
-         & n_ranks_ml_m
+         & n_ranks_r, n_ranks_m, n_ranks_lo,      &
+         & n_ranks_mo
       
       namelist/grid/n_r_max,n_cheb_max,n_phi_tot,n_theta_axi, &
          &  n_r_ic_max,n_cheb_ic_max,minc,nalias,l_axi,       &
@@ -1139,8 +1139,8 @@ contains
       n_ranks_r     = 0
       n_ranks_theta = 0
       n_ranks_m     = 0
-      n_ranks_ml_l  = 0
-      n_ranks_ml_m  = 0
+      n_ranks_lo    = 0
+      n_ranks_mo    = 0
       
       !----- Namelist grid
       ! must be of form 4*integer+1

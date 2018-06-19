@@ -7,7 +7,6 @@ module leg_helper_mod
    use radial_functions, only: or2
    use torsional_oscillations, only: ddzASL
    use special, only: lGrenoble, b0, db0, ddb0
-   use blocking, only: lm2l, lm2m, lm2
    use horizontal_data, only: dLh_loc
    use logic, only: l_conv, l_mag_kin, l_heat, l_mag, l_movie_oc,    &
        &            l_mag_LF, l_fluxProfs, l_chemical_conv
@@ -16,7 +15,7 @@ module leg_helper_mod
        &             w_Rdist,dw_Rdist,ddw_Rdist, omega_ic,omega_ma,     &
        &             xi_Rdist
    use constants, only: zero, one, two
-   use LMmapping, only: dist_map
+   use LMmapping, only: map_dist_st
 
    implicit none
 
@@ -135,9 +134,9 @@ contains
       integer :: lm,l,m, lm_zero, lm_grenoble
       complex(cp) :: dbd
       
-      lm_zero = dist_map%lm2(0,0)
+      lm_zero = map_dist_st%lm2(0,0)
       lm_grenoble = 0
-      if (lGrenoble) lm_grenoble = dist_map%lm2(1,0)
+      if (lGrenoble) lm_grenoble = map_dist_st%lm2(1,0)
 
       if ( nR == n_r_icb ) this%omegaIC=omega_ic
       if ( nR == n_r_cmb ) this%omegaMA=omega_ma
@@ -160,8 +159,8 @@ contains
             !>      contains coord_theta=0. I need to check if this needs to be broadcast
             !>      or if just coord_theta=0 needs this information.
             do lm=1,n_lm_loc
-               l=dist_map%lm2l(lm)
-               m=dist_map%lm2m(lm)
+               l=map_dist_st%lm2l(lm)
+               m=map_dist_st%lm2m(lm)
                if ( l <= l_max .and. m == 0 ) then
                   this%zAS(l+1)  =real(z_Rdist(lm,nR))   ! used in TO
                   this%dzAS(l+1) =real(dz_Rdist(lm,nR))  ! used in TO (anelastic)

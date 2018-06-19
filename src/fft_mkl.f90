@@ -5,7 +5,7 @@ module fft
 
    use precision_mod
    use constants, only: one
-   use geometry, only: nrp, ncp, n_phi_max, n_theta_max, m_max, n_theta_loc
+   use geometry, only: nrp, n_phi_max, n_theta_max, m_max, n_theta_loc
    use blocking, only: nfs
    use mkl_dfti
  

@@ -11,11 +11,11 @@ module communications
                            comm_m, n_ranks_theta
    use LMLoop_data, only: llm, ulm
    use geometry 
-   use blocking, only: lo_map, lmStartB, lmStopB, lm2, lmP2
+   use blocking, only: lo_map, lmStartB, lmStopB
    use logic, only: l_mag, l_conv, l_heat, l_chemical_conv, &
        &            l_mag_kin, l_TP_form, l_double_curl
    use useful, only: abortRun
-   use LMmapping, only: dist_map, radial_map
+   use LMmapping, only: map_dist_st, map_glbl_st
  
    implicit none
  
@@ -572,14 +572,14 @@ contains
             do nR=1,self%dim2
                do l=0,l_max
                   do m=0,l,minc
-                     arr_full(radial_map%lm2(l,m),nR) = temp_lo(lo_map%lm2(l,m),nR)
+                     arr_full(map_glbl_st%lm2(l,m),nR) = temp_lo(lo_map%lm2(l,m),nR)
                   end do
                end do
             end do
          else
             do nR=1,self%dim2
                do l=0,l_max
-                  arr_full(radial_map%lm2(l,0),nR) = temp_lo(lo_map%lm2(l,0),nR)
+                  arr_full(map_glbl_st%lm2(l,0),nR) = temp_lo(lo_map%lm2(l,0),nR)
                end do
             end do
          end if
@@ -590,14 +590,14 @@ contains
          do nR=1,self%dim2
             do l=0,l_max
                do m=0,l,minc
-                  arr_full(radial_map%lm2(l,m),nR) = arr_lo(lo_map%lm2(l,m),nR)
+                  arr_full(map_glbl_st%lm2(l,m),nR) = arr_lo(lo_map%lm2(l,m),nR)
                end do
             end do
          end do
       else
          do nR=1,self%dim2
             do l=0,l_max
-               arr_full(radial_map%lm2(l,0),nR) = arr_lo(lo_map%lm2(l,0),nR)
+               arr_full(map_glbl_st%lm2(l,0),nR) = arr_lo(lo_map%lm2(l,0),nR)
             end do
          end do
       end if
@@ -679,12 +679,12 @@ contains
          if ( .not. l_axi ) then
             do l=0,l_max
                do m=0,l,minc
-                  arr_full(radial_map%lm2(l,m)) = temp_gather_lo(lo_map%lm2(l,m))
+                  arr_full(map_glbl_st%lm2(l,m)) = temp_gather_lo(lo_map%lm2(l,m))
                end do
             end do
          else
             do l=0,l_max
-               arr_full(radial_map%lm2(l,0)) = temp_gather_lo(lo_map%lm2(l,0))
+               arr_full(map_glbl_st%lm2(l,0)) = temp_gather_lo(lo_map%lm2(l,0))
             end do
          end if
       end if
@@ -692,12 +692,12 @@ contains
       if ( .not. l_axi ) then
          do l=0,l_max
             do m=0,l,minc
-               arr_full(radial_map%lm2(l,m)) = arr_lo(lo_map%lm2(l,m))
+               arr_full(map_glbl_st%lm2(l,m)) = arr_lo(lo_map%lm2(l,m))
             end do
          end do
       else
          do l=0,l_max
-            arr_full(radial_map%lm2(l,0)) = arr_lo(lo_map%lm2(l,0))
+            arr_full(map_glbl_st%lm2(l,0)) = arr_lo(lo_map%lm2(l,0))
          end do
       end if
 #endif
@@ -725,12 +725,12 @@ contains
          if ( .not. l_axi ) then
             do l=0,l_max
                do m=0,l,minc
-                  temp_gather_lo(lo_map%lm2(l,m)) = arr_full(radial_map%lm2(l,m))
+                  temp_gather_lo(lo_map%lm2(l,m)) = arr_full(map_glbl_st%lm2(l,m))
                end do
             end do
          else
             do l=0,l_max
-               temp_gather_lo(lo_map%lm2(l,0)) = arr_full(radial_map%lm2(l,0))
+               temp_gather_lo(lo_map%lm2(l,0)) = arr_full(map_glbl_st%lm2(l,0))
             end do
          end if
       end if
@@ -742,12 +742,12 @@ contains
       if ( .not. l_axi ) then
          do l=0,l_max
             do m=0,l,minc
-               arr_lo(lo_map%lm2(l,m)) = arr_full(radial_map%lm2(l,m))
+               arr_lo(lo_map%lm2(l,m)) = arr_full(map_glbl_st%lm2(l,m))
             end do
          end do
       else
          do l=0,l_max
-            arr_lo(lo_map%lm2(l,0)) = arr_full(radial_map%lm2(l,0))
+            arr_lo(lo_map%lm2(l,0)) = arr_full(map_glbl_st%lm2(l,0))
          end do
       end if
 #endif
@@ -1033,7 +1033,7 @@ contains
             do nR=l_r,u_r
                do l=0,l_max
                   do m=0,l,minc
-                     self%arr_Rloc(radial_map%lm2(l,m),nR,i) = &
+                     self%arr_Rloc(map_glbl_st%lm2(l,m),nR,i) = &
                             self%temp_Rloc(lo_map%lm2(l,m),nR,i)
                   end do
                end do
@@ -1043,7 +1043,7 @@ contains
          do i=1,self%count
             do nR=l_r,u_r
                do l=0,l_max
-                  self%arr_Rloc(radial_map%lm2(l,0),nR,i) = &
+                  self%arr_Rloc(map_glbl_st%lm2(l,0),nR,i) = &
                          self%temp_Rloc(lo_map%lm2(l,0),nR,i)
                end do
             end do
@@ -1068,8 +1068,8 @@ contains
          do i=1,self%count
             do nR=l_r,u_r
                do lm=1,n_lm_loc
-                  l = dist_map%lm2l(lm)
-                  m = dist_map%lm2m(lm)
+                  l = map_dist_st%lm2l(lm)
+                  m = map_dist_st%lm2m(lm)
                   self%arr_Rloc(lm,nR,i) = self%temp_Rloc(lo_map%lm2(l,m),nR,i)
                end do
             end do
@@ -1077,9 +1077,9 @@ contains
       else
          do i=1,self%count
             do nR=l_r,u_r
-               if (dist_map%lm2(0,0) > 0) then
+               if (map_dist_st%lm2(0,0) > 0) then
                   do l=0,l_max
-                     self%arr_Rloc(dist_map%lm2(l,0),nR,i) = &
+                     self%arr_Rloc(map_dist_st%lm2(l,0),nR,i) = &
                            self%temp_Rloc(lo_map%lm2(l,0),nR,i)
                   end do
                end if
@@ -1238,7 +1238,7 @@ contains
                do l=0,l_max
                   do m=0,l,minc
                      self%temp_Rloc(lo_map%lm2(l,m),nR,i) = & 
-                                      arr_Rloc(radial_map%lm2(l,m),nR,i)
+                                      arr_Rloc(map_glbl_st%lm2(l,m),nR,i)
                   end do
                end do
             end do
@@ -1248,7 +1248,7 @@ contains
             do nR=l_r,u_r
                do l=0,l_max
                   self%temp_Rloc(lo_map%lm2(l,0),nR,i) = & 
-                                   arr_Rloc(radial_map%lm2(l,0),nR,i)
+                                   arr_Rloc(map_glbl_st%lm2(l,0),nR,i)
                end do
             end do
          end do
@@ -1285,7 +1285,7 @@ contains
                self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
                do l=0,l_max
                   do m=0,l,minc
-                     self%temp_Rloc(lo_map%lm2(l,m),nR,i) = tmp_glb(radial_map%lm2(l,m))
+                     self%temp_Rloc(lo_map%lm2(l,m),nR,i) = tmp_glb(map_glbl_st%lm2(l,m))
                   end do
                end do
             end do
@@ -1297,7 +1297,7 @@ contains
                call gather_Flm(arr_dist(1:n_lm_loc,nR,i), tmp_glb(1:lm_max))
                self%temp_Rloc(1:lm_max,nR,i) = tmp_glb(1:lm_max)
                do l=0,l_max
-                  self%temp_Rloc(lo_map%lm2(l,0),nR,i) = tmp_glb(radial_map%lm2(l,0))
+                  self%temp_Rloc(lo_map%lm2(l,0),nR,i) = tmp_glb(map_glbl_st%lm2(l,0))
                end do
             end do
          end do
@@ -1334,14 +1334,14 @@ contains
          do nR=1,n_r_max
             do l=0,l_max
                do m=0,l,minc
-                  arr_lo(lo_map%lm2(l,m),nR) = arr_LMloc(radial_map%lm2(l,m),nR)
+                  arr_lo(lo_map%lm2(l,m),nR) = arr_LMloc(map_glbl_st%lm2(l,m),nR)
                end do
             end do
          end do
       else
          do nR=1,n_r_max
             do l=0,l_max
-               arr_lo(lo_map%lm2(l,0),nR) = arr_LMloc(radial_map%lm2(l,0),nR)
+               arr_lo(lo_map%lm2(l,0),nR) = arr_LMloc(map_glbl_st%lm2(l,0),nR)
             end do
          end do
       end if
@@ -1364,14 +1364,14 @@ contains
          do nR=1,n_r_max
             do l=0,l_max
                do m=0,l,minc
-                  arr_LMloc(radial_map%lm2(l,m),nR) = arr_lo(lo_map%lm2(l,m),nR)
+                  arr_LMloc(map_glbl_st%lm2(l,m),nR) = arr_lo(lo_map%lm2(l,m),nR)
                end do
             end do
          end do
       else
          do nR=1,n_r_max
             do l=0,l_max
-               arr_LMloc(radial_map%lm2(l,0),nR) = arr_lo(lo_map%lm2(l,0),nR)
+               arr_LMloc(map_glbl_st%lm2(l,0),nR) = arr_lo(lo_map%lm2(l,0),nR)
             end do
          end do
       end if
@@ -1538,10 +1538,10 @@ contains
       
       do i = 1, n_m_loc
         m = dist_m(coord_m,i)
-        l_lm  = dist_map%lm2(m, m)
-        u_lm  = dist_map%lm2(l_max, m)
-        l_lm_g = lm2(m, m)
-        u_lm_g = lm2(l_max, m)
+        l_lm  = map_dist_st%lm2(m, m)
+        u_lm  = map_dist_st%lm2(l_max, m)
+        l_lm_g = map_glbl_st%lm2(m, m)
+        u_lm_g = map_glbl_st%lm2(l_max, m)
         Flm_local(l_lm:u_lm) = Flm_global(l_lm_g:u_lm_g)
       end do
    end subroutine slice_Flm_cmplx
@@ -1558,10 +1558,10 @@ contains
       
       do i = 1, n_m_loc
         m = dist_m(coord_m,i)
-        l_lm  = dist_map%lm2(m, m)
-        u_lm  = dist_map%lm2(l_max, m)
-        l_lm_g = lm2(m, m)
-        u_lm_g = lm2(l_max, m)
+        l_lm  = map_dist_st%lm2(m, m)
+        u_lm  = map_dist_st%lm2(l_max, m)
+        l_lm_g = map_glbl_st%lm2(m, m)
+        u_lm_g = map_glbl_st%lm2(l_max, m)
         Flm_local(l_lm:u_lm) = Flm_global(l_lm_g:u_lm_g)
       end do
    end subroutine slice_Flm_real
@@ -1578,10 +1578,10 @@ contains
       
       do i = 1, n_m_loc
         m = dist_m(coord_m, i)
-        l_lm  = dist_map%lmP2(m, m)
-        u_lm  = dist_map%lmP2(l_max, m)
-        l_lm_g = lmP2(m,   m)
-        u_lm_g = lmP2(l_max+1, m)
+        l_lm  = map_dist_st%lmP2(m, m)
+        u_lm  = map_dist_st%lmP2(l_max, m)
+        l_lm_g = map_glbl_st%lmP2(m,   m)
+        u_lm_g = map_glbl_st%lmP2(l_max+1, m)
         Flm_local(l_lm:u_lm) = FlmP_global(l_lm_g:u_lm_g)
       end do
    end subroutine slice_FlmP_cmplx
@@ -1598,10 +1598,10 @@ contains
       
       do i = 1, n_m_loc
         m = dist_m(coord_m, i)
-        l_lm  = dist_map%lm2(m, m)
-        u_lm  = dist_map%lm2(l_max, m)
-        l_lm_g = lmP2(m,   m)
-        u_lm_g = lmP2(l_max+1, m)
+        l_lm  = map_dist_st%lm2(m, m)
+        u_lm  = map_dist_st%lm2(l_max, m)
+        l_lm_g = map_glbl_st%lmP2(m,   m)
+        u_lm_g = map_glbl_st%lmP2(l_max+1, m)
         Flm_local(l_lm:u_lm) = FlmP_global(l_lm_g:u_lm_g)
       end do
    end subroutine slice_FlmP_real
@@ -1638,8 +1638,8 @@ contains
          do j = 1, dist_m(irank,0)
             m = dist_m(irank,j)
             u_lm_loc = l_lm_loc + l_max+1 - m   ! (l_max+2 - m) points for lmP
-            l_lm_glb = lmP2(m  ,m)
-            u_lm_glb = lmP2(l_max+1,m)
+            l_lm_glb = map_glbl_st%lmP2(m  ,m)
+            u_lm_glb = map_glbl_st%lmP2(l_max+1,m)
             FlmP_global(l_lm_glb:u_lm_glb) = buffer(l_lm_loc:u_lm_loc)
             l_lm_loc = u_lm_loc + 1
          end do
@@ -1694,8 +1694,8 @@ contains
          do j = 1, dist_m(irank, 0)
             m = dist_m(irank, j)
             u_lm_loc = l_lm_loc + l_max - m   ! (l_max+1 - m) points for lm
-            l_lm_glb = lm2(m , m)
-            u_lm_glb = lm2(l_max , m)
+            l_lm_glb = map_glbl_st%lm2(m , m)
+            u_lm_glb = map_glbl_st%lm2(l_max , m)
             Flm_global(l_lm_glb:u_lm_glb) = buffer(l_lm_loc:u_lm_loc)
             l_lm_loc = u_lm_loc + 1
          end do

@@ -4,7 +4,7 @@ module out_dtB_frame
    use precision_mod
    use radial_functions, only: r, or1, chebt_ic, r_ic, rscheme_oc, r_icb, &
                                dr_fac_ic, chebt_ic_even
-   use blocking, only: nThetaBs, sizeThetaB, lm2m, lm2l, nfs, lm2
+   use blocking, only: nThetaBs, sizeThetaB, nfs
    use horizontal_data, only: cosTheta, n_theta_cal2ord, sinTheta, osn1, &
                               dPlm, Plm, dPhi, dLh, D_lP1
    use dtB_mod,only: PstrLM, PadvLM, PdifLM, TstrLM, TadvLM, TdifLM, &
@@ -17,6 +17,7 @@ module out_dtB_frame
    use constants, only: zero, one, ci
    use radial_der_even, only: get_drNS_even
    use radial_der, only: get_dr
+   use LMmapping, only: map_glbl_st
 
    implicit none
 
@@ -162,7 +163,7 @@ contains
                ! This reduces omega effect to field production of axisymm. toroidal field:
                do n_r_loc=1,n_r_max
                   do lm=1,lm_max
-                     m=lm2m(lm)
+                     m=map_glbl_st%lm2m(lm)
                      if ( m == 0 ) then
                         workA(lm,n_r_loc)=TomeLM(lm,n_r_loc)
                      else
@@ -174,7 +175,7 @@ contains
                ! This reduces poloidal field to the dipole contribution:
                do n_r_loc=1,n_r_max
                   do lm=1,lm_max
-                     l=lm2l(lm)
+                     l=map_glbl_st%lm2l(lm)
                      if ( l == 1 ) then
                         workA(lm,n_r_loc)=b(lm,n_r_loc)
                      else
@@ -644,7 +645,7 @@ contains
          if ( l_cond_ic ) then
             do m=0,m_max,minc
                do l=m,l_max
-                  lm=lm2(l,m)
+                  lm=map_glbl_st%lm2(l,m)
                   cs1(lm)=rDep(l)*real(l*(l+1),cp)*PolLM(lm)
                   cs2(lm)=rDep(l)*( real(l+1,cp)*PolLM(lm) + rT*dPolLM(lm) )
                end do
@@ -652,7 +653,7 @@ contains
          else
             do m=0,m_max,minc
                do l=m,l_max
-                  lm=lm2(l,m)
+                  lm=map_glbl_st%lm2(l,m)
                   cs1(lm)=rDep(l)*real(l*(l+1),cp)*PolLM(lm)
                   cs2(lm)=cs1(lm)/real(l,cp)
                end do
@@ -661,7 +662,7 @@ contains
       else
          do m=0,m_max,minc
             do l=m,l_max
-               lm=lm2(l,m)
+               lm=map_glbl_st%lm2(l,m)
                cs1(lm)=O_r_E_2*real(l*(l+1),cp)*PolLM(lm)
                cs2(lm)=O_r_E_2*rT*dPolLM(lm)
             end do
@@ -688,7 +689,7 @@ contains
             Bp_s =zero
 
             do l=m,l_max
-               lm=lm2(l,m)
+               lm=map_glbl_st%lm2(l,m)
                sign=-sign
                                    
                Br_1=         cs1(lm)*Plm(lm,n_theta_nhs)
@@ -748,7 +749,7 @@ contains
 #else
       do m=0,m_max,minc
          do l=m,l_max
-            lm=lm2(l,m)
+            lm=map_glbl_st%lm2(l,m)
             zeros(lm)=zero
          end do
       end do
@@ -824,7 +825,7 @@ contains
       !-- Get coeffs with radial dependence:
       do m=0,m_max,minc
          do l=m,l_max
-            lm=lm2(l,m)
+            lm=map_glbl_st%lm2(l,m)
             cs1(lm)=rDep(l)*Tlm(lm)
 #ifdef WITH_SHTNS
             zeros(lm)=0.0_cp
@@ -850,7 +851,7 @@ contains
             Bp_s =zero
 
             do l=m,l_max
-               lm=lm2(l,m)
+               lm=map_glbl_st%lm2(l,m)
                sign=-sign
                                    
                Bt_1=ci*real(m,cp)*cs1(lm)*Plm(lm,n_theta_nhs)

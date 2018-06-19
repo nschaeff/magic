@@ -28,7 +28,7 @@ module updateWPT_mod
    use fields, only: work_LMloc
    use constants, only: zero, one, two, three, four, third, half, pi, osq4pi
    use useful, only: abortRun
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
 
    implicit none
 
@@ -255,8 +255,8 @@ contains
             end if
          else
             if ( .not. lWPTmat(l1) ) then
-               call get_wptMat(dt,l1,hdif_V(radial_map%lm2(l1,0)), &
-                    &          hdif_S(radial_map%lm2(l1,0)),       &
+               call get_wptMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
+                    &          hdif_S(map_glbl_st%lm2(l1,0)),       &
                     &          wptMat(1,1,l1),wptPivot(1,l1),  &
                     &          wptMat_fac(1,1,l1))
                lWPTmat(l1)=.true.
@@ -316,12 +316,12 @@ contains
                   rhs1(2*n_r_max+1,lmB,threadid)=tops(l1,m1)
                   rhs1(3*n_r_max,lmB,threadid)  =bots(l1,m1)
                   do nR=2,n_r_max-1
-                     rhs1(nR,lmB,threadid)=O_dt*dLh(radial_map%lm2(l1,m1))*  &
+                     rhs1(nR,lmB,threadid)=O_dt*dLh(map_glbl_st%lm2(l1,m1))*  &
                      &                     or2(nR)*w(lm1,nR) +           &
                      &                     w1*dwdt(lm1,nR) +             &
                      &                     w2*dwdtLast(lm1,nR)
                      rhs1(nR+n_r_max,lmB,threadid)=-O_dt*                 &
-                     &                             dLh(radial_map%lm2(l1,m1))*&
+                     &                             dLh(map_glbl_st%lm2(l1,m1))*&
                      &                             or2(nR)*dw(lm1,nR) +   &
                      &                             w1*dpdt(lm1,nR) +      &
                      &                             w2*dpdtLast(lm1,nR)
@@ -486,10 +486,10 @@ contains
                l1=lm2l(lm1)
                m1=lm2m(lm1)
 
-               Dif(lm1) = hdif_V(radial_map%lm2(l1,m1))*dLh(radial_map%lm2(l1,m1))* &
+               Dif(lm1) = hdif_V(map_glbl_st%lm2(l1,m1))*dLh(map_glbl_st%lm2(l1,m1))* &
                &          or2(nR)*visc(nR) *                  ( ddw(lm1,nR) &
                &        +(two*dLvisc(nR)-third*beta(nR))*        dw(lm1,nR) &
-               &        -( dLh(radial_map%lm2(l1,m1))*or2(nR)+four*third* (     &
+               &        -( dLh(map_glbl_st%lm2(l1,m1))*or2(nR)+four*third* (     &
                &             dbeta(nR)+dLvisc(nR)*beta(nR)                  &
                &             +(three*dLvisc(nR)+beta(nR))*or1(nR) )   )*    &
                &                                                  w(lm1,nR) )
@@ -499,30 +499,30 @@ contains
                Buo(lm1) = BuoFac*rho0(nR)*rgrav(nR)*alpha0(nR)*tt(lm1,nR)
                dwdtLast(lm1,nR)=dwdt(lm1,nR) - coex*(Pre(lm1)+Buo(lm1)+Dif(lm1))
                dpdtLast(lm1,nR)= dpdt(lm1,nR) - coex*(                    &
-               &                 dLh(radial_map%lm2(l1,m1))*or2(nR)*p(lm1,nR) &
-               &               + hdif_V(radial_map%lm2(l1,m1))*               &
-               &                 visc(nR)*dLh(radial_map%lm2(l1,m1))*or2(nR)  &
+               &                 dLh(map_glbl_st%lm2(l1,m1))*or2(nR)*p(lm1,nR) &
+               &               + hdif_V(map_glbl_st%lm2(l1,m1))*               &
+               &                 visc(nR)*dLh(map_glbl_st%lm2(l1,m1))*or2(nR)  &
                &                                  * ( -work_LMloc(lm1,nR) &
                &                       + (beta(nR)-dLvisc(nR))*ddw(lm1,nR)&
-               &               + ( dLh(radial_map%lm2(l1,m1))*or2(nR)         &
+               &               + ( dLh(map_glbl_st%lm2(l1,m1))*or2(nR)         &
                &                  + dLvisc(nR)*beta(nR)+ dbeta(nR)        &
                &                  + two*(dLvisc(nR)+beta(nR))*or1(nR)     &
                &                                           ) * dw(lm1,nR) &
-               &               - dLh(radial_map%lm2(l1,m1))*or2(nR)           &
+               &               - dLh(map_glbl_st%lm2(l1,m1))*or2(nR)           &
                &                  * ( two*or1(nR)+two*third*beta(nR)      &
                &                     +dLvisc(nR) )   *         w(lm1,nR)  &
                &                                         ) )
                dttdtLast(lm1,nR)=dttdt(lm1,nR)                            &
-               &      - coex*opr*hdif_S(radial_map%lm2(l1,m1)) * kappa(nR) *  &
+               &      - coex*opr*hdif_S(map_glbl_st%lm2(l1,m1)) * kappa(nR) *  &
                &        (             workB(lm1,nR)                       &
                &          + ( beta(nR)+two*or1(nR)+dLkappa(nR) ) *        &
                &                         dtt(lm1,nR) -                    &
-               &            dLh(radial_map%lm2(l1,m1))*or2(nR)  *             &
+               &            dLh(map_glbl_st%lm2(l1,m1))*or2(nR)  *             &
                &                          tt(lm1,nR)  )+                  &
-               &        coex*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR) &
+               &        coex*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR) &
                &        *temp0(nR)*orho1(nR)*dentropy0(nR)*w(lm1,nR)
                if ( lRmsNext ) then
-                  dtV(lm1)=O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR) * &
+                  dtV(lm1)=O_dt*dLh(map_glbl_st%lm2(l1,m1))*or2(nR) * &
                   &        ( w(lm1,nR)-workD(lm1,nR) )
                end if
             end do
@@ -541,10 +541,10 @@ contains
                l1=lm2l(lm1)
                m1=lm2m(lm1)
 
-               Dif(lm1) = hdif_V(radial_map%lm2(l1,m1))*dLh(radial_map%lm2(l1,m1))* &
+               Dif(lm1) = hdif_V(map_glbl_st%lm2(l1,m1))*dLh(map_glbl_st%lm2(l1,m1))* &
                &          or2(nR)*visc(nR) *                  ( ddw(lm1,nR) &
                &        +(two*dLvisc(nR)-third*beta(nR))*        dw(lm1,nR) &
-               &        -( dLh(radial_map%lm2(l1,m1))*or2(nR)+four*third* (     &
+               &        -( dLh(map_glbl_st%lm2(l1,m1))*or2(nR)+four*third* (     &
                &             dbeta(nR)+dLvisc(nR)*beta(nR)                  &
                &             +(three*dLvisc(nR)+beta(nR))*or1(nR) )   )*    &
                &                                                 w(lm1,nR)  )
@@ -554,28 +554,28 @@ contains
                Buo(lm1) = BuoFac*rho0(nR)*rgrav(nR)*alpha0(nR)*tt(lm1,nR)
                dwdtLast(lm1,nR)=dwdt(lm1,nR) - coex*(Pre(lm1)+Buo(lm1)+Dif(lm1))
                dpdtLast(lm1,nR)= dpdt(lm1,nR) - coex*(                    &
-               &                 dLh(radial_map%lm2(l1,m1))*or2(nR)*p(lm1,nR) &
-               &               + hdif_V(radial_map%lm2(l1,m1))*               &
-               &                 visc(nR)*dLh(radial_map%lm2(l1,m1))*or2(nR)  &
+               &                 dLh(map_glbl_st%lm2(l1,m1))*or2(nR)*p(lm1,nR) &
+               &               + hdif_V(map_glbl_st%lm2(l1,m1))*               &
+               &                 visc(nR)*dLh(map_glbl_st%lm2(l1,m1))*or2(nR)  &
                &                                  * ( -work_LMloc(lm1,nR) &
                &                       + (beta(nR)-dLvisc(nR))*ddw(lm1,nR)&
-               &               + ( dLh(radial_map%lm2(l1,m1))*or2(nR)         &
+               &               + ( dLh(map_glbl_st%lm2(l1,m1))*or2(nR)         &
                &                  + dLvisc(nR)*beta(nR)+ dbeta(nR)        &
                &                  + two*(dLvisc(nR)+beta(nR))*or1(nR)     &
                &                                           ) * dw(lm1,nR) &
-               &               - dLh(radial_map%lm2(l1,m1))*or2(nR)           &
+               &               - dLh(map_glbl_st%lm2(l1,m1))*or2(nR)           &
                &                  * ( two*or1(nR)+two*third*beta(nR)      &
                &                     +dLvisc(nR) )   *         w(lm1,nR)  &
                &                                         ) )
                dttdtLast(lm1,nR)=dttdt(lm1,nR)                            &
-               &                    - coex*opr*hdif_S(radial_map%lm2(l1,m1))* &
+               &                    - coex*opr*hdif_S(map_glbl_st%lm2(l1,m1))* &
                &                                              kappa(nR) * &
                &        (                             workB(lm1,nR)       &
                &          + ( beta(nR) - dLtemp0(nR) +                    &
                &            two*or1(nR) + dLkappa(nR) ) * dtt(lm1,nR)     &
                &          - ( ddLtemp0(nR)+dLtemp0(nR)*(dLkappa(nR)+      &
                &              beta(nR)+two*or1(nR) ) +                    &
-               &                  dLh(radial_map%lm2(l1,m1))*or2(nR) )        &
+               &                  dLh(map_glbl_st%lm2(l1,m1))*or2(nR) )        &
                &                                       *  tt(lm1,nR)    - &
                &       ViscHeatFac*ThExpNb*alpha0(nR)*orho1(nR)*temp0(nR)*& 
                &        (                             workC(lm1,nR) +     &
@@ -584,12 +584,12 @@ contains
                &        ( (dLalpha0(nR)-beta(nR))*(two*or1(nR)+           &
                &           dLalpha0(nR)+dLkappa(nR)+dLtemp0(nR))+         &
                &           ddLalpha0(nR)-dbeta(nR) -                      &
-               &           dLh(radial_map%lm2(l1,m1))*or2(nR) )*              &
+               &           dLh(map_glbl_st%lm2(l1,m1))*or2(nR) )*              &
                &                                          p(lm1,nR) ) ) + &
-               &        coex*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR) &
+               &        coex*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR) &
                &        *orho1(nR)*dentropy0(nR)*w(lm1,nR)
                if ( lRmsNext ) then
-                  dtV(lm1)=O_dt*dLh(radial_map%lm2(l1,m1))*or2(nR) * &
+                  dtV(lm1)=O_dt*dLh(map_glbl_st%lm2(l1,m1))*or2(nR) * &
                   &        ( w(lm1,nR)-workD(lm1,nR) )
                end if
             end do

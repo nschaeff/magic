@@ -7,14 +7,14 @@ module legendre_spec_to_grid
 
    use precision_mod
    use geometry, only: lm_max, n_m_max, nrp, l_max, l_axi
-   use blocking, only: nfs, sizeThetaB, lm2mc, lm2
+   use blocking, only: nfs, sizeThetaB
    use horizontal_data, only: Plm, dPlm, lStart, lStop, lmOdd, D_mc2m, &
        &                      osn2
    use constants, only: zero, half, one
    use parallel_mod, only: coord_r
    use leg_helper_mod, only: leg_helper_t
    use useful, only: abortRun
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
 
    implicit none
  
@@ -1358,7 +1358,7 @@ contains
 
          sign=-one
          do l=0,l_max
-            lm=lm2(l,0)
+            lm=map_glbl_st%lm2(l,0)
             sign=-sign
             ! Northern hemisphere
             aij(nThetaN)=aij(nThetaN) +      alm(l+1)*Plm(lm,nThetaNHS)
@@ -1467,7 +1467,7 @@ contains
       sEA=zero    ! The other equatorial symmetry
       mc_old=1
       do lm=1,lm_max
-         mc=lm2mc(lm)
+         mc=map_glbl_st%lm2mc(lm)
          if ( mc /= mc_old ) then
             ! next m
             outN(mc_old) = sES + sEA

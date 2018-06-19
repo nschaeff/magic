@@ -31,7 +31,7 @@ module updateZ_mod
    use fields, only: work_LMloc
    use useful, only: abortRun
    use special
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
     
    implicit none
  
@@ -248,10 +248,10 @@ contains
          if ( l1 /= 0 ) then
             if ( .not. lZmat(l1) ) then
 #ifdef WITH_PRECOND_Z
-               call get_zMat(dt,l1,hdif_V(radial_map%lm2(l1,0)), &
+               call get_zMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
                     &        zMat(1,1,l1),zPivot(1,l1),zMat_fac(1,l1))
 #else
-               call get_zMat(dt,l1,hdif_V(radial_map%lm2(l1,0)), &
+               call get_zMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
                     &        zMat(1,1,l1),zPivot(1,l1))
 #endif
                lZmat(l1)=.true.
@@ -294,11 +294,11 @@ contains
                   if ( .not. lZ10mat ) then
 #ifdef WITH_PRECOND_Z10
                      call get_z10Mat(dt,l1,                                   &
-                          &          hdif_V(radial_map%lm2(lm2l(lm1),lm2m(lm1))), &
+                          &          hdif_V(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))), &
                                      z10Mat,z10Pivot,z10Mat_fac)
 #else
                      call get_z10Mat(dt,l1,hdif_V(                     &
-                          &          radial_map%lm2(lm2l(lm1),lm2m(lm1))), &
+                          &          map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))), &
                           &          z10Mat,z10Pivot)
 #endif
                      lZ10mat=.true.
@@ -335,7 +335,7 @@ contains
     
                   !----- This is the normal RHS for the other radial grid points:
                   do nR=2,n_r_max-1
-                     rhs(nR)=O_dt*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))* &
+                     rhs(nR)=O_dt*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))* &
                      &       or2(nR)*z(lm1,nR)+ w1*dzdt(lm1,nR)+        &
                      &       w2*dzdtLast(lm1,nR)
                   end do
@@ -420,7 +420,7 @@ contains
                   end if
 
                   do nR=2,n_r_max-1
-                     rhs1(nR,lmB,threadid)=O_dt*dLh(radial_map%lm2(lm2l(lm1),  &
+                     rhs1(nR,lmB,threadid)=O_dt*dLh(map_glbl_st%lm2(lm2l(lm1),  &
                      &                     lm2m(lm1)))*or2(nR)*z(lm1,nR) + &
                      &                     w1*dzdt(lm1,nR) +               &
                      &                     w2*dzdtLast(lm1,nR)
@@ -673,16 +673,16 @@ contains
       !$OMP DO
       do nR=n_r_top,n_r_bot
          do lm1=lmStart_00,lmStop
-            Dif(lm1)=hdif_V(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*                &
-            &        dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*visc(nR)*  &
+            Dif(lm1)=hdif_V(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*                &
+            &        dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*visc(nR)*  &
             &      ( work_LMloc(lm1,nR)   +(dLvisc(nR)-beta(nR)) *dz(lm1,nR) &
             &        -( dLvisc(nR)*beta(nR)+two*dLvisc(nR)*or1(nR)           &
-            &           + dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)       &
+            &           + dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)       &
             &           + dbeta(nR)+ two*beta(nR)*or1(nR) ) * z(lm1,nR) )
     
             dzdtLast(lm1,nR)=dzdt(lm1,nR)-coex*Dif(lm1)
             if ( lRmsNext ) then
-               dtV(lm1)= O_dt*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))* &
+               dtV(lm1)= O_dt*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))* &
                &            or2(nR)*(z(lm1,nR)-workB(lm1,nR))
             end if
          end do
@@ -851,10 +851,10 @@ contains
          if ( l1 /= 0 ) then
             if ( .not. lZmat(l1) ) then
 #ifdef WITH_PRECOND_Z
-               call get_zMat(dt,l1,hdif_V(radial_map%lm2(l1,0)), &
+               call get_zMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
                     &        zMat(1,1,l1),zPivot(1,l1),zMat_fac(1,l1))
 #else
-               call get_zMat(dt,l1,hdif_V(radial_map%lm2(l1,0)), &
+               call get_zMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
                     &        zMat(1,1,l1),zPivot(1,l1))
 #endif
                lZmat(l1)=.true.
@@ -882,11 +882,11 @@ contains
                   if ( .not. lZ10mat ) then
 #ifdef WITH_PRECOND_Z10
                      call get_z10Mat(dt,l1,                                   &
-                          &          hdif_V(radial_map%lm2(lm2l(lm1),lm2m(lm1))), &
+                          &          hdif_V(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))), &
                                      z10Mat,z10Pivot,z10Mat_fac)
 #else
                      call get_z10Mat(dt,l1,hdif_V(                     &
-                          &          radial_map%lm2(lm2l(lm1),lm2m(lm1))), &
+                          &          map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))), &
                           &          z10Mat,z10Pivot)
 #endif
                      lZ10mat=.true.
@@ -923,7 +923,7 @@ contains
     
                   !----- This is the normal RHS for the other radial grid points:
                   do nR=2,n_r_max-1
-                     rhs(nR)=O_dt*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))* &
+                     rhs(nR)=O_dt*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))* &
                      &       or2(nR)*z(lm1,nR)+ w1*dzdt(lm1,nR)+        &
                      &       w2*dzdtLast(lm1,nR)
                   end do
@@ -980,7 +980,7 @@ contains
                   end if
 
                   do nR=2,n_r_max-1
-                     rhs1(nR,lmB,threadid)=O_dt*dLh(radial_map%lm2(lm2l(lm1),  &
+                     rhs1(nR,lmB,threadid)=O_dt*dLh(map_glbl_st%lm2(lm2l(lm1),  &
                      &                     lm2m(lm1)))*or2(nR)*z(lm1,nR) + &
                      &                     w1*dzdt(lm1,nR) +               &
                      &                     w2*dzdtLast(lm1,nR)
@@ -1172,16 +1172,16 @@ contains
       !-- Calculate explicit time step part:
       do nR=n_r_top,n_r_bot
          do lm1=lmStart_00,lmStop
-            Dif(lm1)=hdif_V(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*                &
-            &        dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*visc(nR)*  &
+            Dif(lm1)=hdif_V(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*                &
+            &        dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*visc(nR)*  &
             &      ( work_LMloc(lm1,nR)   +(dLvisc(nR)-beta(nR)) *dz(lm1,nR) &
             &        -( dLvisc(nR)*beta(nR)+two*dLvisc(nR)*or1(nR)           &
-            &           + dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)       &
+            &           + dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)       &
             &           + dbeta(nR)+ two*beta(nR)*or1(nR) ) * z(lm1,nR) )
     
             dzdtLast(lm1,nR)=dzdt(lm1,nR)-coex*Dif(lm1)
             if ( lRmsNext ) then
-               dtV(lm1)= O_dt*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))* &
+               dtV(lm1)= O_dt*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))* &
                &            or2(nR)*(z(lm1,nR)-workB(lm1,nR))
             end if
          end do

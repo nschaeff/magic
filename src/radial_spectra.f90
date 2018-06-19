@@ -10,7 +10,7 @@ module radial_spectra
    use logic, only: l_cond_ic
    use output_data, only: tag
    use useful, only: cc2real
-   use LMmapping, only: radial_map, mappings
+   use LMmapping, only: map_glbl_st, mappings
    use constants, only: pi, one, four, half
 
    implicit none
@@ -57,7 +57,7 @@ contains
             if ( l <= 6 ) then
                m=map%lm2m(lm)
                amp=real(Pol(lm,n_r_loc))
-               e_p_temp=dLh(radial_map%lm2(l,m))**2 *or2(n_r_loc)*cc2real(Pol(lm,n_r_loc),m)
+               e_p_temp=dLh(map_glbl_st%lm2(l,m))**2 *or2(n_r_loc)*cc2real(Pol(lm,n_r_loc),m)
                if ( m == 0 ) then
                   if ( abs(amp)/=0.0_cp ) then
                      e_p_AS(l,n_r_loc)=fac*amp/abs(amp)*e_p_temp
@@ -88,13 +88,13 @@ contains
                   m=map%lm2m(lm)
                   if ( m /= 0 .or. lAS ) then
                      if ( l_cond_ic ) then
-                        e_p_temp=dLh(radial_map%lm2(l,m))*rRatio**(2*l) * &
-                        &        dLh(radial_map%lm2(l,m))*O_r_icb_E_2*    &
+                        e_p_temp=dLh(map_glbl_st%lm2(l,m))*rRatio**(2*l) * &
+                        &        dLh(map_glbl_st%lm2(l,m))*O_r_icb_E_2*    &
                         &        cc2real(PolIC(lm,n_r_loc),m)
                         amp=real(PolIC(lm,n_r_loc))
                      else
-                        e_p_temp=dLh(radial_map%lm2(l,m))*O_r_icb_E_2*rRatio**(2*l) * &
-                        &        dLh(radial_map%lm2(l,m))*cc2real(PolIC(lm,n_r_ICB),m)
+                        e_p_temp=dLh(map_glbl_st%lm2(l,m))*O_r_icb_E_2*rRatio**(2*l) * &
+                        &        dLh(map_glbl_st%lm2(l,m))*cc2real(PolIC(lm,n_r_ICB),m)
                         amp=real(Pol(lm,n_r_ICB))
                      end if
                      if ( m == 0 ) then
@@ -191,7 +191,7 @@ contains
             if ( l <= 6 ) then
                m=map%lm2m(lm)
                amp=real(Tor(lm,n_r_loc))
-               e_t_temp=dLh(radial_map%lm2(l,m))*cc2real(Tor(lm,n_r_loc),m)
+               e_t_temp=dLh(map_glbl_st%lm2(l,m))*cc2real(Tor(lm,n_r_loc),m)
                if ( abs(amp)/=0.0_cp ) then
                   if ( m == 0 ) e_t_AS(l,n_r_loc)=fac*amp/abs(amp)*e_t_temp
                end if
@@ -219,7 +219,7 @@ contains
                if ( l <= 6 ) then
                   m=map%lm2m(lm)
                   if ( m /= 0 .or. lAS ) then
-                     e_t_temp= dLh(radial_map%lm2(l,m))*rRatio**(2*l+2) &
+                     e_t_temp= dLh(map_glbl_st%lm2(l,m))*rRatio**(2*l+2) &
                           &    * cc2real(TorIC(lm,n_r_loc),m)
                      amp=real(TorIC(lm,n_r_loc))
                      if ( abs(amp)/=0.0_cp ) then

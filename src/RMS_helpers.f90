@@ -7,12 +7,11 @@ module RMS_helpers
    use precision_mod
    use parallel_mod
    use geometry, only: l_max, lm_max_dtB, n_r_max, lm_max
-   use blocking, only: lm2
    use radial_functions, only: or2, rscheme_oc, r
    use horizontal_data, only: osn1, Plm, dPlm, dLh
    use useful, only: cc2real
    use integration, only: rInt_R
-   use LMmapping, only: mappings, radial_map
+   use LMmapping, only: mappings, map_glbl_st
    use constants, only: vol_oc, one
 
    implicit none
@@ -56,7 +55,7 @@ contains
          Bp_n=0.0_cp
          Bp_s=0.0_cp
          do l=0,l_max
-            lm=lm2(l,0)
+            lm=map_glbl_st%lm2(l,0)
             sign=-sign
             Bp_1=-real(Tlm(l+1))*dPlm(lm,nThetaN)
             Bp_n=Bp_n+Bp_1
@@ -114,10 +113,10 @@ contains
          do lm=max(2,llm),ulm
             l=map%lm2l(lm)
             m=map%lm2m(lm)
-            PolRmsTemp= dLh(radial_map%lm2(l,m)) * (                        &
-                 dLh(radial_map%lm2(l,m))*or2(n_r_loc)*cc2real(Pol(lm,n_r_loc),m) + &
+            PolRmsTemp= dLh(map_glbl_st%lm2(l,m)) * (                        &
+                 dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(Pol(lm,n_r_loc),m) + &
                  cc2real(drPol(lm,n_r_loc),m) )
-            TorRmsTemp=   dLh(radial_map%lm2(l,m))*cc2real(Tor(lm,n_r_loc),m)
+            TorRmsTemp=   dLh(map_glbl_st%lm2(l,m))*cc2real(Tor(lm,n_r_loc),m)
             if ( m == 0 ) then  ! axisymmetric part
                PolAsRms_r(n_r_loc)=PolAsRms_r(n_r_loc) + PolRmsTemp
                TorAsRms_r(n_r_loc)=TorAsRms_r(n_r_loc) + TorRmsTemp
@@ -178,7 +177,7 @@ contains
       do lm=lmStart,lmStop
          l=map%lm2l(lm)
          m=map%lm2m(lm)
-         help=dLh(radial_map%lm2(l,m))*cc2real(dPol(lm),m)
+         help=dLh(map_glbl_st%lm2(l,m))*cc2real(dPol(lm),m)
          Pol2hInt(l)=Pol2hInt(l)+help
       end do
 
@@ -201,7 +200,7 @@ contains
       do lm=lmStart,lmStop
          l=map%lm2l(lm)
          m=map%lm2m(lm)
-         help=dLh(radial_map%lm2(l,m))*cc2real(dPol(lm),m)
+         help=dLh(map_glbl_st%lm2(l,m))*cc2real(dPol(lm),m)
          Pol2hInt(lm)=Pol2hInt(lm)+help
       end do
 
@@ -229,7 +228,7 @@ contains
          m=map%lm2m(lm)
          help=rE2*cc2real(Pol(lm),m)
          Pol2hInt(l)=Pol2hInt(l)+help
-         PolLMr(lm)=rE2/dLh(radial_map%lm2(l,m))*Pol(lm)
+         PolLMr(lm)=rE2/dLh(map_glbl_st%lm2(l,m))*Pol(lm)
       end do
 
    end subroutine hInt2Pol
@@ -256,7 +255,7 @@ contains
          m=map%lm2m(lm)
          help=rE2*cc2real(Pol(lm),m)
          Pol2hInt(lm)=Pol2hInt(lm)+help
-         PolLMr(lm)=rE2/dLh(radial_map%lm2(l,m))*Pol(lm)
+         PolLMr(lm)=rE2/dLh(map_glbl_st%lm2(l,m))*Pol(lm)
       end do
 
    end subroutine hInt2PolLM
@@ -328,7 +327,7 @@ contains
       do lm=lmStart,lmStop
          l=map%lm2l(lm)
          m=map%lm2m(lm)
-         help=rE4/dLh(radial_map%lm2(l,m))*cc2real(Tor(lm),m)
+         help=rE4/dLh(map_glbl_st%lm2(l,m))*cc2real(Tor(lm),m)
          Tor2hInt(l)=Tor2hInt(l)+help
       end do
     
@@ -354,7 +353,7 @@ contains
       do lm=lmStart,lmStop
          l=map%lm2l(lm)
          m=map%lm2m(lm)
-         help=rE4/dLh(radial_map%lm2(l,m))*cc2real(Tor(lm),m)
+         help=rE4/dLh(map_glbl_st%lm2(l,m))*cc2real(Tor(lm),m)
          Tor2hInt(lm)=Tor2hInt(lm)+help
       end do
     
@@ -392,7 +391,7 @@ contains
          Br_n=0.0_cp
          Br_s=0.0_cp
          do l=0,l_max
-            lm=lm2(l,0)
+            lm=map_glbl_st%lm2(l,0)
             sign=-sign
             Br_1=real(Blm(l+1))*real(l*(l+1),kind=cp)*Plm(lm,nThetaN)
             Br_n=Br_n+Br_1

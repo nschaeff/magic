@@ -8,7 +8,7 @@ module fields_average_mod
    use mem_alloc, only: bytes_allocated
    use radial_functions, only: chebt_ic, chebt_ic_even, r, dr_fac_ic, &
        &                       rscheme_oc
-   use blocking,only: lmStartB, lmStopB, sizeThetaB, nThetaBs, lm2, nfs
+   use blocking,only: lmStartB, lmStopB, sizeThetaB, nThetaBs, nfs
    use horizontal_data, only: Plm, dPlm, dLh
    use logic, only: l_mag, l_conv, l_save_out, l_heat, l_cond_ic, &
        &            l_chemical_conv

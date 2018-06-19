@@ -20,7 +20,7 @@ module updateS_mod
    use fields, only:  work_LMloc
    use constants, only: zero, one, two
    use useful, only: abortRun
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
 
    implicit none
 
@@ -180,10 +180,10 @@ contains
          else
             if ( .not. lSmat(l1) ) then
 #ifdef WITH_PRECOND_S
-               call get_sMat(dt,l1,hdif_S(radial_map%lm2(l1,0)), &
+               call get_sMat(dt,l1,hdif_S(map_glbl_st%lm2(l1,0)), &
                     sMat(1,1,l1),sPivot(1,l1),sMat_fac(1,l1))
 #else
-               call get_sMat(dt,l1,hdif_S(radial_map%lm2(l1,0)), &
+               call get_sMat(dt,l1,hdif_S(map_glbl_st%lm2(l1,0)), &
                     sMat(1,1,l1),sPivot(1,l1))
 #endif
                lSmat(l1)=.true.
@@ -228,7 +228,7 @@ contains
                      rhs1(nR,lmB,0)=s(lm1,nR)*O_dt +            &
                          &                w1*dsdt(lm1,nR) +            &
                          &                w2*dsdtLast(lm1,nR) -        &
-                         &  alpha*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1))) &
+                         &  alpha*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))) &
                          &  *or2(nR)*orho1(nR)*dentropy0(nR)*w(lm1,nR)
 #ifdef WITH_PRECOND_S
                      rhs1(nR,lmB,0) = sMat_fac(nR,l1)*rhs1(nR,lmB,0)
@@ -295,13 +295,13 @@ contains
       do nR=n_r_cmb+1,n_r_icb-1
          do lm1=lmStart,lmStop
             dsdtLast(lm1,nR)=dsdt(lm1,nR) &
-                 & - coex*opr*hdif_S(radial_map%lm2(lm2l(lm1),lm2m(lm1))) * &
+                 & - coex*opr*hdif_S(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))) * &
                  &   kappa(nR) *                   ( work_LMloc(lm1,nR) &
                  &   + ( beta(nR)+dLtemp0(nR)+two*or1(nR)+dLkappa(nR) ) &
                  &                                         * ds(lm1,nR) &
-                 &   - dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)     &
+                 &   - dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)     &
                  &                                         *  s(lm1,nR) &
-                 &   )+coex*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)&
+                 &   )+coex*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)&
                  &    *orho1(nR)*dentropy0(nR)*               w(lm1,nR)
          end do
       end do
@@ -436,10 +436,10 @@ contains
          else
             if ( .not. lSmat(l1) ) then
 #ifdef WITH_PRECOND_S
-               call get_sMat(dt,l1,hdif_S(radial_map%lm2(l1,0)), &
+               call get_sMat(dt,l1,hdif_S(map_glbl_st%lm2(l1,0)), &
                              sMat(1,1,l1),sPivot(1,l1),sMat_fac(1,l1))
 #else
-               call get_sMat(dt,l1,hdif_S(radial_map%lm2(l1,0)), &
+               call get_sMat(dt,l1,hdif_S(map_glbl_st%lm2(l1,0)), &
                              sMat(1,1,l1),sPivot(1,l1))
 #endif
                lSmat(l1)=.true.
@@ -494,7 +494,7 @@ contains
                      rhs1(nR,lmB,threadid)=s(lm1,nR)*O_dt +            &
                          &                w1*dsdt(lm1,nR) +            &
                          &            w2*dsdtLast(lm1,nR) -            &
-                         &  alpha*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1))) &
+                         &  alpha*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))) &
                          &  *or2(nR)*orho1(nR)*temp0(nR)*              &
                          &        dentropy0(nR)*w(lm1,nR)
 #ifdef WITH_PRECOND_S
@@ -571,7 +571,7 @@ contains
       !$OMP shared(s,ds,w,dsdtLast,rscheme_oc) &
       !$OMP shared(n_r_max,work_LMloc,llm,ulm,temp0) &
       !$OMP shared(n_r_cmb,n_r_icb,lmStart,lmStop,dsdt,coex,opr,hdif_S,dentropy0) &
-      !$OMP shared(radial_map,lm2l,lm2m,kappa,beta,dLtemp0,or1,dLkappa,dLh,or2) &
+      !$OMP shared(map_glbl_st,lm2l,lm2m,kappa,beta,dLtemp0,or1,dLkappa,dLh,or2) &
       !$OMP shared(orho1)
       !$OMP DO
       do iThread=0,nThreads-1
@@ -589,11 +589,11 @@ contains
       do nR=n_r_cmb+1,n_r_icb-1
          do lm1=lmStart,lmStop
            dsdtLast(lm1,nR)=dsdt(lm1,nR) &
-                & - coex*opr*hdif_S(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*kappa(nR) * &
+                & - coex*opr*hdif_S(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*kappa(nR) * &
                 &   (                                         work_LMloc(lm1,nR) &
                 &           + ( beta(nR)+two*or1(nR)+dLkappa(nR) ) *  ds(lm1,nR) &
-                &     - dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*  s(lm1,nR) &
-                &   ) + coex*dLh(radial_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)        &
+                &     - dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*  s(lm1,nR) &
+                &   ) + coex*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)        &
                 &           *orho1(nR)*temp0(nR)*dentropy0(nR)*        w(lm1,nR)
          end do
       end do

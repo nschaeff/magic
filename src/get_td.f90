@@ -17,8 +17,6 @@ module nonlinear_lm_mod
        &             or4, temp0, alpha0, ogrun, orho1
    use physical_parameters, only: CorFac, ra, epsc, ViscHeatFac,            &
        &             OhmLossFac, n_r_LCR, epscXi, BuoFac, ThExpNb
-   use blocking, only: lm2l, lm2m, lm2lmP, lmP2lmPS, lmP2lmPA, lm2lmA,      &
-       &             lm2lmS, lm2
    use horizontal_data, only: dLh_loc,  dTheta1S_loc, dTheta1A_loc,         &
        &             dPhi_loc, dTheta2A_loc, dTheta3A_loc, dTheta4A_loc,    &
        &             dPhi0_loc, dTheta2S_loc, dTheta3S_loc, dTheta4S_loc,   &
@@ -30,7 +28,7 @@ module nonlinear_lm_mod
    use constants, only: zero, two
    use fields, only: w_Rdist, dw_Rdist, ddw_Rdist, z_Rdist, dz_Rdist
    use RMS_helpers, only: hIntRms
-   use LMmapping, only: dist_map, radial_map
+   use LMmapping, only: map_dist_st, map_glbl_st
 
    implicit none
    
@@ -253,17 +251,17 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
       integer :: lm_maybe_skip_first
       
       lm_maybe_skip_first = 1
-      if (dist_map%lm2(0,0) > 0) lm_maybe_skip_first = 2
+      if (map_dist_st%lm2(0,0) > 0) lm_maybe_skip_first = 2
     
       if (nBc == 0 .or. lRmsCalc ) then
     
          if ( l_conv ) then  ! Convection
             
-            if (dist_map%lm2(0,0) > 0) then  ! if m=0 is in this rank
-               lm  = dist_map%lm2(0,0)
-               lmA = dist_map%lm2lmA(lm)
-               lmP = dist_map%lm2lmP(lm)
-               lmPA= dist_map%lmP2lmPA(lmP)
+            if (map_dist_st%lm2(0,0) > 0) then  ! if m=0 is in this rank
+               lm  = map_dist_st%lm2(0,0)
+               lmA = map_dist_st%lm2lmA(lm)
+               lmP = map_dist_st%lm2lmP(lm)
+               lmPA= map_dist_st%lmP2lmPA(lmP)
                
                if ( l_conv_nl ) then
                   AdvPol_loc=      or2(nR)*this%AdvrLM(lm)
@@ -307,13 +305,13 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
             end if
             
             do lm=lm_maybe_skip_first,n_lm_loc
-               l   =dist_map%lm2l(lm)
-               m   =dist_map%lm2m(lm)
-               lmS =dist_map%lm2lmS(lm)
-               lmA =dist_map%lm2lmA(lm)
-               lmP =dist_map%lm2lmP(lm)
-               lmPS=dist_map%lmP2lmPS(lmP)
-               lmPA=dist_map%lmP2lmPA(lmP)
+               l   =map_dist_st%lm2l(lm)
+               m   =map_dist_st%lm2m(lm)
+               lmS =map_dist_st%lm2lmS(lm)
+               lmA =map_dist_st%lm2lmA(lm)
+               lmP =map_dist_st%lm2lmP(lm)
+               lmPS=map_dist_st%lmP2lmPS(lmP)
+               lmPA=map_dist_st%lmP2lmPA(lmP)
                
                if ( l_double_curl ) then ! Pressure is not needed
 
@@ -527,37 +525,37 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                stop
     
                if ( l_conv_nl ) then
-                  call hIntRms(AdvPol,nR,1,lm_max,0,Adv2hInt(:,nR),radial_map, .false.)
-                  call hIntRms(this%Advt2LM,nR,1,lmP_max,1,Adv2hInt(:,nR),radial_map, &
+                  call hIntRms(AdvPol,nR,1,lm_max,0,Adv2hInt(:,nR),map_glbl_st, .false.)
+                  call hIntRms(this%Advt2LM,nR,1,lmP_max,1,Adv2hInt(:,nR),map_glbl_st, &
                        &       .true.)
-                  call hIntRms(this%Advp2LM,nR,1,lmP_max,1,Adv2hInt(:,nR),radial_map, &
+                  call hIntRms(this%Advp2LM,nR,1,lmP_max,1,Adv2hInt(:,nR),map_glbl_st, &
                        &       .true.)
                end if
 
                if ( l_TP_form .or. l_anelastic_liquid ) then
                   call hIntRms(leg_helper%dpR,nR,1,lm_max,0, &
-                       &       Pre2hInt(:,nR),radial_map,.false.)
+                       &       Pre2hInt(:,nR),map_glbl_st,.false.)
                else
                   call hIntRms(leg_helper%dpR-beta(nR)*leg_helper%preR,&
-                       &       nR,1,lm_max,0,Pre2hInt(:,nR),radial_map,.false.)
+                       &       nR,1,lm_max,0,Pre2hInt(:,nR),map_glbl_st,.false.)
                end if
-               call hIntRms(this%PFt2LM,nR,1,lmP_max,1,Pre2hInt(:,nR),radial_map,.true.)
-               call hIntRms(this%PFp2LM,nR,1,lmP_max,1,Pre2hInt(:,nR),radial_map,.true.)
+               call hIntRms(this%PFt2LM,nR,1,lmP_max,1,Pre2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(this%PFp2LM,nR,1,lmP_max,1,Pre2hInt(:,nR),map_glbl_st,.true.)
 
                ! rho* grad(p/rho) = grad(p) - beta*p
                if ( ra /= 0.0_cp ) &
-                  call hIntRms(Buo,nR,1,lm_max,0,Buo2hInt(:,nR),radial_map,.false.)
+                  call hIntRms(Buo,nR,1,lm_max,0,Buo2hInt(:,nR),map_glbl_st,.false.)
                if ( l_corr ) then
-                  call hIntRms(CorPol,nR,1,lm_max,0,Cor2hInt(:,nR),radial_map,.false.)
+                  call hIntRms(CorPol,nR,1,lm_max,0,Cor2hInt(:,nR),map_glbl_st,.false.)
                   call hIntRms(this%CFt2LM,nR,1,lmP_max,1,Cor2hInt(:,nR), &
-                       &       radial_map,.true.)
+                       &       map_glbl_st,.true.)
                   calL hIntRms(this%CFp2LM,nR,1,lmP_max,1,Cor2hInt(:,nR), &
-                       &       radial_map,.true.)
+                       &       map_glbl_st,.true.)
                end if
                if ( l_mag_LF .and. nR>n_r_LCR ) then
-                  call hIntRms(LFPol,nR,1,lm_max,0,LF2hInt(:,nR),radial_map,.false.)
-                  call hIntRms(this%LFt2LM,nR,1,lmP_max,1,LF2hInt(:,nR),radial_map,.true.)
-                  call hIntRms(this%LFp2LM,nR,1,lmP_max,1,LF2hInt(:,nR),radial_map,.true.)
+                  call hIntRms(LFPol,nR,1,lm_max,0,LF2hInt(:,nR),map_glbl_st,.false.)
+                  call hIntRms(this%LFt2LM,nR,1,lmP_max,1,LF2hInt(:,nR),map_glbl_st,.true.)
+                  call hIntRms(this%LFp2LM,nR,1,lmP_max,1,LF2hInt(:,nR),map_glbl_st,.true.)
                end if
 
       !---------------------------------------------------------------------------------------------
@@ -573,19 +571,19 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                   CIA(lm)=ArcMag(lm)+AdvPol(lm)
                   !CIA(lm)=CorPol(lm)+Buo(lm)+AdvPol(lm)
                end do
-               call hIntRms(Geo,nR,1,lm_max,0,Geo2hInt(:,nR),radial_map,.false.)
-               call hIntRms(CLF,nR,1,lm_max,0,CLF2hInt(:,nR),radial_map,.false.)
-               call hIntRms(PLF,nR,1,lm_max,0,PLF2hInt(:,nR),radial_map,.false.)
-               call hIntRms(Mag,nR,1,lm_max,0,Mag2hInt(:,nR),radial_map,.false.)
-               call hIntRms(Arc,nR,1,lm_max,0,Arc2hInt(:,nR),radial_map,.false.)
-               call hIntRms(ArcMag,nR,1,lm_max,0,ArcMag2hInt(:,nR),radial_map,.false.)
-               call hIntRms(CIA,nR,1,lm_max,0,CIA2hInt(:,nR),radial_map,.false.)
+               call hIntRms(Geo,nR,1,lm_max,0,Geo2hInt(:,nR),map_glbl_st,.false.)
+               call hIntRms(CLF,nR,1,lm_max,0,CLF2hInt(:,nR),map_glbl_st,.false.)
+               call hIntRms(PLF,nR,1,lm_max,0,PLF2hInt(:,nR),map_glbl_st,.false.)
+               call hIntRms(Mag,nR,1,lm_max,0,Mag2hInt(:,nR),map_glbl_st,.false.)
+               call hIntRms(Arc,nR,1,lm_max,0,Arc2hInt(:,nR),map_glbl_st,.false.)
+               call hIntRms(ArcMag,nR,1,lm_max,0,ArcMag2hInt(:,nR),map_glbl_st,.false.)
+               call hIntRms(CIA,nR,1,lm_max,0,CIA2hInt(:,nR),map_glbl_st,.false.)
       !---------------------------------------------------------------------------------------------
       ! This is (more or less) how this specific piece will look like afterwards: 
       !---------------------------------------------------------------------------------------------
       !                do lm=1,n_lm_loc
-      !                   l = dist_map%lm2l(lm)
-      !                   m = dist_map%lm2m(lm)
+      !                   l = map_dist_st%lm2l(lm)
+      !                   m = map_dist_st%lm2m(lm)
       !                   lm_glb = lm2(l,m)
       !                   
       !                   Geo(lm)=CorPol(lm)-leg_helper%dpR(lm)+beta(nR)*leg_helper%preR(lm)
@@ -598,13 +596,13 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
       !                   !CIA(lm)=CorPol(lm)+Buo(lm)+AdvPol(lm)
       !                end do
       !
-      !                call hIntRms(Geo(1:n_lm_loc),nR,1,n_lm_loc,0,Geo2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(CLF(1:n_lm_loc),nR,1,n_lm_loc,0,CLF2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(PLF(1:n_lm_loc),nR,1,n_lm_loc,0,PLF2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(Mag(1:n_lm_loc),nR,1,n_lm_loc,0,Mag2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(Arc(1:n_lm_loc),nR,1,n_lm_loc,0,Arc2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(ArcMag(1:n_lm_loc),nR,1,n_lm_loc,0,ArcMag2hInt(0:l_max,nR),dist_map,.false.)
-      !                call hIntRms(CIA(1:n_lm_loc),nR,1,n_lm_loc,0,CIA2hInt(0:l_max,nR),dist_map,.false.)               
+      !                call hIntRms(Geo(1:n_lm_loc),nR,1,n_lm_loc,0,Geo2hInt(0:l_max,nR),map_dist_st,.false.)
+      !                call hIntRms(CLF(1:n_lm_loc),nR,1,n_lm_loc,0,CLF2hInt(0:l_max,nR),map_dist_st,.false.)
+      !                call hIntRms(PLF(1:n_lm_loc),nR,1,n_lm_loc,0,PLF2hInt(0:l_max,nR),map_dist_st,.false.)
+      !                call hIntRms(Mag(1:n_lm_loc),nR,1,n_lm_loc,0,Mag2hInt(0:l_max,nR),map_dist_st,.false.)
+      !                call hIntRms(Arc(1:n_lm_loc),nR,1,n_lm_loc,0,Arc2hInt(0:l_max,nR),map_dist_st,.false.)
+      !                call hIntRms(ArcMag(1:n_lm_loc),nR,1,n_lm_loc,0,ArcMag2hInt(0:l_max,nR),map_dist_st,.false.)
+      !                call hIntRms(CIA(1:n_lm_loc),nR,1,n_lm_loc,0,CIA2hInt(0:l_max,nR),map_dist_st,.false.)               
       !                
       !                call mpi_iallreduce(MPI_IN_PLACE, Geo2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(1), ierr)
       !                call mpi_iallreduce(MPI_IN_PLACE, CLF2hInt(0:l_max,nR), l_max+1, MPI_DEF_REAL, MPI_SUM, comm_theta, Rq(2), ierr)
@@ -630,7 +628,7 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
       !---------------------------------------------------------------------------------------------
 
                do lm=1,lm_max
-                  lmP =lm2lmP(lm)
+                  lmP = map_glbl_st%lm2lmP(lm)
                   Geo(lm)=-this%CFt2LM(lmP)-this%PFt2LM(lmP)
                   CLF(lm)=-this%CFt2LM(lmP)+this%LFt2LM(lmP)
                   PLF(lm)=this%LFt2LM(lmP)-this%PFt2LM(lmP)
@@ -640,16 +638,16 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                   CIA(lm)=ArcMag(lm)+this%Advt2LM(lmP)
                   !CIA(lm)=-this%CFt2LM(lmP)+this%Advt2LM(lmP)
                end do
-               call hIntRms(Geo,nR,1,lm_max,0,Geo2hInt(:,nR),radial_map,.true.)
-               call hIntRms(CLF,nR,1,lm_max,0,CLF2hInt(:,nR),radial_map,.true.)
-               call hIntRms(PLF,nR,1,lm_max,0,PLF2hInt(:,nR),radial_map,.true.)
-               call hIntRms(Mag,nR,1,lm_max,0,Mag2hInt(:,nR),radial_map,.true.)
-               call hIntRms(Arc,nR,1,lm_max,0,Arc2hInt(:,nR),radial_map,.true.)
-               call hIntRms(ArcMag,nR,1,lm_max,0,ArcMag2hInt(:,nR),radial_map,.true.)
-               call hIntRms(CIA,nR,1,lm_max,0,CIA2hInt(:,nR),radial_map,.true.)
+               call hIntRms(Geo,nR,1,lm_max,0,Geo2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(CLF,nR,1,lm_max,0,CLF2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(PLF,nR,1,lm_max,0,PLF2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(Mag,nR,1,lm_max,0,Mag2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(Arc,nR,1,lm_max,0,Arc2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(ArcMag,nR,1,lm_max,0,ArcMag2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(CIA,nR,1,lm_max,0,CIA2hInt(:,nR),map_glbl_st,.true.)
     
                do lm=1,lm_max
-                  lmP =lm2lmP(lm)
+                  lmP = map_glbl_st%lm2lmP(lm)
                   Geo(lm)=-this%CFp2LM(lmP)-this%PFp2LM(lmP)
                   CLF(lm)=-this%CFp2LM(lmP)+this%LFp2LM(lmP)
                   PLF(lm)=this%LFp2LM(lmP)-this%PFp2LM(lmP)
@@ -659,13 +657,13 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
                   CIA(lm)=ArcMag(lm)+this%Advp2LM(lmP)
                   !CIA(lm)=-this%CFp2LM(lmP)+this%Advp2LM(lmP)
                end do
-               call hIntRms(Geo,nR,1,lm_max,0,Geo2hInt(:,nR),radial_map,.true.)
-               call hIntRms(CLF,nR,1,lm_max,0,CLF2hInt(:,nR),radial_map,.true.)
-               call hIntRms(PLF,nR,1,lm_max,0,PLF2hInt(:,nR),radial_map,.true.)
-               call hIntRms(Mag,nR,1,lm_max,0,Mag2hInt(:,nR),radial_map,.true.)
-               call hIntRms(Arc,nR,1,lm_max,0,Arc2hInt(:,nR),radial_map,.true.)
-               call hIntRms(ArcMag,nR,1,lm_max,0,ArcMag2hInt(:,nR),radial_map,.true.)
-               call hIntRms(CIA,nR,1,lm_max,0,CIA2hInt(:,nR),radial_map,.true.)
+               call hIntRms(Geo,nR,1,lm_max,0,Geo2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(CLF,nR,1,lm_max,0,CLF2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(PLF,nR,1,lm_max,0,PLF2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(Mag,nR,1,lm_max,0,Mag2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(Arc,nR,1,lm_max,0,Arc2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(ArcMag,nR,1,lm_max,0,ArcMag2hInt(:,nR),map_glbl_st,.true.)
+               call hIntRms(CIA,nR,1,lm_max,0,CIA2hInt(:,nR),map_glbl_st,.true.)
 
             end if
 !---------------------------------------------------------------------------------------------------
@@ -679,13 +677,13 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
             ! In case double curl is calculated dpdt is useless
             if ( (.not. l_double_curl) .or. lPressCalc ) then 
                do lm=lm_maybe_skip_first,n_lm_loc
-                  l   =dist_map%lm2l(lm)
-                  m   =dist_map%lm2m(lm)
-                  lmS =dist_map%lm2lmS(lm)
-                  lmA =dist_map%lm2lmA(lm)
-                  lmP =dist_map%lm2lmP(lm)
-                  lmPS=dist_map%lmP2lmPS(lmP)
-                  lmPA=dist_map%lmP2lmPA(lmP)
+                  l   =map_dist_st%lm2l(lm)
+                  m   =map_dist_st%lm2m(lm)
+                  lmS =map_dist_st%lm2lmS(lm)
+                  lmA =map_dist_st%lm2lmA(lm)
+                  lmP =map_dist_st%lm2lmP(lm)
+                  lmPS=map_dist_st%lmP2lmPS(lmP)
+                  lmPA=map_dist_st%lmP2lmPA(lmP)
        
                   !------ Recycle CorPol and AdvPol:
                   if ( l_corr ) then
@@ -748,8 +746,8 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
          
          if ( l_heat ) then
             
-            if (dist_map%lm2(0,0) > 0) then  ! if m=0 is in this rank
-               lm  = dist_map%lm2(0,0)
+            if (map_dist_st%lm2(0,0) > 0) then  ! if m=0 is in this rank
+               lm  = map_dist_st%lm2(0,0)
 
                dsdt_loc  =epsc*epscProf(nR) !+opr/epsS*divKtemp0(nR)
                dVSrLM(lm)=this%VSrLM(lm)
@@ -777,11 +775,11 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
             end if
     
             do lm=lm_maybe_skip_first,n_lm_loc
-               l   =dist_map%lm2l(lm)
-               m   =dist_map%lm2m(lm)
-               lmP =dist_map%lm2lmP(lm)
-               lmPS=dist_map%lmP2lmPS(lmP)
-               lmPA=dist_map%lmP2lmPA(lmP)
+               l   =map_dist_st%lm2l(lm)
+               m   =map_dist_st%lm2m(lm)
+               lmP =map_dist_st%lm2lmP(lm)
+               lmPS=map_dist_st%lmP2lmPS(lmP)
+               lmPA=map_dist_st%lmP2lmPA(lmP)
                
                !------ This is horizontal heat advection:
                !PERFON('td_h1')
@@ -831,18 +829,18 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
          end if
 
          if ( l_chemical_conv ) then
-            if (dist_map%lm2(0,0) > 0) then  ! if m=0 is in this rank
-               lm  = dist_map%lm2(0,0)
+            if (map_dist_st%lm2(0,0) > 0) then  ! if m=0 is in this rank
+               lm  = map_dist_st%lm2(0,0)
                dVXirLM(lm)=this%VXirLM(lm)
                dxidt(lm)  =epscXi
             end if
     
             do lm=lm_maybe_skip_first,n_lm_loc
-               l   =dist_map%lm2l(lm)
-               m   =dist_map%lm2m(lm)
-               lmP =dist_map%lm2lmP(lm)
-               lmPS=dist_map%lmP2lmPS(lmP)
-               lmPA=dist_map%lmP2lmPA(lmP)
+               l   =map_dist_st%lm2l(lm)
+               m   =map_dist_st%lm2m(lm)
+               lmP =map_dist_st%lm2lmP(lm)
+               lmPS=map_dist_st%lmP2lmPS(lmP)
+               lmPA=map_dist_st%lmP2lmPA(lmP)
                !------ This is horizontal heat advection:
     
                if ( l > m ) then
@@ -860,11 +858,11 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
     
          if ( l_mag_nl .or. l_mag_kin  ) then
             do lm=1,n_lm_loc
-               l   =dist_map%lm2l(lm)
-               m   =dist_map%lm2m(lm)
-               lmP =dist_map%lm2lmP(lm)
-               lmPS=dist_map%lmP2lmPS(lmP)
-               lmPA=dist_map%lmP2lmPA(lmP)
+               l   =map_dist_st%lm2l(lm)
+               m   =map_dist_st%lm2m(lm)
+               lmP =map_dist_st%lm2lmP(lm)
+               lmPS=map_dist_st%lmP2lmPS(lmP)
+               lmPA=map_dist_st%lmP2lmPA(lmP)
                
                if ((l == 0) .and. (m == 0)) then
                   dVxBhLM(lm)= -r(nR)*r(nR)* dTheta1A_loc(lm)*this%VxBtLM(lmPA)
@@ -919,11 +917,11 @@ subroutine get_td(this,nR,nBc,lRmsCalc,lPressCalc,dVSrLM,dVPrLM,dVXirLM, &
             !      Because the radial derivative will be taken, this will contribute to
             !      the other radial grid points.
             do lm=1,n_lm_loc
-               l   = dist_map%lm2l(lm)
-               m   = dist_map%lm2m(lm)
-               lmP = dist_map%lm2lmP(lm)
-               lmPS= dist_map%lmP2lmPS(lmP)   ! l-1
-               lmPA= dist_map%lmP2lmPA(lmP)   ! l+1
+               l   = map_dist_st%lm2l(lm)
+               m   = map_dist_st%lm2m(lm)
+               lmP = map_dist_st%lm2lmP(lm)
+               lmPS= map_dist_st%lmP2lmPS(lmP)   ! l-1
+               lmPA= map_dist_st%lmP2lmPA(lmP)   ! l+1
                
                if ((l == 0) .and. (m == 0)) then
                   dVxBhLM(lm)=zero

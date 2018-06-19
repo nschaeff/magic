@@ -7,8 +7,7 @@ module RMS
    use parallel_mod
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use blocking, only: nThetaBs, nfs, sizeThetaB, lo_map, lm2, &
-       &               lm2m
+   use blocking, only: nThetaBs, nfs, sizeThetaB, lo_map
    use finite_differences, only: type_fd
    use chebyshev, only: type_cheb_odd
    use radial_scheme, only: type_rscheme
@@ -33,7 +32,6 @@ module RMS
    use dtB_mod, only: PdifLM_LMloc, TdifLM_LMloc, PstrLM_LMloc, PadvLM_LMloc, &
        &              TadvLM_LMloc, TstrLM_LMloc, TomeLM_LMloc
    use useful, only: getMSD2, abortRun
-   use LMmapping, only: radial_map
                                                                   
    implicit none
  

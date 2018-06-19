@@ -12,7 +12,7 @@ module geos_mod
    use radial_functions, only: r_ICB, r_CMB, rscheme_oc, orho1
    use physical_parameters, only: ra, ek, pr, prmag, radratio
    use num_param, only: tScale
-   use blocking, only: lm2l, lm2m, lm2mc, lo_map
+   use blocking, only: lo_map
    use horizontal_data, only: dLh, phi, dPhi
    use logic, only: lVerbose, l_corrMov, l_anel, l_save_out, l_SRIC
    use output_data, only: sDens, zDens, tag, runid
@@ -24,7 +24,7 @@ module geos_mod
    use TO_helpers, only: getPAStr
    use cosine_transform_odd, only: costf_odd_t
    use chebInt_mod
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
 
    implicit none 
  
@@ -1054,9 +1054,9 @@ contains
          Or_e2=one/rS(nN)**2
     
          do lm=1,lm_max     ! Sum over lms
-            l =lm2l(lm)
-            m =lm2m(lm)
-            mc=lm2mc(lm)
+            l =map_glbl_st%lm2l(lm)
+            m =map_glbl_st%lm2m(lm)
+            mc=map_glbl_st%lm2mc(lm)
             wSr  =zero
             dwSr =zero
             ddwSr=zero
@@ -1129,9 +1129,9 @@ contains
          Or_e2=one/rS(nS)**2
     
          do lm=1,lm_max     ! Sum over lms
-            l =lm2l(lm)
-            m =lm2m(lm)
-            mc=lm2mc(lm)
+            l =map_glbl_st%lm2l(lm)
+            m =map_glbl_st%lm2m(lm)
+            mc=map_glbl_st%lm2mc(lm)
             wSr  =zero
             dwSr =zero
             ddwSr=zero
@@ -1320,7 +1320,7 @@ contains
          do lm=llm,ulm
             l = lo_map%lm2l(lm)
             m = lo_map%lm2m(lm)
-            wS(lm,nR)  =orho1(nR)*w(lm,nR)*dLh(radial_map%lm2(l,m))
+            wS(lm,nR)  =orho1(nR)*w(lm,nR)*dLh(map_glbl_st%lm2(l,m))
             dwS(lm,nR) =orho1(nR)*dw(lm,nR)
             ddwS(lm,nR)=orho1(nR)*ddw(lm,nR)
             zS(lm,nR)  =orho1(nR)*z(lm,nR)

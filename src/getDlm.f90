@@ -15,7 +15,7 @@ module getDlm_mod
    use useful, only: cc2real, cc22real
    use integration, only: rInt_R
    use useful, only: abortRun
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
    
    implicit none
  
@@ -72,10 +72,10 @@ contains
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
 
-               e_p= dLh(radial_map%lm2(l,m)) *  ( &
-                    dLh(radial_map%lm2(l,m))*or2(nR)*cc2real(w(lm,nR),m) &
+               e_p= dLh(map_glbl_st%lm2(l,m)) *  ( &
+                    dLh(map_glbl_st%lm2(l,m))*or2(nR)*cc2real(w(lm,nR),m) &
                     & + cc2real(dw(lm,nR),m) )
-               e_t=dLh(radial_map%lm2(l,m))*cc2real(z(lm,nR),m)
+               e_t=dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,nR),m)
 
                e_lr(nR,l)=e_lr(nR,l) + e_p+e_t
                e_lr_c(nR,l)=0.0_cp
@@ -99,10 +99,10 @@ contains
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
 
-               e_p= O_rho * dLh(radial_map%lm2(l,m)) *  ( &
-                    dLh(radial_map%lm2(l,m))*or2(nR)*cc2real(w(lm,nR),m) &
+               e_p= O_rho * dLh(map_glbl_st%lm2(l,m)) *  ( &
+                    dLh(map_glbl_st%lm2(l,m))*or2(nR)*cc2real(w(lm,nR),m) &
                     & + cc2real(dw(lm,nR),m) )
-               e_t=O_rho*dLh(radial_map%lm2(l,m))*cc2real(z(lm,nR),m)
+               e_t=O_rho*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,nR),m)
                if ( m /= 0 ) then
                   e_lr_c(nR,l)=e_lr_c(nR,l) + e_p+e_t
                end if

@@ -11,7 +11,7 @@ module output_mod
        &                       orho1, sigma
    use physical_parameters, only: opm,ek,ktopv,prmag,nVarCond,LFfac
    use num_param, only: tScale
-   use blocking, only: lm2, lo_map
+   use blocking, only: lo_map
    use horizontal_data, only: dLh,hdif_B,dPl0Eq
    use logic, only: l_average, l_mag, l_power, l_anel, l_mag_LF, lVerbose, &
        &            l_dtB, l_RMS, l_r_field, l_r_fieldT, l_PV, l_SRIC,     &
@@ -60,7 +60,7 @@ module output_mod
    use useful, only:  logWrite
    use radial_spectra  ! rBrSpec, rBpSpec
    use storeCheckPoints
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
 
    implicit none
  
@@ -681,9 +681,9 @@ contains
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
                dbdtCMB(lm)= dbdt_CMB_LMloc(lm)/                             &
-                    &    (dLh(radial_map%lm2(l,m))*or2(n_r_cmb))                       &
-                    &    + opm*hdif_B(radial_map%lm2(l,m)) * ( ddb_LMloc(lm,n_r_cmb) - &
-                    &      dLh(radial_map%lm2(l,m))*or2(n_r_cmb)*b_LMloc(lm,n_r_cmb) )
+                    &    (dLh(map_glbl_st%lm2(l,m))*or2(n_r_cmb))                       &
+                    &    + opm*hdif_B(map_glbl_st%lm2(l,m)) * ( ddb_LMloc(lm,n_r_cmb) - &
+                    &      dLh(map_glbl_st%lm2(l,m))*or2(n_r_cmb)*b_LMloc(lm,n_r_cmb) )
             end do
 
             call write_Bcmb(timeScaled,dbdtCMB(:),l_max_cmb,n_dt_cmb_sets,  &

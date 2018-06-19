@@ -6,8 +6,7 @@ module nonlinear_bcs
        &                 n_r_cmb, n_r_icb
    use radial_data, only: 
    use radial_functions, only: r_cmb, r_icb, rho0
-   use blocking, only: lm2l, lm2m, lm2lmP, lmP2lmPS, lmP2lmPA, nfs, &
-       &               sizeThetaB
+   use blocking, only: nfs, sizeThetaB
    use physical_parameters, only: sigma_ratio, conductance_ma, prmag
    use horizontal_data, only: dTheta1S_loc, dTheta1A_loc, dPhi_loc, O_sin_theta_loc, &
        &                      dLh_loc, sn2, cosTheta
@@ -18,7 +17,7 @@ module nonlinear_bcs
    use shtns, only: spat_to_SH, spat_to_SH_dist
 #endif
    use useful, only: abortRun
-   use LMmapping, only: dist_map
+   use LMmapping, only: map_dist_st
 
    implicit none
 
@@ -140,17 +139,17 @@ contains
 
          fac=conductance_ma*prmag
 
-         if (dist_map%lm2(0,0) > 0)  b_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp) 
-         if (dist_map%lm2(0,0) > 0) aj_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp) 
+         if (map_dist_st%lm2(0,0) > 0)  b_nl_bc(map_dist_st%lm2(0,0)) = (1.0_cp,1.0_cp) 
+         if (map_dist_st%lm2(0,0) > 0) aj_nl_bc(map_dist_st%lm2(0,0)) = (1.0_cp,1.0_cp) 
          
          do lm=1,n_lm_loc
-            l   =dist_map%lm2l(lm)
-            m   =dist_map%lm2m(lm)
+            l   =map_dist_st%lm2l(lm)
+            m   =map_dist_st%lm2m(lm)
             if ((l==0) .and. (m==0)) cycle
 
-            lmP =dist_map%lm2lmP(lm)
-            lmPS=dist_map%lmP2lmPS(lmP)
-            lmPA=dist_map%lmP2lmPA(lmP)
+            lmP =map_dist_st%lm2lmP(lm)
+            lmPS=map_dist_st%lmP2lmPS(lmP)
+            lmPA=map_dist_st%lmP2lmPA(lmP)
             if ( l > m ) then
                b_nl_bc(lm)= fac/dLH_loc(lm) * (  dTheta1S_loc(lm)*br_vt_lm(lmPS)  &
                                            - dTheta1A_loc(lm)*br_vt_lm(lmPA)  &
@@ -171,16 +170,16 @@ contains
          fac=sigma_ratio*prmag
          
          ! if m=0 is in this rank, aj_nl_bc(1) = 1.0
-         if (dist_map%lm2(0,0) > 0) aj_nl_bc(dist_map%lm2(0,0)) = (1.0_cp,1.0_cp)  
+         if (map_dist_st%lm2(0,0) > 0) aj_nl_bc(map_dist_st%lm2(0,0)) = (1.0_cp,1.0_cp)  
          
          do lm=1,n_lm_loc
-            l   =dist_map%lm2l(lm)
-            m   =dist_map%lm2m(lm)
+            l   =map_dist_st%lm2l(lm)
+            m   =map_dist_st%lm2m(lm)
             if ((l==0) .and. (m==0)) cycle
 
-            lmP =dist_map%lm2lmP(lm)
-            lmPS=dist_map%lmP2lmPS(lmP)
-            lmPA=dist_map%lmP2lmPA(lmP)
+            lmP =map_dist_st%lm2lmP(lm)
+            lmPS=map_dist_st%lmP2lmPS(lmP)
+            lmPA=map_dist_st%lmP2lmPA(lmP)
             if ( l > m ) then
                aj_nl_bc(lm)=-fac/dLH_loc(lm) * ( dTheta1S_loc(lm)*br_vp_lm(lmPS)   &
                                            - dTheta1A_loc(lm)*br_vp_lm(lmPA)   &

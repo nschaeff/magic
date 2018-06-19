@@ -368,7 +368,10 @@ contains
                             3*(8+n_phi_max*SIZEOF_OUT_REAL)*n_theta_block_size
 #endif
          size_of_data_per_r = size_of_data_per_thetaB * nThetaBs
-         size_of_data_per_rank = size_of_data_per_r * nR_per_rank
+         !-- TODO:
+         !   This variable does not return the correct size.
+         !   Needs to be reviewed in the future
+         size_of_data_per_rank = size_of_data_per_r * dist_r(0,0)
 
          if ( coord_r == 0 ) then
             ! coord_r zero writes the Header

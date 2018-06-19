@@ -52,7 +52,7 @@ module LMmapping
       integer, allocatable :: lm22m(:,:,:)
    end type subblocks_mappings
  
-   type(mappings) :: dist_map, radial_map
+   type(mappings) :: map_dist_st, map_glbl_st
    
 contains
    
@@ -67,18 +67,18 @@ contains
       
 
       local_bytes_used = bytes_allocated
-!       call allocate_mappings(radial_map,l_max,lm_max,lmP_max,l_axi)
+!       call allocate_mappings(map_glbl_st,l_max,lm_max,lmP_max,l_axi)
 !       call allocate_mappings(lo_map,l_max,lm_max,lmP_max,l_axi)
 
-      call allocate_mappings(radial_map, lm_max, lmP_max, l_axi)
-      call allocate_mappings(dist_map, n_lm_loc,n_lmP_loc,l_axi)
+      call allocate_mappings(map_glbl_st, lm_max, lmP_max, l_axi)
+      call allocate_mappings(map_dist_st, n_lm_loc,n_lmP_loc,l_axi)
       
       ! (/0:n_m_max-1/)*minc: an array containing all m points
-      call set_lmmapping_default(radial_map, (/0:n_m_max-1/)*minc ) 
-      call set_lmmapping_default(dist_map,   dist_m(coord_m,1:))
+      call set_lmmapping_default(map_glbl_st, (/0:n_m_max-1/)*minc ) 
+      call set_lmmapping_default(map_dist_st,   dist_m(coord_m,1:))
       
-      call print_mapping(dist_map,  'dist')
-      call print_mapping(radial_map,'radial')
+      call print_mapping(map_dist_st, 'dist_st')
+      call print_mapping(map_glbl_st, 'glbl_st')
       
       local_bytes_used = bytes_allocated-local_bytes_used
       call memWrite('LMmapping.f90', local_bytes_used)
@@ -87,7 +87,7 @@ contains
    !----------------------------------------------------------------------------
    subroutine finalize_mapping
 
-      call deallocate_mappings(dist_map)
+      call deallocate_mappings(map_dist_st)
 
    end subroutine finalize_mapping
    
@@ -101,8 +101,8 @@ contains
       !   n_lm_len is the number of local lm points. Similarly, n_lmP_len 
       !   is the same quantity, for l_max+1.
       !   
-      !   So, if you're creating the dist_map, pass (n_lm_loc, n_lmP_len).
-      !   If you're creating radial_map, pass (n_lm_max, n_lmP_max).
+      !   So, if you're creating the map_dist_st, pass (n_lm_loc, n_lmP_len).
+      !   If you're creating map_glbl_st, pass (n_lm_max, n_lmP_max).
       !   
       !   Author: Rafael Lago, MPCDF, April 2018
       !   

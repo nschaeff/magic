@@ -5,9 +5,9 @@ module TO_helpers
 
    use precision_mod
    use geometry, only: l_max
-   use blocking, only: lm2
    use horizontal_data, only: dPlm, osn1
    use constants, only: one, two, half
+   use LMmapping, only: map_glbl_st
 
    implicit none
 
@@ -143,7 +143,7 @@ contains
          Bp_n=0.0_cp
          Bp_s=0.0_cp
          do l=0,l_max
-            lm=lm2(l,0)
+            lm=map_glbl_st%lm2(l,0)
             sign=-sign
             Bp_1=-Tlm(l+1)*dPlm(lm,nThetaN)
             Bp_n=Bp_n+Bp_1

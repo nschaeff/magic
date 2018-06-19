@@ -1,8 +1,15 @@
+2018-06-19
+-------------------------------------------------------------------------------
+- [created] created distribute_mlo
+- First implementation of distribute_mlo. There are two patterns possible 
+  patterns, "lfirst" and "mfirst". None are optimal but "mfirst" is a little 
+  bit fairer.
+
 2018-06-12
 -------------------------------------------------------------------------------
 - [created] radial_map in LMMapping
-- [replaced] st_map by radial_map
-
+- [replaced] st_map by map_glbl_st
+- [todo] replace map_glbl_st by map_dist_st. This is for the distant future.
 
 2018-06-12
 -------------------------------------------------------------------------------
@@ -49,9 +56,6 @@
    - several calls reorganized:
      - ldif moved from readNamelists to num_param
      - several initializations from readNamelist moved into initialize_output
-  
-  
-  
     
 2018-06-05
 -------------------------------------------------------------------------------
@@ -65,23 +69,23 @@
 - Adopting one comment structure. Comments follow the indentation of the 
   subroutine, e.g.
   
-         subroutine foo
-            !
-            !   This subroutine does X
-            !
-            !   This line
-            !   > call my_function
-            !   is more performant than this line
-            !   > call another_function.
-            !   
-            !   Comments are allowed to go as far as 80 characters width, with 
-            !   many exceptions
-            !   
-            !   Author: Rafael Lago
-            !
-            !-- TODO blablabal
-            !
-         end subroutine
+      subroutine foo
+         !
+         !   This subroutine does X
+         !
+         !   This line
+         !   > call my_function
+         !   is more performant than this line
+         !   > call another_function.
+         !   
+         !   Comments are allowed to go as far as 80 characters width, with 
+         !   many exceptions
+         !   
+         !   Author: Rafael Lago
+         !
+         !-- TODO blablabal
+         !
+      end subroutine
          
    This change will take a while to consolidate, as I re-write the modules.
     

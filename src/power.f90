@@ -26,7 +26,7 @@ module power
    use outRot, only: get_viscous_torque
    use constants, only: one, two, half
    use legendre_spec_to_grid, only: lmAS2pt
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
 
    implicit none
 
@@ -180,9 +180,9 @@ contains
          !   do lm=max(2,llm),ulm
          !      l=lo_map%lm2l(lm)
          !      m=lo_map%lm2m(lm)
-         !      laplace=dLh(radial_map%lm2(l,m))*or2(ir)*w(lm,ir)-ddw(lm,ir)
-         !      curlU2_r(ir)=     curlU2_r(ir) + dLh(radial_map%lm2(l,m)) * ( &
-         !           dLh(radial_map%lm2(l,m))*or2(ir)*cc2real(z(lm,ir),m)  + &
+         !      laplace=dLh(map_glbl_st%lm2(l,m))*or2(ir)*w(lm,ir)-ddw(lm,ir)
+         !      curlU2_r(ir)=     curlU2_r(ir) + dLh(map_glbl_st%lm2(l,m)) * ( &
+         !           dLh(map_glbl_st%lm2(l,m))*or2(ir)*cc2real(z(lm,ir),m)  + &
          !           cc2real(dz(lm,ir),m) + &
          !           cc2real(laplace,m)    )
          !   end do
@@ -193,10 +193,10 @@ contains
             do lm=max(2,llm),ulm
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
-               laplace=dLh(radial_map%lm2(l,m))*or2(ir)*b(lm,ir)-ddb(lm,ir)
+               laplace=dLh(map_glbl_st%lm2(l,m))*or2(ir)*b(lm,ir)-ddb(lm,ir)
                curlB2_r(ir)=curlB2_r(ir) +  &
-               &             dLh(radial_map%lm2(l,m))*lambda(ir)*(              &
-               &             dLh(radial_map%lm2(l,m))*or2(ir)*                  &
+               &             dLh(map_glbl_st%lm2(l,m))*lambda(ir)*(              &
+               &             dLh(map_glbl_st%lm2(l,m))*or2(ir)*                  &
                &             cc2real(aj(lm,ir),m) + cc2real(dj(lm,ir),m) + &
                &             cc2real(laplace,m)    )
             end do
@@ -209,7 +209,7 @@ contains
                   l=lo_map%lm2l(lm)
                   m=lo_map%lm2m(lm)
                   buoy_r(ir)=buoy_r(ir) +                                 &
-                  &           dLh(radial_map%lm2(l,m))*BuoFac*rgrav(ir)*       &
+                  &           dLh(map_glbl_st%lm2(l,m))*BuoFac*rgrav(ir)*       &
                   &           ( otemp1(ir)*cc22real(w(lm,ir),s(lm,ir),m) &
                   &           -ViscHeatFac*ThExpNb*alpha0(ir)*orho1(ir)*  &
                   &            cc22real(w(lm,ir),p(lm,ir),m) )
@@ -219,7 +219,7 @@ contains
                   l=lo_map%lm2l(lm)
                   m=lo_map%lm2m(lm)
                   buoy_r(ir)=buoy_r(ir) +                         &
-                  &           dLh(radial_map%lm2(l,m))*BuoFac*          &
+                  &           dLh(map_glbl_st%lm2(l,m))*BuoFac*          &
                   &           rgrav(ir)*cc22real(w(lm,ir),s(lm,ir),m)
                end do
             end if
@@ -230,7 +230,7 @@ contains
                l=lo_map%lm2l(lm)
                m=lo_map%lm2m(lm)
                buoy_chem_r(ir)=buoy_chem_r(ir) +                      &
-               &                dLh(radial_map%lm2(l,m))*ChemFac*           &
+               &                dLh(map_glbl_st%lm2(l,m))*ChemFac*           &
                &                rgrav(ir)*cc22real(w(lm,ir),xi(lm,ir),m)
             end do
          end if
@@ -317,8 +317,8 @@ contains
                Bh=(l+one)*O_r_ic(ir)*aj_ic(lm,ir)+dj_ic(lm,ir)
                laplace=-ddb_ic(lm,ir) - two*(l+one)*O_r_ic(ir)*db_ic(lm,ir)
                curlB2_rIC(ir)=curlB2_rIC(ir) +                            &
-               &               dLh(radial_map%lm2(l,m))*r_ratio**(2*l+2) *  ( &
-               &               dLh(radial_map%lm2(l,m))*O_r_ic2(ir)*          &
+               &               dLh(map_glbl_st%lm2(l,m))*r_ratio**(2*l+2) *  ( &
+               &               dLh(map_glbl_st%lm2(l,m))*O_r_ic2(ir)*          &
                &               cc2real(aj_ic(lm,ir),m) +                  &
                &               cc2real(Bh,m) + cc2real(laplace,m)       )
             end do

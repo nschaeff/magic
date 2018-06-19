@@ -7,7 +7,7 @@ module outRot
    use radial_functions, only: r_icb, r_cmb, r, rscheme_oc
    use physical_parameters, only: kbotv, ktopv
    use num_param, only: lScale, tScale, vScale
-   use blocking, only: lo_map, lmStartB,lmStopB, lm2
+   use blocking, only: lo_map, lmStartB,lmStopB
    use logic, only: l_AM, l_save_out, l_iner, l_SRIC, l_rot_ic, &
        &            l_SRMA, l_rot_ma, l_mag_LF, l_mag, l_drift, &
        &            l_finite_diff
@@ -19,7 +19,7 @@ module outRot
    use horizontal_data, only: cosTheta, gauss
    use special, only: BIC, lGrenoble
    use useful, only: abortRun
-   use LMmapping, only: radial_map
+   use LMmapping, only: map_glbl_st
 
    implicit none
 
@@ -567,8 +567,8 @@ contains
       real(cp) :: fac
     
       !----- Construct radial function:
-      l1m0=lm2(1,0)
-      l1m1=lm2(1,1)
+      l1m0=map_glbl_st%lm2(1,0)
+      l1m1=map_glbl_st%lm2(1,1)
       do n_r_loc=1,n_r_max
          r_E_2=r(n_r_loc)*r(n_r_loc)
          if ( l1m1 > 0 ) then

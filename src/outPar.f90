@@ -10,7 +10,7 @@ module outPar_mod
    use geometry, only: n_r_max, n_r_maxMag, l_max, lm_max, &
        &                 l_maxMag, n_r_icb, l_r, u_r, l_r_Mag, &
        &                 u_r_Mag, n_r_loc, dist_r
-   use blocking, only: nfs, nThetaBs, sizeThetaB, lm2m
+   use blocking, only: nfs, nThetaBs, sizeThetaB
    use logic, only: l_viscBcCalc, l_anel, l_fluxProfs, l_mag_nl, &
        &            l_perpPar, l_save_out, l_temperature_diff,   &
        &            l_anelastic_liquid, l_TP_form
@@ -28,6 +28,7 @@ module outPar_mod
    use useful, only: cc2real
    use integration, only: rInt_R
    use legendre_spec_to_grid, only: lmAS2pt
+   use LMmapping, only: map_glbl_st
 
    implicit none
 
@@ -187,7 +188,7 @@ contains
             ! calculate entropy/temperature variance:
             sR2(nR)=0.0_cp
             do lm=1,lm_max
-              m=lm2m(lm)
+              m=map_glbl_st%lm2m(lm)
               sR2(nR)=sR2(nR)+cc2real(s_Rdist(lm,nR),m)
             end do
             if ( nLogs  <=  1) then
