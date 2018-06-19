@@ -78,8 +78,6 @@ module parallel_mod
                            rank2mo(:), &
                            rank2lo(:)
    
-   !   Others (Cosmetic)
-   
    !   Others (might be deprecated)
    integer :: nThreads
    integer :: nLMBs_per_rank

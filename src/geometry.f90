@@ -122,6 +122,10 @@ module geometry
    !   The former stores the number of *local* points, the later stores the 
    !   total number of points in all ranks.
    !   
+   !   Notice that n_lm, n_lmP and etc are not the same as lm_max and lmP_max.
+   !   The former stores the number of *local* points, the later stores the 
+   !   total number of points in all ranks.
+   !   
 
    !-- Distributed Grid Space 
    integer, allocatable, protected :: dist_theta(:,:)
@@ -283,8 +287,6 @@ contains
       call print_mlo_distribution_summary
       call print_mlo_distribution
       
-      stop
-
    end subroutine initialize_distributed_geometry
    
    !----------------------------------------------------------------------------
@@ -406,7 +408,6 @@ contains
       if (l_double_curl  ) n_lmDC_loc  = n_lm_loc
       
    end subroutine distribute_lm
-   
    !----------------------------------------------------------------------------
    subroutine distribute_mlo
       !   
