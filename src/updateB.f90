@@ -367,11 +367,12 @@ contains
                      rhs2(1,lmB,threadid) = aj_nl_cmb(st_map%lm2(l1,m1))
                   else
                      rhs1(1,lmB,threadid) = 0.0_cp
+                     if ( ktopb == 2 ) rhs1(2,lmB,threadid) = 0.0_cp
                      rhs2(1,lmB,threadid) = 0.0_cp
                   end if
 
                   rhs1(n_r_max,lmB,threadid)=0.0_cp
-                  !if ( kbotb == 2 ) rhs1(n_r_max-1,lmB,threadid)=0.0_cp
+                  if ( kbotb == 2 ) rhs1(n_r_max-1,lmB,threadid)=0.0_cp
 
                   rhs2(n_r_max,lmB,threadid)=0.0_cp
                   if ( m1 == 0 ) then   ! Magnetoconvection boundary conditions
@@ -505,6 +506,9 @@ contains
                         &          + O_dt*dLh(st_map%lm2(l1,m1))*or2(nR)*aj(lm1,nR)
                      end if
                   end do
+                  !! overwrite when perfect conductor
+                  if ( ktopb==2 ) rhs1(2,lmB,threadid)        = 0.0_cp
+                  if ( kbotb==2 ) rhs1(n_r_max-1,lmB,threadid)= 0.0_cp
 
                   !-- Magnetic boundary conditions, inner core for radial derivatives
                   !         of poloidal and toroidal magnetic potentials:
@@ -912,7 +916,8 @@ contains
          else if ( ktopb == 2 ) then
             !----- perfect conductor
             !      see Glatzmaier, JCP 55, 461-484 (1984)
-            bMat(1,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(1,nR_out)
+            bMat(1,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(1,nR_out)
+            bMat(2,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(2,nR_out)
             jMat(1,nR_out)=rscheme_oc%rnorm* rscheme_oc%drMat(1,nR_out)
          else if ( ktopb == 4 ) then
             !----- pseudo vacuum condition, field has only
@@ -931,7 +936,8 @@ contains
             jMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(n_r_max,nR_out)
          else if ( kbotb == 2 ) then
             !----------- perfect conducting IC
-            bMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(n_r_max,nR_out)
+            bMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(n_r_max,nR_out)
+            bMat(n_r_max-1,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(n_r_max-1,nR_out)
             jMat(n_r_max,nR_out)=rscheme_oc%rnorm* rscheme_oc%drMat(n_r_max,nR_out)
          else if ( kbotb == 3 ) then
             !---------- finite conducting IC, four boundary conditions:
@@ -983,6 +989,9 @@ contains
       do nR_out=rscheme_oc%n_max+1,n_r_max
          bMat(1,nR_out)=0.0_cp
          jMat(1,nR_out)=0.0_cp
+         if ( ktopb == 2 ) then
+            bMat(2,nR_out)=0.0_cp
+         end if
          if ( l_LCR ) then
             do nR=2,n_r_LCR
                bMat(nR,nR_out)=0.0_cp
@@ -991,6 +1000,9 @@ contains
          end if
          bMat(n_r_max,nR_out)=0.0_cp
          jMat(n_r_max,nR_out)=0.0_cp
+         if ( kbotb == 2 ) then
+            bMat(n_r_max-1,nR_out)=0.0_cp
+         end if
          if ( kbotb == 3 ) then
             bMat(n_r_max+1,nR_out)=0.0_cp
             jMat(n_r_max+1,nR_out)=0.0_cp
