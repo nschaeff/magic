@@ -42,7 +42,7 @@ def hammer2cart(ttheta, pphi, colat=False):
 
 def cut(dat, vmax=None, vmin=None):
     """
-    This functions truncates the values of an input array that are beyond 
+    This functions truncates the values of an input array that are beyond
     vmax or below vmin and replace them by vmax and vmin, respectively.
 
     >>> # Keep only values between -1e3 and 1e3
@@ -184,10 +184,15 @@ def equatContour(data, radius, minc=1, label=None, levels=defaultLevels,
             cax = fig.add_axes([0.85, 0.5-0.7*h/2., 0.03, 0.7*h])
         mir = fig.colorbar(im, cax=cax)
 
-    # Normalise data 
+    # Normalise data
     if normed:
         im.set_clim(-max(abs(data.max()), abs(data.min())),
                      max(abs(data.max()), abs(data.min())))
+
+    #To avoid white lines on pdfs
+
+    for c in im.collections:
+        c.set_edgecolor("face")
 
     return fig, xx, yy
 
@@ -253,6 +258,12 @@ def merContour(data, radius, label=None, levels=defaultLevels, cm=defaultCm,
         im = ax.contourf(xx, yy, data, cs, cmap=cmap)
         #im = ax.pcolormesh(xx, yy, data, cmap=cmap, antialiased=True)
 
+    #To avoid white lines on pdfs
+
+    for c in im.collections:
+        c.set_edgecolor("face")
+
+
     ax.plot(radius[0]*np.sin(th), radius[0]*np.cos(th), 'k-')
     ax.plot(radius[-1]*np.sin(th), radius[-1]*np.cos(th), 'k-')
     ax.plot([0., 0], [radius[-1], radius[0]], 'k-')
@@ -278,7 +289,7 @@ def merContour(data, radius, label=None, levels=defaultLevels, cm=defaultCm,
 
 
 def radialContour(data, rad=0.85, label=None, proj='hammer', lon_0=0., vmax=None,
-                  vmin=None, lat_0=30., levels=defaultLevels, cm=defaultCm, 
+                  vmin=None, lat_0=30., levels=defaultLevels, cm=defaultCm,
                   normed=True, cbar=True, tit=True, lines=False):
     """
     Plot the radial cut of a given field
@@ -420,6 +431,7 @@ def radialContour(data, rad=0.85, label=None, proj='hammer', lon_0=0., vmax=None
                 ax.contour(x, y, data, 1, colors=['k'])
             #im = ax.pcolormesh(x, y, data, cmap=cmap, antialiased=True)
 
+
     # Add the colorbar at the right place
     pos = ax.get_position()
     l, b, w, h = pos.bounds
@@ -435,5 +447,9 @@ def radialContour(data, rad=0.85, label=None, proj='hammer', lon_0=0., vmax=None
         im.set_clim(-max(abs(data.max()), abs(data.min())),
                      max(abs(data.max()), abs(data.min())))
 
-    return fig
+    #To avoid white lines on pdfs
 
+    for c in im.collections:
+        c.set_edgecolor("face")
+
+    return fig
