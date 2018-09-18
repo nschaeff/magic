@@ -916,8 +916,10 @@ contains
          else if ( ktopb == 2 ) then
             !----- perfect conductor
             !      see Glatzmaier, JCP 55, 461-484 (1984)
-            bMat(1,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(1,nR_out)
-            bMat(2,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(2,nR_out)
+            ! the (extra) condition Br=0 on Bpol is imposed just
+            ! below the boundary
+            bMat(2,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(2,nR_out)
+            bMat(1,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(1,nR_out)
             jMat(1,nR_out)=rscheme_oc%rnorm* rscheme_oc%drMat(1,nR_out)
          else if ( ktopb == 4 ) then
             !----- pseudo vacuum condition, field has only
@@ -936,8 +938,8 @@ contains
             jMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(n_r_max,nR_out)
          else if ( kbotb == 2 ) then
             !----------- perfect conducting IC
-            bMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(n_r_max,nR_out)
-            bMat(n_r_max-1,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(n_r_max-1,nR_out)
+            bMat(n_r_max-1,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(n_r_max-1,nR_out)
+            bMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(n_r_max,nR_out)
             jMat(n_r_max,nR_out)=rscheme_oc%rnorm* rscheme_oc%drMat(n_r_max,nR_out)
          else if ( kbotb == 3 ) then
             !---------- finite conducting IC, four boundary conditions:
