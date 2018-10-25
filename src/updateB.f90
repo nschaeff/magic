@@ -918,8 +918,8 @@ contains
             !      see Glatzmaier, JCP 55, 461-484 (1984)
             ! the (extra) condition Br=0 on Bpol is imposed just
             ! below the boundary
-            bMat(2,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(2,nR_out)
-            bMat(1,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(1,nR_out)
+            bMat(1,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(1,nR_out)
+            bMat(2,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(1,nR_out)
             jMat(1,nR_out)=rscheme_oc%rnorm* rscheme_oc%drMat(1,nR_out)
          else if ( ktopb == 4 ) then
             !----- pseudo vacuum condition, field has only
@@ -938,8 +938,8 @@ contains
             jMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(n_r_max,nR_out)
          else if ( kbotb == 2 ) then
             !----------- perfect conducting IC
-            bMat(n_r_max-1,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(n_r_max-1,nR_out)
-            bMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(n_r_max,nR_out)
+            bMat(n_r_max,nR_out)=rscheme_oc%rnorm*rscheme_oc%rMat(n_r_max,nR_out)
+            bMat(n_r_max-1,nR_out)=rscheme_oc%rnorm*rscheme_oc%d2rMat(n_r_max,nR_out)
             jMat(n_r_max,nR_out)=rscheme_oc%rnorm* rscheme_oc%drMat(n_r_max,nR_out)
          else if ( kbotb == 3 ) then
             !---------- finite conducting IC, four boundary conditions:
@@ -991,9 +991,7 @@ contains
       do nR_out=rscheme_oc%n_max+1,n_r_max
          bMat(1,nR_out)=0.0_cp
          jMat(1,nR_out)=0.0_cp
-         if ( ktopb == 2 ) then
-            bMat(2,nR_out)=0.0_cp
-         end if
+         if ( ktopb == 2 ) bMat(2,nR_out)=0.0_cp
          if ( l_LCR ) then
             do nR=2,n_r_LCR
                bMat(nR,nR_out)=0.0_cp
@@ -1002,9 +1000,7 @@ contains
          end if
          bMat(n_r_max,nR_out)=0.0_cp
          jMat(n_r_max,nR_out)=0.0_cp
-         if ( kbotb == 2 ) then
-            bMat(n_r_max-1,nR_out)=0.0_cp
-         end if
+         if ( kbotb == 2 ) bMat(n_r_max-1,nR_out)=0.0_cp
          if ( kbotb == 3 ) then
             bMat(n_r_max+1,nR_out)=0.0_cp
             jMat(n_r_max+1,nR_out)=0.0_cp
