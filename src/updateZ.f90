@@ -233,7 +233,7 @@ contains
       end if
 
       if (l_diff_prec) then
-         diff_prec_fac=y11_norm*oek*sin(diff_prec_angle)
+         diff_prec_fac=oek*sin(diff_prec_angle)
       else
          diff_prec_fac = 0.0_cp
       end if

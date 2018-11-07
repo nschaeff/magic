@@ -322,8 +322,8 @@ contains
       c_z10_omega_ma=y10_norm/(r(1)*r(1))/rho0(1)
 
       !----- Proportionality factors for (l=1,m=1) toroidal velocity potential
-      c_z11_omega_ic=y11_norm/(r(n_r_max)*r(n_r_max))/rho0(n_r_max)
-      c_z11_omega_ma=y11_norm/(r(1)*r(1))/rho0(1)
+      c_z11_omega_ic=two*y11_norm/(r(n_r_max)*r(n_r_max))/rho0(n_r_max)
+      c_z11_omega_ma=two*y11_norm/(r(1)*r(1))/rho0(1)
 
       !----- Inner-core normalized moment of inertia:
       c_moi_ic=8.0_cp*pi/15.0_cp*r_icb**5*rho_ratio_ic*rho0(n_r_max)
