@@ -23,7 +23,7 @@ module LMLoop_mod
    use debugging,  only: debug_write
    use communications, only: GET_GLOBAL_SUM, lo2r_redist_start, lo2r_xi, &
        &                    lo2r_s, lo2r_flow, lo2r_field,               &
-       &                    lo2r_redist_start_dist
+       &                    lo2r_redist_start_dist, transform_new2old, transform_old2new
    use updateS_mod
    use updateZ_mod
    use updateWP_mod
@@ -206,13 +206,14 @@ contains
          if ( .not. l_single_matrix ) then
             PERFON('up_S')
             if ( l_anelastic_liquid ) then
+            
                print *, "Not Parallelized!", __LINE__, __FILE__
                stop
                call updateS_ala(s_LMloc, ds_LMloc, w_LMloc, dVSrLM,dsdt,  & 
                     &           dsdtLast_LMloc, w1, coex, dt, nLMB)
             else
-! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !                print *, "Not Parallelized!", __LINE__, __FILE__
-! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !                stop
+! !                print *, "Not Parallelized!", __LINE__, __FILE__
+! !                stop
                call updateS( s_LMloc, ds_LMloc, w_LMloc, dVSrLM,dsdt, &
                     &        dsdtLast_LMloc, w1, coex, dt, nLMB )
             end if

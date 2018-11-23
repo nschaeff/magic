@@ -13,9 +13,9 @@ module parallel_mod
    !      - m: discontiguous, distributed
    !      - r:    contiguous, distributed
    !    - ML-Space (r, m, l) MLLoop
+   !      - m: discontiguous, distributed
+   !      - l: "sort of" contiguous, distributed
    !      - r:    contiguous, local
-   !      - m:    contiguous, distributed
-   !      - l: discontiguous, distributed
    !  
    ! The available MPI ranks are split into a 2D cartesian grid. 
    ! Notice that the cartesian for (l,m,r) *hast* to be the same 
@@ -34,7 +34,7 @@ module parallel_mod
    !   - comm_r: same as above
    !   - comm_m: copy of comm_theta
    ! 
-   ! - comm_mlo: cartesian grid for (r, m, l) used in the MLloop
+   ! - comm_mlo: cartesian grid for (m, l, r) used in the MLloop
    !   - comm_mo: only the m direction of comm_mlo_space
    !   - comm_lo: only the l direction of comm_mlo_space
    ! 
@@ -72,7 +72,7 @@ module parallel_mod
    !   ML-Space (ML Loop)
    integer ::   comm_mlo
    integer ::    comm_lo,    comm_mo
-   integer :: n_ranks_lo, n_ranks_mo
+   integer :: n_ranks_lo, n_ranks_mo, n_ranks_mlo
    integer ::   coord_lo,   coord_mo, coord_mlo
    integer, allocatable :: mlo2rank(:,:), &
                            rank2mo(:), &
@@ -180,6 +180,7 @@ contains
       !-- ML Space (ML Loop)
       !   
       !   
+      n_ranks_mlo = n_ranks
       n_ranks_mo  = n_ranks_m
       n_ranks_lo  = n_ranks_r
       coord_mo    = coord_m

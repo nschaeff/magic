@@ -180,6 +180,9 @@ module geometry
    !   was chosen to build this variable. n_mlo_array gives the length of the 
    !   second dimension of this array.
    !   
+   !   where_mlo(m,l): this merely returns the coord_mlo (or rank in the 
+   !   comm_mlo) in which the tuplet (m,l) is allocated.
+   !   
    !-- TODO: none of the code uses dist_mlo so far. This is the next step
    !-- TODO: dist_mlo is created in distribute_mlo, but this is rather poorly
    !   optimized. I'm afraid that a reasonable distribution would require a very
@@ -188,7 +191,7 @@ module geometry
    integer, allocatable, protected :: dist_mlo(:,:,:)
    integer, allocatable, protected :: dist_n_mlo(:)
    integer, protected :: n_mo_loc, n_lo_loc, n_mlo_loc
-   integer, protected :: n_mlo_array
+   integer, protected :: n_mlo_array, mlo_max
    
    private :: distribute_gs, distribute_lm, distribute_mlo, &
               distribute_contiguous_first, distribute_contiguous_last, &
@@ -425,7 +428,7 @@ contains
       !   
       integer :: tmp(0:n_ranks_r-1,0:2)
       integer :: icoord_mlo, icoord_mo, icoord_lo
-      integer :: m_idx, l_idx, mlo_idx
+      integer :: m_idx, l_idx, mlo_idx, irank
       integer :: l, m
       
       allocate(dist_n_mlo(0:n_ranks-1))
@@ -475,6 +478,9 @@ contains
          stop
       end if
       
+      n_mlo_loc = dist_n_mlo(coord_mlo)
+      mlo_max = lm_max
+      
    end subroutine distribute_mlo
    
    !----------------------------------------------------------------------------   
@@ -491,6 +497,8 @@ contains
       !   
       !   This distribution is far from being optimal and should work just as 
       !   a placeholder.
+      !   
+      !   This will place l as the slowest index and m as the fastest!
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !

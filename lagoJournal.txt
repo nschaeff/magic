@@ -1,3 +1,59 @@
+2018-11-23
+-------------------------------------------------------------------------------
+- transform_old2new and transform_new2old working. Now I can start porting
+  the LMloop portion of the code
+- Added a ml_mapping for the LMLoop. The name of the LMLoop should be MLloop
+  (because it is transposed of LM)
+- I serisouly need to lay down the nomeclature. I think the following is
+  very reasonable:
+  - dist_A(rank,info) : contains info about each rank
+  - loc_A(info) : a pointer to dist_A(myrank). It is the same information, but
+    only for the current rank
+  - glb_A(info) : only occurs in mappings. This reflects the position of the
+    information in the local rank in the global coordinates, e.g. point
+    (m,l) in loc_A is index 10, but in the global coordinates, this point
+    would have index 133. This is important for converting from (lm,lr,ur)
+    to (llm:ulm,r), for instance.
+  - There is still a serious problem with this approach, and that is that
+    sometimes there is only "A" (without prefixes or suffixes) and sometimes
+    it refers to dist_, sometimes to _loc, sometimes to glb usw. So far only 
+    the map_mlo is using this nomenclature
+
+
+2018-11-20
+-------------------------------------------------------------------------------
+- Re-taking MagIC. Current status of magic_wizard tests:
+  (n_procs_r=8, n_procs_theta=4)
+  - dynamo_benchmark
+  - varProps
+  ✘ finite_differences: for some reason, this simply does not find the required
+    files. I'll check this later...
+  ✘ boussBenchSat: this enables lPowerCalc flag, which calls some of the 
+    diagnostics. This test passes with BUILD_TYPE=Release, but not 
+    BUILD_TYPE=Debug (it fires floating point invalid error) 
+  - doubleDiffusion
+  ✘ couetteAxi: here m=0. It confuses my implementation. I need to 
+                rethink the distribution in this case, or force 
+                n_procs_theta=1.
+  - precession
+  - testRestart
+  ✘ testTruncations: problem in geometry.f90:506; I may have done something extra 
+    dumb here...
+  - testMapping
+  - testRadialOutputs
+  - hydro_bench_anel
+  ✘ fluxPerturbation: there is a [BUG] here. It happens at line output.f90:809 
+    and it is only fired if cmake is called with BUILD_TYPE=Debug. In this 
+    line, it generates a NaN (sqrt of a negative real number) which is 
+    neglected at BUILD_TYPE=Release. I've reported this before, but even in 
+    the master branch (779796945c82) this bug is still present.
+  - isothermal_nrho3
+  - dynamo_benchmark_condICrotIC
+  ✘ varCond: it calls movie_gather_frames_to_rank0 which is not yet parallelized
+  
+  Command:
+  ./magic_wizard.py --use-mpi --use-mkl --use-shtns --mpicmd=srun --extracmd="n_procs_r=4 n_procs_theta=8" --nranks=32 --link --name="dynamo_benchmark, varProps, finite_differences, boussBenchSat, doubleDiffusion, couetteAxi, precession, testRestart, testTruncations, testMapping, hydro_bench_anel, fluxPerturbation, isothermal_nrho3, dynamo_benchmark_condICrotIC, varCond"
+
 2018-06-19
 -------------------------------------------------------------------------------
 - [created] created distribute_mlo

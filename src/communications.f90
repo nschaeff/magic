@@ -15,7 +15,11 @@ module communications
    use logic, only: l_mag, l_conv, l_heat, l_chemical_conv, &
        &            l_mag_kin, l_TP_form, l_double_curl
    use useful, only: abortRun
-   use LMmapping, only: map_dist_st, map_glbl_st
+   use LMmapping, only: map_dist_st, map_glbl_st, map_mlo
+ 
+ 
+use blocking
+ 
  
    implicit none
  
@@ -98,11 +102,10 @@ module communications
    
    !-- ?????????
    !
-!    integer :: 
-   
-
    public :: myAllGather, slice_f, slice_Flm, slice_FlmP, gather_f, &
-             gather_FlmP, gather_Flm, transpose_m_theta, transpose_theta_m
+             gather_FlmP, gather_Flm, transpose_m_theta, transpose_theta_m, &
+             transform_new2old, transform_old2new, printMatrix, printTriplets,&
+             printMatrixInt
              
 contains
   
@@ -1841,5 +1844,165 @@ contains
       end do
    end subroutine transpose_theta_m
 !-------------------------------------------------------------------------------
+!  
+!  LM Loop transposes and Gathers and Etc
+!
+!-------------------------------------------------------------------------------
+   subroutine transform_new2old(Fmlo_new, Fmlo_old)
+      complex(cp), intent(inout) :: Fmlo_new(n_mlo_loc, n_r_max)
+      complex(cp), intent(inout) :: Fmlo_old(llm:ulm,   n_r_max)
+      
+      complex(cp) :: recvbuff(n_r_max)
+      integer :: irank, ierr, lm, l, m
+      
+      do lm=1,lm_max
+         m = map_glbl_st%lm2m(lm)
+         l = map_glbl_st%lm2l(lm)
+         irank = map_mlo%ml2coord(m,l)
+         if (irank==coord_mlo) recvbuff = Fmlo_new(map_mlo%ml2(m,l),:)
+         call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_mlo, ierr)
+
+         if (lm>=llm .and. lm<=ulm) Fmlo_old(lm,:) = recvbuff
+      end do
+
+   end subroutine transform_new2old
+!-------------------------------------------------------------------------------
+!  A funny thing about the function below is that it is not actually necessary
+!  for MagIC itself, but only for the transition. And it is quite the
+!  complicated one if I want to have reasonable performance.
+!  I'll just use regular-extremely-expensive P2P communications. Do not even
+!  try to use this in a large scale simulations. 
+   subroutine transform_old2new(Fmlo_old, Fmlo_new)
+!-------------------------------------------------------------------------------
+      complex(cp), intent(inout) :: Fmlo_old(llm:ulm,   n_r_max)
+      complex(cp), intent(inout) :: Fmlo_new(n_mlo_loc, n_r_max)
+      
+      complex(cp) :: recvbuff(n_r_max)
+      integer :: old2coord(l_max, l_max)
+      integer :: irank, ierr, lm, l, m
+      integer :: nLMB_start, nLMB_end
+      
+      old2coord = -1
+      do irank=0,n_ranks_r-1
+         nLMB_start = 1+irank*nLMBs_per_rank
+         nLMB_end   = min((irank+1)*nLMBs_per_rank,nLMBs)
+         do lm=lmStartB(nLMB_start),lmStopB(nLMB_end)
+            m = map_glbl_st%lm2m(lm)
+            l = map_glbl_st%lm2l(lm)
+            
+            if (irank==coord_r) recvbuff = Fmlo_old(lm,:)
+            call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_r, ierr)
+            if (map_mlo%ml2coord(m,l)==coord_mlo) Fmlo_new(map_mlo%ml2(m,l),:) = recvbuff
+         end do
+      end do
+      
+   end subroutine transform_old2new
+!-------------------------------------------------------------------------------
+   subroutine printMatrix(inMat, o_fmtString)
+      complex(cp), intent(in) :: inMat(:,:)
+      character(*), optional, intent(in) :: o_fmtString
+      
+      character(:), allocatable :: fmtString
+      integer :: nrow, ncol, irow, icol
+      
+      if (present(o_fmtString)) then
+         fmtString = o_fmtString
+      else
+         fmtString = "(F00.0)"
+      end if
+      
+      nrow = size(inMat,1)
+      ncol = size(inMat,2)
+      
+      do irow=1,nrow
+         write(*,"(A)", advance="NO") "["
+         do icol=1,ncol-1
+            write(*,fmtString, advance="NO") real(inMat(irow,icol))
+            write(*,"(A)", advance="NO") "+"
+            write(*,fmtString, advance="NO") aimag(inMat(irow,icol))
+            write(*,"(A)", advance="NO") "i, "
+         end do
+         write(*,fmtString, advance="NO") real(inMat(irow,ncol))
+         write(*,"(A)", advance="NO") "+"
+         write(*,fmtString, advance="NO") aimag(inMat(irow,ncol))
+         write(*,"(A)", advance="NO") "i]"//NEW_LINE("A")
+      end do
+      flush(6)
+   end subroutine printMatrix
+!-------------------------------------------------------------------------------
+   subroutine printMatrixInt(inMat, o_fmtString)
+      integer, intent(in) :: inMat(:,:)
+      character(*), optional, intent(in) :: o_fmtString
+      
+      character(:), allocatable :: fmtString
+      integer :: nrow, ncol, irow, icol
+      
+      if (present(o_fmtString)) then
+         fmtString = o_fmtString
+      else
+         fmtString = "(I0)"
+      end if
+      
+      nrow = size(inMat,1)
+      ncol = size(inMat,2)
+      
+      do irow=1,nrow
+         write(*,"(A)", advance="NO") "["
+         do icol=1,ncol-1
+            write(*,fmtString, advance="NO") inMat(irow,icol)
+            write(*,"(A)", advance="NO") ", "
+         end do
+         write(*,fmtString, advance="NO") inMat(irow,ncol)
+         write(*,"(A)", advance="NO") "]"//NEW_LINE("A")
+      end do
+      flush(6)
+   end subroutine printMatrixInt
+!-------------------------------------------------------------------------------
+   subroutine printTriplets(inMat)
+      complex(cp), intent(in) :: inMat(:,:)
+      
+      character(:), allocatable :: fmtString
+      integer :: nrow, ncol, irow, icol, l_idx, m_idx, r_idx
+      
+      fmtString = "(I2)"
+      
+      nrow = size(inMat,1)
+      ncol = size(inMat,2)
+      
+      do irow=1,nrow
+         write(*,"(A)", advance="NO") "[("
+         do icol=1,ncol-1
+            if (real(inMat(irow,icol))<=0.0) then
+               m_idx = -int(real(inMat(irow,icol)))
+               l_idx = -1
+            else
+               m_idx = map_glbl_st%lm2m(int(real(inMat(irow,icol))))
+               l_idx = map_glbl_st%lm2l(int(real(inMat(irow,icol))))
+            end if
+            r_idx = int(aimag(inMat(irow,icol)))
+            write(*,fmtString, advance="NO") m_idx
+            write(*,"(A)", advance="NO") ","
+            write(*,fmtString, advance="NO") l_idx
+            write(*,"(A)", advance="NO") ","
+            write(*,fmtString, advance="NO") r_idx
+            write(*,"(A)", advance="NO") ") | ("
+         end do
+         if (real(inMat(irow,icol))<=0.0) then
+            m_idx = -int(real(inMat(irow,icol)))
+            l_idx = -1
+         else
+            m_idx = map_glbl_st%lm2m(int(real(inMat(irow,ncol))))
+            l_idx = map_glbl_st%lm2l(int(real(inMat(irow,ncol))))
+         end if
+         r_idx = int(aimag(inMat(irow,ncol)))
+         write(*,fmtString, advance="NO") m_idx
+         write(*,"(A)", advance="NO") ","
+         write(*,fmtString, advance="NO") l_idx
+         write(*,"(A)", advance="NO") ","
+         write(*,fmtString, advance="NO") r_idx
+         write(*,"(A)", advance="NO") ")]"//NEW_LINE("A")
+      end do
+      flush(6)
+   end subroutine printTriplets
 
 end module communications

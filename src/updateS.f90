@@ -4,7 +4,7 @@ module updateS_mod
    use omp_lib
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use geometry, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb
+   use geometry, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb, n_mlo_loc
    use radial_functions, only: orho1, or1, or2, beta, dentropy0, rscheme_oc,  &
        &                       kappa, dLkappa, dLtemp0, temp0
    use physical_parameters, only: opr, kbots, ktops
@@ -20,7 +20,10 @@ module updateS_mod
    use fields, only:  work_LMloc
    use constants, only: zero, one, two
    use useful, only: abortRun
-   use LMmapping, only: map_glbl_st
+   use LMmapping, only: map_glbl_st, map_mlo
+   
+   use communications ! added by Lago; maybe remove later?
+   use parallel_mod
 
    implicit none
 
@@ -128,7 +131,20 @@ contains
 
       integer :: iThread,all_lms,start_lm,stop_lm
       integer :: iChunk,nChunks,size_of_last_chunk,lmB0
+      
+      complex(cp) :: test_new(n_mlo_loc,n_r_max), test_old(llm:ulm, n_r_max)
+      integer ::  ilm, ir, irank, ierr
 
+      test_old = dVSrLM
+         
+      call transform_old2new(dVSrLM, test_new)
+      call transform_new2old(test_new, test_old)
+      test_old = test_old - dVSrLM
+      call printMatrix(test_old)
+      flush(6)
+
+      print *, "See Zeroes? Then transform_new2old and transform_old2new works! :P"
+      STOP
       if ( .not. l_update_s ) return
 
       nLMBs2(1:nLMBs) => lo_sub_map%nLMBs2

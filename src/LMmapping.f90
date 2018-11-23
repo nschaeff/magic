@@ -40,6 +40,29 @@ module LMmapping
       integer, allocatable :: lm2lmP(:),lmP2lm(:)     
  
    end type mappings
+   
+   !
+   ! n_ml_loc: number of ml tuples in this rank. This means that mlo goes
+   !   from 1 to n_ml_loc in this rank. Each mlo corresponds to a (m,l) tuple.
+   ! 
+   ! dist_ml2(rank,m,l): the mlo index of tuplet (m,l) in rank. If this 
+   ! tuple is not stored in "rank", then its value is -1.
+   ! dist_ml2l(rank,mlo): the value of l for the index mlo in rank "rank"
+   ! dist_ml2m(rank,mlo): the value of m for the index mlo in rank "rank"
+   !
+   ! ml2(m,l): a pointer to dist_ml2(coord_mlo,m,l)
+   ! ml2l(mlo): a pointer to dist_ml2l(coord_mlo,mlo)
+   ! ml2m(mlo): a pointer to dist_ml2m(coord_mlo,mlo)
+   ! 
+   ! If might be useful to loop over "all local mlo" sometimes. For that
+   ! purpose we have also
+   !--------------------------------------------------------------------------
+   type, public :: ml_mappings
+      integer, allocatable :: glb_ml2(:,:), glb_ml2l(:), glb_ml2m(:)
+      integer, allocatable :: ml2coord(:,:)
+      integer, pointer :: loc_ml2(:,:), loc_ml2l(:), loc_ml2m(:)
+      integer, pointer :: ml2(:,:), ml2l(:), ml2m(:)
+   end type ml_mappings
  
    !-- ????
    !   
@@ -53,6 +76,7 @@ module LMmapping
    end type subblocks_mappings
  
    type(mappings) :: map_dist_st, map_glbl_st
+   type(ml_mappings) :: map_mlo
    
 contains
    
@@ -65,17 +89,19 @@ contains
       integer :: i, iRstart, iRstop, iRremaining, iThetastart, iThetastop
       integer(lip) :: local_bytes_used
       
-
       local_bytes_used = bytes_allocated
 !       call allocate_mappings(map_glbl_st,l_max,lm_max,lmP_max,l_axi)
 !       call allocate_mappings(lo_map,l_max,lm_max,lmP_max,l_axi)
 
       call allocate_mappings(map_glbl_st, lm_max, lmP_max, l_axi)
       call allocate_mappings(map_dist_st, n_lm_loc,n_lmP_loc,l_axi)
+      call allocate_ml_mappings(map_mlo)
       
       ! (/0:n_m_max-1/)*minc: an array containing all m points
       call set_lmmapping_default(map_glbl_st, (/0:n_m_max-1/)*minc ) 
       call set_lmmapping_default(map_dist_st,   dist_m(coord_m,1:))
+      
+      call set_mlmapping(map_mlo)
       
       call print_mapping(map_dist_st, 'dist_st')
       call print_mapping(map_glbl_st, 'glbl_st')
@@ -87,6 +113,7 @@ contains
    !----------------------------------------------------------------------------
    subroutine finalize_mapping
 
+      call deallocate_mappings(map_glbl_st)
       call deallocate_mappings(map_dist_st)
 
    end subroutine finalize_mapping
@@ -117,8 +144,8 @@ contains
       else
          self%m_max = 0
       end if
-      self%lm_max   = n_lm_len   ! deprecated; to be later replaced by %n_lm_len. Only used in blocking.f90
-      self%lmP_max  = n_lmP_len  ! deprecated; to be later replaced by %n_lmP_len. Only used in blocking.f90
+      self%lm_max   = n_lm_len   ! deprecated; to be later replaced by %n_lm. Only used in blocking.f90
+      self%lmP_max  = n_lmP_len  ! deprecated; to be later replaced by %n_lmP. Only used in blocking.f90
       self%n_lm  = n_lm_len
       self%n_lmP = n_lmP_len
 
@@ -138,16 +165,45 @@ contains
    end subroutine allocate_mappings
    
    !----------------------------------------------------------------------------
+   subroutine allocate_ml_mappings(self)
+      !   
+      !   Allocates the mapping objects. 
+      !   
+      !   The l_max is taken from geometry module. It is supposed to represent 
+      !   the global number of l points.
+      !   n_ml is the number of local mlo points
+      !   
+      !   Author: Rafael Lago, MPCDF, November 2018
+      !   
+      type(ml_mappings), intent(inout) :: self
+
+      allocate( self%ml2coord(0:l_max, 0:l_max) )
+      allocate( self%glb_ml2 (0:l_max, 0:l_max) )
+      allocate( self%loc_ml2 (0:l_max, 0:l_max) )
+      allocate( self%glb_ml2m(mlo_max) )
+      allocate( self%glb_ml2l(mlo_max) )
+      allocate( self%loc_ml2m(n_mlo_loc) )
+      allocate( self%loc_ml2l(n_mlo_loc) )
+      
+!       bytes_allocated = bytes_allocated + &
+!         (2*(l_max+1)*(l_max+1)+2*(l_max+1))*SIZEOF_INTEGER
+                        
+   end subroutine allocate_ml_mappings
+   
+   !----------------------------------------------------------------------------
    subroutine deallocate_mappings(self)
-
       type(mappings) :: self
-
       deallocate( self%lm2, self%lm2l, self%lm2m, self%lm2mc, self%l2lmAS )
       deallocate( self%lm2lmS, self%lm2lmA, self%lmP2, self%lmP2l )
       deallocate( self%lmP2m, self%lmP2lmPS, self%lmP2lmPA, self%lm2lmP )
       deallocate( self%lmP2lm )
-
    end subroutine deallocate_mappings
+   
+   !----------------------------------------------------------------------------
+   subroutine deallocate_ml_mappings(self)
+      type(ml_mappings) :: self
+      deallocate( self%ml2coord, self%ml2, self%ml2m, self%ml2l )
+   end subroutine deallocate_ml_mappings
    
    !----------------------------------------------------------------------------
    subroutine allocate_subblocks_mappings(self,map,nLMBs,in_l_max,lmStartB, &
@@ -315,6 +371,64 @@ contains
       end do
       
    end subroutine set_lmmapping_default
+   
+   !----------------------------------------------------------------------------
+   subroutine set_mlmapping(map)
+      !   
+      !   This function assumes that m_arr is of size (n,2), where n is the 
+      !   number of tuples in this mapping
+      !   
+      !   It makes no assumption about the lengths m_arr.
+      !   
+      !   Author: Rafael Lago, MPCDF, November 2018
+      !
+      !-- TODO: double-check if lm2mc is correctly computed (or if it is needed
+      !   at all anymore. I don't think it is.)
+      !   
+      type(ml_mappings), intent(inout) :: map
+      integer, parameter :: Invalid_Idx = -1
+      
+      !-- Local variables
+      integer :: m, l, m_idx, l_idx, ml_loc, ml_glb, irank, mlo_idx
+      
+      map%glb_ml2  = Invalid_Idx
+      map%glb_ml2m = Invalid_Idx
+      map%glb_ml2l = Invalid_Idx
+      map%loc_ml2  = Invalid_Idx
+      map%loc_ml2m = Invalid_Idx
+      map%loc_ml2l = Invalid_Idx
+      map%ml2coord = Invalid_Idx
+      
+      ! Which ranks contain the specified (m,l) tuplet
+      do irank=0,n_ranks_mlo-1
+         do mlo_idx=1,n_mlo_array
+            m_idx = dist_mlo(irank,mlo_idx,1)
+            l_idx = dist_mlo(irank,mlo_idx,2)
+            if(m_idx>=0 .and. l_idx>=0) map%ml2coord(m_idx,l_idx) = irank
+         end do
+      end do
+      
+      ! Maps all local m,l tuplets into a global array of size l_max,l_max
+      ! The tuples which do not belong to this rank are marked with Invalid_Idx
+      do ml_loc = 1,n_mlo_loc
+         m  = dist_mlo(coord_mlo,ml_loc,1)
+         l  = dist_mlo(coord_mlo,ml_loc,2)
+         ml_glb = map_glbl_st%lm2(l,m) ! Yes, I inverted (m,l) here on purpose
+         if (m < 0) cycle
+         if (l < 0) cycle
+         
+         map%loc_ml2(m,l) = ml_loc
+         map%glb_ml2(m,l) = ml_glb
+         map%glb_ml2m(ml_glb) = m
+         map%glb_ml2l(ml_glb) = l
+      end do
+      map%loc_ml2m = dist_mlo(coord_mlo,:,1)
+      map%loc_ml2l = dist_mlo(coord_mlo,:,2)
+      
+      map%ml2  => map%loc_ml2
+      map%ml2m => map%loc_ml2m
+      map%ml2l => map%loc_ml2l
+   end subroutine set_mlmapping
    
    !----------------------------------------------------------------------------
    subroutine print_mapping(map,name)
