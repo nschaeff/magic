@@ -132,19 +132,62 @@ contains
       integer :: iThread,all_lms,start_lm,stop_lm
       integer :: iChunk,nChunks,size_of_last_chunk,lmB0
       
+      
+      
+      !!! New layout  TMP
+      !!!----------------------------------
+      !!!! SAME !!!
+      
+      !-- Local variables
+      real(cp) :: s0Mat_new(n_r_max,n_r_max)     ! for l=m=0  
+      real(cp) :: sMat_new(n_r_max,n_r_max,n_r_max)
+      integer  :: s0Pivot_new(n_r_max)
+      integer  :: sPivot_new(n_r_max,l_max)
+#ifdef WITH_PRECOND_S
+      real(cp) :: sMat_fac_new(n_r_max,l_max)
+#endif
+#ifdef WITH_PRECOND_S0
+      real(cp) :: s0Mat_fac_new(n_r_max)
+#endif
+      logical :: lSmat_new(0:l_max)
+      
+      real(cp)    :: rhs_new(n_r_max)
+      complex(cp) :: rhs1_new(n_r_max,l_max,0)
+      
+      complex(cp) :: w_new(n_mlo_loc,n_r_max)
+      complex(cp) :: dVSrLM_new(n_mlo_loc,n_r_max)
+      complex(cp) :: work_LMloc_new(n_mlo_loc,n_r_max)
+      
+      !-- Input/output of scalar fields:
+      complex(cp) :: s_new(n_mlo_loc,n_r_max)
+      complex(cp) :: dsdt_new(n_mlo_loc,n_r_max)
+      complex(cp) :: dsdtLast_new(n_mlo_loc,n_r_max)
+      !-- Output: udpated s,ds,dsdtLast
+      complex(cp) :: ds_new(n_mlo_loc,n_r_max)
+      
       complex(cp) :: test_new(n_mlo_loc,n_r_max), test_old(llm:ulm, n_r_max)
-      integer ::  ilm, ir, irank, ierr
-
-      test_old = dVSrLM
-         
-      call transform_old2new(dVSrLM, test_new)
-      call transform_new2old(test_new, test_old)
-      test_old = test_old - dVSrLM
-      call printMatrix(test_old)
-      flush(6)
-
-      print *, "See Zeroes? Then transform_new2old and transform_old2new works! :P"
-      STOP
+      real(cp) :: test_norm
+      
+      integer ::  ilm, ir, irank, ierr, i
+      
+      s0Mat_new     = s0Mat
+      sMat_new      = sMat
+      s0Pivot_new   = s0Pivot
+      sPivot_new    = sPivot
+      sMat_fac_new  = sMat_fac
+      s0Mat_fac_new = s0Mat_fac
+      lSmat_new = lSmat
+      
+      call transform_old2new(w, w_new)
+      call transform_old2new(dVSrLM, dVSrLM_new)
+      call transform_old2new(s, s_new)
+      call transform_old2new(dsdt, dsdt_new)
+      call transform_old2new(dsdtLast, dsdtLast_new)
+      call transform_old2new(ds, ds_new)
+      
+      !!! END New layout  TMP
+      !!!----------------------------------
+      
       if ( .not. l_update_s ) return
 
       nLMBs2(1:nLMBs) => lo_sub_map%nLMBs2
@@ -173,7 +216,7 @@ contains
             dsdt(lm,nR)=orho1(nR)*(dsdt(lm,nR)-or2(nR)*work_LMloc(lm,nR))
          end do
       end do
-
+      
       ! one subblock is linked to one l value and needs therefore once the matrix
       do nLMB2=1,nLMBs2(nLMB)
          ! this inner loop is in principle over the m values which belong to the
@@ -293,6 +336,71 @@ contains
       end do     ! loop over lm blocks
       !$OMP END SINGLE
       !$OMP END PARALLEL
+      
+      !--- [NEW LAYOUT]
+      !--- Finish calculation of dsdt:
+      !------------------------------------------------
+      call get_dr( dVSrLM_new,work_LMloc_new,n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc, nocopy=.true. )
+
+      do nR=1,n_r_max
+         do i=1,n_mlo_loc
+            dsdt_new(i,nR)=orho1(nR)*(dsdt_new(i,nR)-or2(nR)*work_LMloc_new(i,nR))
+         end do
+      end do
+      !--- Finish calculation of dsdt: 
+      
+      do i=1,n_mlo_loc 
+         l = map_mlo%i2l(i)
+         
+         
+         
+         
+         
+         
+         
+         
+         
+         
+         
+         
+         
+         
+         
+      end do
+      
+      
+      
+      
+      !--- [END NEW LAYOUT]
+      !------------------------------------------------
+      
+      
+      
+      
+      
+      
+      
+      
+      CALL transform_new2old(s_new, test_old)
+      test_norm = ABS(SUM(test_old-s))
+      PRINT *, "Test Norm: ", test_norm
+      STOP
+      
+      
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
 
       !write(*,"(A,2ES22.12)") "s after = ",SUM(s)
       !-- set cheb modes > rscheme_oc%n_max to zero (dealiazing)

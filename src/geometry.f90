@@ -812,27 +812,27 @@ contains
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !
-      integer :: icoord_mlo, mlo_idx
+      integer :: icoord_mlo, i
       integer :: l, m
-      logical :: lfirst
+      logical :: mfirst
       
       if (rank/=0) return
       
       do icoord_mlo=0,n_ranks-1
          write (*,'(A,I0,A)') ' !  Distribution rank_mlo ',icoord_mlo,' :'
 
-         do m=0,m_max
-            if (.not. any(dist_mlo(icoord_mlo,:,1)==m)) cycle
-            write (*,'(A,I0,A)', ADVANCE='NO') ' !                            m=',m,', l=['
-            lfirst = .true.
-            do mlo_idx=1,dist_n_mlo(icoord_mlo)
-               if (dist_mlo(icoord_mlo,mlo_idx,1)/=m) cycle
-               l = dist_mlo(icoord_mlo,mlo_idx,2)
-               if (lfirst) then
-                  write (*,'(I0)', ADVANCE='NO') l
-                  lfirst = .false.
+         do l=0,m_max
+            if (.not. any(dist_mlo(icoord_mlo,:,2)==l)) cycle
+            write (*,'(A,I0,A)', ADVANCE='NO') ' !                            l=',l,', m=['
+            mfirst = .true.
+            do i=1,dist_n_mlo(icoord_mlo)
+               if (dist_mlo(icoord_mlo,i,2)/=l) cycle
+               m = dist_mlo(icoord_mlo,i,1)
+               if (mfirst) then
+                  write (*,'(I0)', ADVANCE='NO') m
+                  mfirst = .false.
                else
-                  write (*,'(A,I0)', ADVANCE='NO') ',',l
+                  write (*,'(A,I0)', ADVANCE='NO') ',',m
                end if
             end do
             write (*,'(A)', ADVANCE='NO') "]"//NEW_LINE("a")

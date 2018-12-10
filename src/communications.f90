@@ -1849,15 +1849,15 @@ contains
 !
 !-------------------------------------------------------------------------------
    subroutine transform_new2old(Fmlo_new, Fmlo_old)
-      complex(cp), intent(inout) :: Fmlo_new(n_mlo_loc, n_r_max)
+      complex(cp), intent(in)    :: Fmlo_new(n_mlo_loc, n_r_max)
       complex(cp), intent(inout) :: Fmlo_old(llm:ulm,   n_r_max)
       
       complex(cp) :: recvbuff(n_r_max)
       integer :: irank, ierr, lm, l, m
       
       do lm=1,lm_max
-         m = map_glbl_st%lm2m(lm)
-         l = map_glbl_st%lm2l(lm)
+         m = lo_map%lm2m(lm)
+         l = lo_map%lm2l(lm)
          irank = map_mlo%ml2coord(m,l)
          if (irank==coord_mlo) recvbuff = Fmlo_new(map_mlo%ml2(m,l),:)
          call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_mlo, ierr)
@@ -1874,7 +1874,7 @@ contains
 !  try to use this in a large scale simulations. 
    subroutine transform_old2new(Fmlo_old, Fmlo_new)
 !-------------------------------------------------------------------------------
-      complex(cp), intent(inout) :: Fmlo_old(llm:ulm,   n_r_max)
+      complex(cp), intent(in)    :: Fmlo_old(llm:ulm,   n_r_max)
       complex(cp), intent(inout) :: Fmlo_new(n_mlo_loc, n_r_max)
       
       complex(cp) :: recvbuff(n_r_max)
@@ -1887,8 +1887,8 @@ contains
          nLMB_start = 1+irank*nLMBs_per_rank
          nLMB_end   = min((irank+1)*nLMBs_per_rank,nLMBs)
          do lm=lmStartB(nLMB_start),lmStopB(nLMB_end)
-            m = map_glbl_st%lm2m(lm)
-            l = map_glbl_st%lm2l(lm)
+            m = lo_map%lm2m(lm)
+            l = lo_map%lm2l(lm)
             
             if (irank==coord_r) recvbuff = Fmlo_old(lm,:)
             call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_r, ierr)
