@@ -23,7 +23,8 @@ use blocking
  
    implicit none
  
-   private 
+! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !    private uncomment this
+   public 
  
    interface get_global_sum
       module procedure get_global_sum_cmplx_2d, get_global_sum_cmplx_1d, &
@@ -105,7 +106,7 @@ use blocking
    public :: myAllGather, slice_f, slice_Flm, slice_FlmP, gather_f, &
              gather_FlmP, gather_Flm, transpose_m_theta, transpose_theta_m, &
              transform_new2old, transform_old2new, printMatrix, printTriplets,&
-             printMatrixInt
+             printMatrixInt, printArray
              
 contains
   
@@ -1849,17 +1850,19 @@ contains
 !
 !-------------------------------------------------------------------------------
    subroutine transform_new2old(Fmlo_new, Fmlo_old)
-      complex(cp), intent(in)    :: Fmlo_new(n_mlo_loc, n_r_max)
+      complex(cp), intent(in) :: Fmlo_new(n_mlo_loc, n_r_max)
       complex(cp), intent(inout) :: Fmlo_old(llm:ulm,   n_r_max)
       
       complex(cp) :: recvbuff(n_r_max)
       integer :: irank, ierr, lm, l, m
       
       do lm=1,lm_max
+!          m = map_glbl_st%lm2m(lm)
+!          l = map_glbl_st%lm2l(lm)
          m = lo_map%lm2m(lm)
          l = lo_map%lm2l(lm)
          irank = map_mlo%ml2coord(m,l)
-         if (irank==coord_mlo) recvbuff = Fmlo_new(map_mlo%ml2(m,l),:)
+         if (irank==coord_mlo) recvbuff = Fmlo_new(map_mlo%ml2i(m,l),:)
          call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_mlo, ierr)
 
          if (lm>=llm .and. lm<=ulm) Fmlo_old(lm,:) = recvbuff
@@ -1874,7 +1877,7 @@ contains
 !  try to use this in a large scale simulations. 
    subroutine transform_old2new(Fmlo_old, Fmlo_new)
 !-------------------------------------------------------------------------------
-      complex(cp), intent(in)    :: Fmlo_old(llm:ulm,   n_r_max)
+      complex(cp), intent(in) :: Fmlo_old(llm:ulm,   n_r_max)
       complex(cp), intent(inout) :: Fmlo_new(n_mlo_loc, n_r_max)
       
       complex(cp) :: recvbuff(n_r_max)
@@ -1892,11 +1895,64 @@ contains
             
             if (irank==coord_r) recvbuff = Fmlo_old(lm,:)
             call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_r, ierr)
-            if (map_mlo%ml2coord(m,l)==coord_mlo) Fmlo_new(map_mlo%ml2(m,l),:) = recvbuff
+            if (map_mlo%ml2coord(m,l)==coord_mlo) Fmlo_new(map_mlo%ml2i(m,l),:) = recvbuff
          end do
       end do
       
    end subroutine transform_old2new
+!-------------------------------------------------------------------------------
+   subroutine printArray(inMat, o_fmtString)
+      complex(cp), intent(in) :: inMat(:)
+      character(*), optional, intent(in) :: o_fmtString
+      
+      character(:), allocatable :: fmtString
+      integer :: nrow, ncol, irow, icol
+      
+      if (present(o_fmtString)) then
+         fmtString = o_fmtString
+      else
+         fmtString = "(F)"
+      end if
+      
+      nrow = size(inMat,1)
+      
+      write(*,"(A)", advance="NO") "["
+      do irow=1,nrow-1
+         write(*,fmtString, advance="NO") real(inMat(irow))
+         write(*,"(A)", advance="NO") "+"
+         write(*,fmtString, advance="NO") aimag(inMat(irow))
+         write(*,"(A)", advance="NO") "i, "
+      end do
+      write(*,fmtString, advance="NO") real(inMat(irow))
+      write(*,"(A)", advance="NO") "+"
+      write(*,fmtString, advance="NO") aimag(inMat(irow))
+      write(*,"(A)", advance="NO") "i]"//NEW_LINE("A")
+      flush(6)
+   end subroutine printArray
+!-------------------------------------------------------------------------------
+   subroutine printArrayReal(inMat, o_fmtString)
+      real(cp), intent(in) :: inMat(:)
+      character(*), optional, intent(in) :: o_fmtString
+      
+      character(:), allocatable :: fmtString
+      integer :: nrow, ncol, irow, icol
+      
+      if (present(o_fmtString)) then
+         fmtString = o_fmtString
+      else
+         fmtString = "(F)"
+      end if
+      
+      nrow = size(inMat,1)
+      
+      write(*,"(A)", advance="NO") "["
+      do irow=1,nrow-1
+         write(*,fmtString, advance="NO") real(inMat(irow))
+      end do
+      write(*,fmtString, advance="NO") real(inMat(irow))
+      write(*,"(A)", advance="NO") "]"//NEW_LINE("A")
+      flush(6)
+   end subroutine printArrayReal
 !-------------------------------------------------------------------------------
    subroutine printMatrix(inMat, o_fmtString)
       complex(cp), intent(in) :: inMat(:,:)

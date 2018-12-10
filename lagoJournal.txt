@@ -863,4 +863,17 @@ this code?
 blocking.f90. It seems that it is always set to 1, am I correct (lines 139 
 and 140)?
 
+---------------------------------------------
+---------------------------------------------
+
+  JUST BECAUSE I KEEP FORGETTING:
+  This is the proper loop in Fortran!
+---------------------------------------------
+---------------------------------------------
+
+do j = 1, n
+    do i = 1, n
+        ! operate on A(i,j) ...
+    end do
+end do
  

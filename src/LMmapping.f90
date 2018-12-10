@@ -54,14 +54,34 @@ module LMmapping
    ! ml2l(mlo): a pointer to dist_ml2l(coord_mlo,mlo)
    ! ml2m(mlo): a pointer to dist_ml2m(coord_mlo,mlo)
    ! 
-   ! If might be useful to loop over "all local mlo" sometimes. For that
-   ! purpose we have also
+   ! li2lo(n_lo_loc): the list of all l's found in the current rank
+   ! mi2mo(n_mo_loc): the list of all m's found in the current rank
+   ! Notice that not all (m,l) pairs are present in this rank; for instance
+   ! (2,5) and (1,6) might be in this rank, but (2,6) and (1,5) are not!
+   ! 
+   ! With the structure above you can loop over all local l and m as:
+   !  do li=1,n_lo_loc
+   !   l = li2lo(li)
+   !   do mi=1,n_mo_loc
+   !     m = mi2mo(mi)
+   !     if (ml2%(m,l)<0) cycle
+   !     *do stuff*
+   !   end do
+   !  end do
+   ! 
+   ! or as:
+   !  do mlo_idx=1,n_mlo_loc
+   !    l = ml2l(mlo_idx)
+   !    m = ml2m(mlo_idx)
+   !    /*do stuff*/
+   !  end do
+   ! It depends on the purpose of the loop, I guess.
+   ! 
    !--------------------------------------------------------------------------
    type, public :: ml_mappings
-      integer, allocatable :: glb_ml2(:,:), glb_ml2l(:), glb_ml2m(:)
-      integer, allocatable :: ml2coord(:,:)
-      integer, pointer :: loc_ml2(:,:), loc_ml2l(:), loc_ml2m(:)
-      integer, pointer :: ml2(:,:), ml2l(:), ml2m(:)
+      integer, allocatable :: i2l(:), i2m(:), i2ml(:)
+      integer, allocatable :: ml2i(:,:), ml2coord(:,:)
+      integer, allocatable :: li2l(:), mi2m(:)
    end type ml_mappings
  
    !-- ????
@@ -171,19 +191,22 @@ contains
       !   
       !   The l_max is taken from geometry module. It is supposed to represent 
       !   the global number of l points.
-      !   n_ml is the number of local mlo points
       !   
       !   Author: Rafael Lago, MPCDF, November 2018
       !   
       type(ml_mappings), intent(inout) :: self
-
+      
       allocate( self%ml2coord(0:l_max, 0:l_max) )
-      allocate( self%glb_ml2 (0:l_max, 0:l_max) )
-      allocate( self%loc_ml2 (0:l_max, 0:l_max) )
-      allocate( self%glb_ml2m(mlo_max) )
-      allocate( self%glb_ml2l(mlo_max) )
-      allocate( self%loc_ml2m(n_mlo_loc) )
-      allocate( self%loc_ml2l(n_mlo_loc) )
+      
+      ! These two will point to their target in set_mlmapping
+      allocate( self%i2m(n_mlo_loc) )
+      allocate( self%i2l(n_mlo_loc) )
+      allocate( self%i2ml(n_mlo_loc) )
+      
+      allocate( self%ml2i(0:l_max, 0:l_max) )
+      
+      allocate( self%li2l(n_lo_loc) )
+      allocate( self%mi2m(n_mo_loc) )
       
 !       bytes_allocated = bytes_allocated + &
 !         (2*(l_max+1)*(l_max+1)+2*(l_max+1))*SIZEOF_INTEGER
@@ -202,7 +225,7 @@ contains
    !----------------------------------------------------------------------------
    subroutine deallocate_ml_mappings(self)
       type(ml_mappings) :: self
-      deallocate( self%ml2coord, self%ml2, self%ml2m, self%ml2l )
+!       deallocate( self%ml2coord, self%ml2, self%ml2m, self%ml2l )
    end subroutine deallocate_ml_mappings
    
    !----------------------------------------------------------------------------
@@ -389,45 +412,56 @@ contains
       integer, parameter :: Invalid_Idx = -1
       
       !-- Local variables
-      integer :: m, l, m_idx, l_idx, ml_loc, ml_glb, irank, mlo_idx
+      integer :: m, l, mi, li, i, ml, irank, mlo_idx
+      integer :: l_counter, m_counter
       
-      map%glb_ml2  = Invalid_Idx
-      map%glb_ml2m = Invalid_Idx
-      map%glb_ml2l = Invalid_Idx
-      map%loc_ml2  = Invalid_Idx
-      map%loc_ml2m = Invalid_Idx
-      map%loc_ml2l = Invalid_Idx
       map%ml2coord = Invalid_Idx
+      map%i2ml     = Invalid_Idx
+      map%ml2i     = Invalid_Idx
+      map%i2m      = Invalid_Idx
+      map%i2l      = Invalid_Idx
+      map%mi2m     = Invalid_Idx
+      map%li2l     = Invalid_Idx
       
       ! Which ranks contain the specified (m,l) tuplet
       do irank=0,n_ranks_mlo-1
-         do mlo_idx=1,n_mlo_array
-            m_idx = dist_mlo(irank,mlo_idx,1)
-            l_idx = dist_mlo(irank,mlo_idx,2)
-            if(m_idx>=0 .and. l_idx>=0) map%ml2coord(m_idx,l_idx) = irank
+         do i=1,n_mlo_array
+            m = dist_mlo(irank,i,1)
+            l = dist_mlo(irank,i,2)
+            if(m>=0 .and. l>=0) map%ml2coord(m,l) = irank
          end do
+      end do
+      
+      l_counter = 1
+      m_counter = 1
+      do i=0,l_max
+         if (any(dist_mlo(coord_mlo,:,1)==i)) then
+            map%mi2m(m_counter) = i
+            m_counter = m_counter + 1
+         end if
+         if (any(dist_mlo(coord_mlo,:,2)==i)) then
+            map%li2l(l_counter) = i
+            l_counter = l_counter + 1
+         end if
       end do
       
       ! Maps all local m,l tuplets into a global array of size l_max,l_max
       ! The tuples which do not belong to this rank are marked with Invalid_Idx
-      do ml_loc = 1,n_mlo_loc
-         m  = dist_mlo(coord_mlo,ml_loc,1)
-         l  = dist_mlo(coord_mlo,ml_loc,2)
-         ml_glb = map_glbl_st%lm2(l,m) ! Yes, I inverted (m,l) here on purpose
+      do i = 1,n_mlo_loc
+         m  = dist_mlo(coord_mlo,i,1)
+         l  = dist_mlo(coord_mlo,i,2)
+         map%i2m(i) = m
+         map%i2l(i) = l
+         
          if (m < 0) cycle
          if (l < 0) cycle
          
-         map%loc_ml2(m,l) = ml_loc
-         map%glb_ml2(m,l) = ml_glb
-         map%glb_ml2m(ml_glb) = m
-         map%glb_ml2l(ml_glb) = l
+         ml = map_glbl_st%lm2(l,m)
+         map%i2ml(i)   = ml        ! perhaps incorporate this in dist_mlo?
+         map%ml2i(m,l) = i
+         print *, "pairing: ", l, m, i
       end do
-      map%loc_ml2m = dist_mlo(coord_mlo,:,1)
-      map%loc_ml2l = dist_mlo(coord_mlo,:,2)
       
-      map%ml2  => map%loc_ml2
-      map%ml2m => map%loc_ml2m
-      map%ml2l => map%loc_ml2l
    end subroutine set_mlmapping
    
    !----------------------------------------------------------------------------

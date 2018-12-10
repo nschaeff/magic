@@ -138,6 +138,7 @@ contains
       !!!----------------------------------
       !!!! SAME !!!
       
+      !-- Local variables
       real(cp) :: s0Mat_new(n_r_max,n_r_max)     ! for l=m=0  
       real(cp) :: sMat_new(n_r_max,n_r_max,n_r_max)
       integer  :: s0Pivot_new(n_r_max)
@@ -151,7 +152,7 @@ contains
       logical :: lSmat_new(0:l_max)
       
       real(cp)    :: rhs_new(n_r_max)
-      complex(cp) :: rhs1_new(n_r_max,n_mlo_loc)
+      complex(cp) :: rhs1_new(n_r_max,l_max,0)
       
       complex(cp) :: w_new(n_mlo_loc,n_r_max)
       complex(cp) :: dVSrLM_new(n_mlo_loc,n_r_max)
@@ -167,7 +168,7 @@ contains
       complex(cp) :: test_new(n_mlo_loc,n_r_max), test_old(llm:ulm, n_r_max)
       real(cp) :: test_norm
       
-      integer ::  ilm, ir, irank, ierr, i, r, l, m, ml
+      integer ::  ilm, ir, irank, ierr, i
       
       s0Mat_new     = s0Mat
       sMat_new      = sMat
@@ -216,6 +217,25 @@ contains
          end do
       end do
       
+      !--- Finish calculation of dsdt: [NEW LAYOUT]
+      !------------------------------------------------
+      call get_dr( dVSrLM_new,work_LMloc_new,n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc, nocopy=.true. )
+
+      do nR=1,n_r_max
+         do i=1,n_mlo_loc
+            dsdt_new(i,nR)=orho1(nR)*(dsdt_new(i,nR)-or2(nR)*work_LMloc_new(i,nR))
+         end do
+      end do
+      !--- Finish calculation of dsdt: [END NEW LAYOUT]
+      !------------------------------------------------
+      CALL transform_new2old(s_new, test_old)
+      test_norm = ABS(SUM(test_old-s))
+      PRINT *, "Test Norm: ", test_norm
+      STOP
+      
+      
+      
+
       ! one subblock is linked to one l value and needs therefore once the matrix
       do nLMB2=1,nLMBs2(nLMB)
          ! this inner loop is in principle over the m values which belong to the
@@ -272,8 +292,7 @@ contains
 #endif
 
                   call sgesl(s0Mat,n_r_max,n_r_max,s0Pivot,rhs)
-                  test_norm = ABS(SUM(rhs(:)))
-                  IF (test_norm>0.0) print *, "* Norm: ", l1, m1, test_norm  
+
                else ! l1  /=  0
                   lmB=lmB+1
 
@@ -293,8 +312,6 @@ contains
                      rhs1(nR,lmB,0) = sMat_fac(nR,l1)*rhs1(nR,lmB,0)
 #endif
                   end do
-                  test_norm = ABS(SUM(rhs1(:,lmB,0)))
-                  IF (test_norm>0.0) print *, "* Norm: ", l1, m1, test_norm
                end if
             end do
             !PERFOFF
@@ -338,99 +355,6 @@ contains
       end do     ! loop over lm blocks
       !$OMP END SINGLE
       !$OMP END PARALLEL
-      
-      !--- [NEW LAYOUT]
-      !--- Finish calculation of dsdt:
-      !------------------------------------------------
-      call get_dr( dVSrLM_new,work_LMloc_new,n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc, nocopy=.true. )
-
-      do r=1,n_r_max
-         do i=1,n_mlo_loc
-            dsdt_new(i,r)=orho1(r)*(dsdt_new(i,r)-or2(r)*work_LMloc_new(i,r))
-         end do
-      end do
-      !--- Finish calculation of dsdt: 
-      
-      do i=1,n_mlo_loc
-         l = map_mlo%i2l(i)
-         m = map_mlo%i2m(i)
-         ml = map_mlo%i2ml(i)
-         lm = map_glbl_st%lm2(l,m)
-         
-         if ( .not. lSmat_new(l) ) then
-            if ( l == 0 ) then
-#ifdef WITH_PRECOND_S0
-               call get_s0Mat(dt,s0Mat_new,s0Pivot_new,s0Mat_fac_new)
-#else
-               call get_s0Mat(dt,s0Mat_new,s0Pivot_new)
-#endif
-            else
-#ifdef WITH_PRECOND_S
-               call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)),sMat_new(1,1,l),sPivot_new(1,l),sMat_fac_new(1,l))
-#else
-               call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)),sMat_new(1,1,l),sPivot_new(1,l))
-#endif
-            end if
-            lSmat_new(l)=.true.
-         end if
-         
-         if ( l == 0 ) then
-            ! This computation is independet from m. 
-            ! It can be skipped if it was computed for any (m,0)
-            rhs_new(1)=      real(tops(0,0))
-            rhs_new(n_r_max)=real(bots(0,0))
-            do r=2,n_r_max-1
-               rhs_new(r) = real(s_new(i,r))*O_dt    &
-                       + w1*real(dsdt_new(i,r))      &
-                       + w2*real(dsdtLast_new(i,r))
-            end do
-
-#ifdef WITH_PRECOND_S0
-            rhs_new = s0Mat_fac_new*rhs_new
-#endif
-
-            call sgesl(s0Mat_new,n_r_max,n_r_max,s0Pivot_new,rhs_new)
-            test_norm = ABS(SUM(rhs_new))
-            IF (test_norm>0.0) print *, "Norm: ", l, m, test_norm
-         else ! l1  /=  0
-            rhs1_new(1,i)=      tops(l,m)
-            rhs1_new(n_r_max,i)=bots(l,m)
-#ifdef WITH_PRECOND_S
-            rhs1_new(1,i)=      sMat_fac_new(1,l)*rhs1_new(1,i)
-            rhs1_new(n_r_max,i)=sMat_fac_new(1,l)*rhs1_new(n_r_max,i)
-#endif
-            do r=2,n_r_max-1
-               rhs1_new(r,i)=s_new(i,r)*O_dt +             &
-               & w1*dsdt_new(i,r) + w2*dsdtLast_new(i,r) - &
-               & alpha*dLh(lm)*or2(r)*orho1(r)*dentropy0(r)*w_new(i,r)
-#ifdef WITH_PRECOND_S
-               rhs1_new(r,i) = sMat_fac_new(r,l)*rhs1_new(r,i)
-#endif
-            end do
-            test_norm = ABS(SUM(rhs1_new(:,i)))
-            IF (test_norm>0.0) print *, "Norm: ", l, m, test_norm
-         end if
-      end do
-      
-      
-      
-      
-      !--- [END NEW LAYOUT]
-      !------------------------------------------------
-      
-      
-      
-      
-      
-      
-      
-      
-!       CALL transform_new2old(s_new, test_old)
-!       test_norm = ABS(SUM(test_old-s))
-!       PRINT *, "Test Norm: ", test_norm
-      print *, "Round OVER!!"
-!       STOP
-      
       
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
