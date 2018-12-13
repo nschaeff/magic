@@ -73,7 +73,7 @@ module radial_functions
    type(costf_even_t), public :: chebt_ic_even
 
    !-- Radial scheme
-   class(type_rscheme), public, pointer :: rscheme_oc
+   class(type_rscheme), public, pointer :: rscheme_oc, rscheme_oc_new
  
    !-- same for inner core:
    real(cp), public :: cheb_norm_ic                      ! Chebyshev normalisation for IC
@@ -160,6 +160,7 @@ contains
          bytes_allocated = bytes_allocated + n_r_max*SIZEOF_DEF_REAL
 
          allocate ( type_cheb_odd :: rscheme_oc )
+         allocate ( type_cheb_odd :: rscheme_oc_new )
 
          n_in = n_cheb_max
          if ( l_newmap ) then
@@ -171,12 +172,14 @@ contains
       else
 
          allocate ( type_fd :: rscheme_oc )
+         allocate ( type_fd :: rscheme_oc_new )
 
          n_in   = fd_order
          n_in_2 = fd_order_bound
 
       end if
       call rscheme_oc%initialize(n_r_max,n_in,n_in_2)
+      call rscheme_oc_new%initialize(n_r_max,n_in,n_in_2)
 
    end subroutine initialize_radial_functions
 !------------------------------------------------------------------------------
@@ -246,6 +249,8 @@ contains
 
       call rscheme_oc%get_grid(n_r_max, r_icb, r_cmb, ratio1, ratio2, r)
       call rscheme_oc%get_der_mat(n_r_max)
+      call rscheme_oc_new%get_grid(n_r_max, r_icb, r_cmb, ratio1, ratio2, r)
+      call rscheme_oc_new%get_der_mat(n_r_max)
 
       if ( rank == 0 ) then
          fileName = 'radius.'//tag

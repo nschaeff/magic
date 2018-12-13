@@ -8,6 +8,7 @@ module algebra
 
    private
 
+   logical :: multiple_rhs = .false.   ! read the comment in cgeslML subroutine!
    public :: sgefa, sgesl, cgesl, cgeslML
 
 contains
@@ -47,8 +48,26 @@ contains
       integer,  intent(in) :: nRHSs       ! number of right-hand sides
 
       complex(cp), intent(inout) :: rhs(:,:) ! on input RHS of problem
-
-      call getrs(cmplx(a(1:n,1:n),0.0_cp,kind=cp),pivot(1:n),rhs(1:n,:))
+      
+      complex(cp), allocatable :: tmp_rhs(:,:)
+      integer :: i
+      
+      if (multiple_rhs) then
+         call getrs(cmplx(a(1:n,1:n),0.0_cp,kind=cp),pivot(1:n),rhs(1:n,:))
+      else
+         ! When using multiple RHS, MKL will compute slightly different 
+         ! solutions if you batch the RHS together e.g. solving for 
+         ! [x1, x2] or for [x1, x3] will give slightly different x1
+         ! Setting "multiple_rhs" flag to "false" will allow you to test
+         ! if this changes some precision in your code or not
+         allocate(tmp_rhs(n,1))
+         do i=1,nRHSs
+            tmp_rhs(1:n,1) = rhs(1:n,i)
+            call getrs(cmplx(a(1:n,1:n),0.0_cp,kind=cp),pivot(1:n),tmp_rhs)
+            rhs(1:n,i) = tmp_rhs(1:n,1)
+         end do
+         deallocate(tmp_rhs)
+      end if
 
    end subroutine cgeslML
 !-----------------------------------------------------------------------------

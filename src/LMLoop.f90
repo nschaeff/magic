@@ -12,7 +12,7 @@ module LMLoop_mod
    use parallel_mod
    use mem_alloc, only: memWrite, bytes_allocated
    use geometry, only: l_max, lm_max, n_r_max, n_r_maxMag, n_r_icb,    &
-       &            n_r_cmb
+       &            n_r_cmb, n_mlo_loc
    use blocking, only: lmStartB, lmStopB, lo_map
    use logic, only: l_mag, l_conv, l_anelastic_liquid, lVerbose, l_heat, &
        &            l_single_matrix, l_chemical_conv, l_TP_form,         &
@@ -31,6 +31,7 @@ module LMLoop_mod
    use updateWPS_mod
    use updateB_mod
    use updateXi_mod
+   use radial_functions
 
    implicit none
 
@@ -149,6 +150,27 @@ contains
       real(cp)    :: omega_ma_dist              ! Calculated OC rotation
       real(cp)    :: omega_ic_dist              ! Calculated IC rotation
       
+      
+      !!! New layout  TMP
+      !!!----------------------------------
+      !!!! SAME !!!
+      
+      complex(cp) :: dVSrLM_new(n_mlo_loc,n_r_max)
+      complex(cp) :: dsdt_new(n_mlo_loc,n_r_max)
+      
+      complex(cp) :: test_old(llm:ulm,n_r_max)
+      real(cp) :: test_norm
+      
+      call transform_old2new(s_LMloc, s_LMloc_new)
+      call transform_old2new(ds_LMloc, ds_LMloc_new)
+      call transform_old2new(w_LMloc, w_LMloc_new)
+      call transform_old2new(dsdt, dsdt_new)
+      call transform_old2new(dVSrLM, dVSrLM_new)
+      call transform_old2new(dsdtLast_LMloc, dsdtLast_LMloc_new)
+
+      !!! END New layout  TMP
+      !!!----------------------------------
+      
 
       PERFON('LMloop')
       !LIKWID_ON('LMloop')
@@ -175,6 +197,7 @@ contains
             else
                lWPmat(l)=.false.
                lSmat(l) =.false.
+               lSmat_new(l) =.false.
             end if
             lZmat(l) =.false.
             if ( l_mag ) lBmat(l) =.false.
@@ -214,8 +237,33 @@ contains
             else
 ! !                print *, "Not Parallelized!", __LINE__, __FILE__
 ! !                stop
+
                call updateS( s_LMloc, ds_LMloc, w_LMloc, dVSrLM,dsdt, &
                     &        dsdtLast_LMloc, w1, coex, dt, nLMB )
+                    
+               call updateS_new( s_LMloc_new, ds_LMloc_new, w_LMloc_new, dVSrLM_new, dsdt_new, &
+                    &             dsdtLast_LMloc_new, w1, coex, dt, nLMB)
+
+               call transform_new2old(s_LMloc_new, test_old)
+               test_norm = ABS(SUM(s_LMloc - test_old))
+               IF (test_norm>0.0) print *, "|| s_new - s || : ", test_norm
+               
+               call transform_new2old(ds_LMloc_new, test_old)
+               test_norm = ABS(SUM(ds_LMloc - test_old))
+               IF (test_norm>0.0) print *, "|| ds_new - ds || : ", test_norm
+               
+               call transform_new2old(dsdt_new, test_old)
+               test_norm = ABS(SUM(dsdt - test_old))
+               IF (test_norm>0.0) print *, "|| dsdt_new - dsdt || : ", test_norm
+               
+!                call transform_new2old(dsdtLast_LMloc_new, test_old)
+!                test_norm = ABS(SUM(dsdtLast_LMloc - test_old))
+!                IF (test_norm>0.0) print *, "|| dtLast_new - dtLast || : ", test_norm
+               
+               call transform_new2old(dVSrLM_new, test_old)
+               test_norm = ABS(SUM(dVSrLM - test_old))
+               IF (test_norm>0.0) print *, "|| dVSrLM_new - dVSrLM || : ", test_norm
+               
             end if
             PERFOFF
             ! Here one could start the redistribution of s_LMloc,ds_LMloc etc. with a 

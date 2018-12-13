@@ -12,7 +12,7 @@ module fieldsLast
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: n_r_max, lm_max, n_r_maxMag, lm_maxMag, &
-       &                 n_r_ic_maxMag
+       &                 n_r_ic_maxMag, n_mlo_loc
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag
    use logic, only: l_chemical_conv
    use parallel_mod, only: coord_r
@@ -24,7 +24,7 @@ module fieldsLast
    complex(cp), public, allocatable :: dwdtLast_LMloc(:,:)
    complex(cp), public, allocatable :: dpdtLast_LMloc(:,:)
    complex(cp), public, allocatable :: dzdtLast_lo(:,:)
-   complex(cp), public, allocatable :: dsdtLast_LMloc(:,:)
+   complex(cp), public, allocatable :: dsdtLast_LMloc(:,:), dsdtLast_LMloc_new(:,:)
    complex(cp), public, allocatable :: dxidtLast_LMloc(:,:)
  
    complex(cp), public, allocatable :: dbdtLast_LMloc(:,:)
@@ -45,6 +45,11 @@ contains
       allocate( dpdtLast_LMloc(llm:ulm,n_r_max) )
       allocate( dzdtLast_lo(llm:ulm,n_r_max) )
       allocate( dsdtLast_LMloc(llm:ulm,n_r_max) )
+      
+      !! [BEGIN NEW LAYOUT]
+      allocate( dsdtLast_LMloc_new(n_mlo_loc,n_r_max) )
+      !! [END NEW LAYOUT]
+      
       bytes_allocated = bytes_allocated + &
       &                 4*(ulm-llm+1)*n_r_max*SIZEOF_DEF_COMPLEX
 
@@ -73,6 +78,8 @@ contains
       deallocate( dsdtLast_LMloc, dbdtLast_LMloc, djdtLast_LMloc )
       deallocate( dbdt_icLast_LMloc, djdt_icLast_LMloc )
       deallocate( dxidtLast_LMloc )
+      
+      deallocate( dsdtLast_LMloc_new )
 
    end subroutine finalize_fieldsLast
 !-------------------------------------------------------------------------------

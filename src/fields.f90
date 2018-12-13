@@ -6,7 +6,7 @@ module fields
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: lm_max, n_r_max, lm_maxMag, n_r_maxMag, &
-       &                 n_r_ic_maxMag, n_lm_loc, n_lmMag_loc, l_r, u_r
+       &                 n_r_ic_maxMag, n_mlo_loc, n_lm_loc, n_lmMag_loc, l_r, u_r
    use logic, only: l_chemical_conv
    use LMLoop_data, only: llm, ulm, llmMag, ulmMag
    use parallel_mod, only: coord_r, n_ranks_theta
@@ -18,7 +18,7 @@ module fields
    !-- Velocity potentials:
    complex(cp), public, allocatable, target :: flow_LMloc_container(:,:,:)
    complex(cp), public, allocatable, target :: flow_Rdist_container(:,:,:)
-   complex(cp), public, pointer :: w_LMloc(:,:),dw_LMloc(:,:),ddw_LMloc(:,:)
+   complex(cp), public, pointer :: w_LMloc(:,:),dw_LMloc(:,:),ddw_LMloc(:,:), w_LMloc_new(:,:)
    complex(cp), public, pointer :: w_Rdist(:,:), dw_Rdist(:,:), ddw_Rdist(:,:)
  
    complex(cp), public, pointer :: z_LMloc(:,:),dz_LMloc(:,:)
@@ -27,7 +27,7 @@ module fields
    !-- Entropy:
    complex(cp), public, allocatable, target :: s_LMloc_container(:,:,:)
    complex(cp), public, allocatable, target :: s_Rdist_container(:,:,:)
-   complex(cp), public, pointer :: s_LMloc(:,:), ds_LMloc(:,:)
+   complex(cp), public, pointer :: s_LMloc(:,:), ds_LMloc(:,:), s_LMloc_new(:,:), ds_LMloc_new(:,:)
    complex(cp), public, pointer :: s_Rdist(:,:), ds_Rdist(:,:)
  
    !-- Chemical composition:
@@ -65,7 +65,7 @@ module fields
    complex(cp), public, allocatable :: dj_ic_LMloc(:,:)
    complex(cp), public, allocatable :: ddj_ic_LMloc(:,:)
 
-   complex(cp), public, allocatable :: work_LMloc(:,:) ! Needed in update routines
+   complex(cp), public, allocatable :: work_LMloc(:,:), work_LMloc_new(:,:) ! Needed in update routines
    
    !-- Rotation rates:
    real(cp), public :: omega_ic,omega_ma
@@ -127,6 +127,14 @@ contains
       s_Rdist(1:n_lm_loc,l_r:u_r)   => s_Rdist_container(:,:,1)
       ds_Rdist(1:n_lm_loc,l_r:u_r)  => s_Rdist_container(:,:,2)
 
+      !!! [NEW LAYOUT]
+      allocate(w_LMloc_new(n_mlo_loc,1:n_r_max))
+      allocate(s_LMloc_new(n_mlo_loc,1:n_r_max))
+      allocate(ds_LMloc_new(n_mlo_loc,1:n_r_max))
+      
+      allocate( work_LMloc_new(n_mlo_loc,1:n_r_max) )
+      !!! [END NEW LAYOUT]
+      
       bytes_allocated = bytes_allocated + &
                         9*(ulm-llm+1)*n_r_max*SIZEOF_DEF_COMPLEX
       bytes_allocated = bytes_allocated + &

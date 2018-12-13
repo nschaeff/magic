@@ -81,7 +81,9 @@ module LMmapping
    type, public :: ml_mappings
       integer, allocatable :: i2l(:), i2m(:), i2ml(:)
       integer, allocatable :: ml2i(:,:), ml2coord(:,:)
-      integer, allocatable :: li2l(:), mi2m(:)
+      integer, allocatable :: milj2i(:,:), milj2m(:,:)
+      integer, allocatable :: n_mi(:), lj2l(:)
+      integer :: n_li
    end type ml_mappings
  
    !-- ????
@@ -205,8 +207,13 @@ contains
       
       allocate( self%ml2i(0:l_max, 0:l_max) )
       
-      allocate( self%li2l(n_lo_loc) )
-      allocate( self%mi2m(n_mo_loc) )
+!       allocate( self%li2l(n_lo_loc) )
+!       allocate( self%mi2m(n_mo_loc) )
+!       allocate( self%mi2m(n_mo_loc) )
+      allocate( self%milj2i(n_mo_loc,n_lo_loc) )
+      allocate( self%milj2m(n_mo_loc,n_lo_loc) )
+      allocate( self%lj2l(n_lo_loc) )
+      allocate( self%n_mi(n_lo_loc) )
       
 !       bytes_allocated = bytes_allocated + &
 !         (2*(l_max+1)*(l_max+1)+2*(l_max+1))*SIZEOF_INTEGER
@@ -412,7 +419,7 @@ contains
       integer, parameter :: Invalid_Idx = -1
       
       !-- Local variables
-      integer :: m, l, mi, li, i, ml, irank, mlo_idx
+      integer :: m, l, mi, lj, i, j, ml, irank, mlo_idx
       integer :: l_counter, m_counter
       
       map%ml2coord = Invalid_Idx
@@ -420,9 +427,7 @@ contains
       map%ml2i     = Invalid_Idx
       map%i2m      = Invalid_Idx
       map%i2l      = Invalid_Idx
-      map%mi2m     = Invalid_Idx
-      map%li2l     = Invalid_Idx
-      
+
       ! Which ranks contain the specified (m,l) tuplet
       do irank=0,n_ranks_mlo-1
          do i=1,n_mlo_array
@@ -432,34 +437,65 @@ contains
          end do
       end do
       
-      l_counter = 1
-      m_counter = 1
-      do i=0,l_max
-         if (any(dist_mlo(coord_mlo,:,1)==i)) then
-            map%mi2m(m_counter) = i
-            m_counter = m_counter + 1
-         end if
-         if (any(dist_mlo(coord_mlo,:,2)==i)) then
-            map%li2l(l_counter) = i
-            l_counter = l_counter + 1
-         end if
-      end do
-      
       ! Maps all local m,l tuplets into a global array of size l_max,l_max
       ! The tuples which do not belong to this rank are marked with Invalid_Idx
       do i = 1,n_mlo_loc
          m  = dist_mlo(coord_mlo,i,1)
          l  = dist_mlo(coord_mlo,i,2)
-         map%i2m(i) = m
-         map%i2l(i) = l
          
          if (m < 0) cycle
          if (l < 0) cycle
          
+         map%i2m(i) = m
+         map%i2l(i) = l
+         
          ml = map_glbl_st%lm2(l,m)
          map%i2ml(i)   = ml        ! perhaps incorporate this in dist_mlo?
          map%ml2i(m,l) = i
-         print *, "pairing: ", l, m, i
+! ! ! ! ! ! ! !          print *, "pairing: ", l, m, i
+      end do
+      
+!       l_counter = 1
+!       m_counter = 1
+!       do i=0,l_max
+!          if (any(dist_mlo(coord_mlo,:,1)==i)) then
+!             map%mi2m(m_counter) = i
+!             m_counter = m_counter + 1
+!          end if
+!          if (any(dist_mlo(coord_mlo,:,2)==i)) then
+!             map%li2l(l_counter) = i
+!             l_counter = l_counter + 1
+!          end if
+!       end do
+!       map%n_li = l_counter - 1
+!       map%n_mi = m_counter - 1
+      
+      
+      ! Now this is complicated
+      ! I'll map each (mi,lj) tuple into their atual (m,l) tuple as 
+      ! well as their index i and other shenenigans. The thing is, the 
+      ! j-th l and the i-th m are not the same as the (m,l)!!
+!       map%lj2l   => map%helper(0,:,1)
+!       map%n_mi   => map%helper(0,:,2)
+!       map%milj2m => map%helper(:,:,1)
+!       map%milj2i => map%helper(:,:,2)
+!       map%mi2m => map%helper(:,0,1)
+      lj = 0
+      do l=0,l_max
+         if (.not. any(dist_mlo(coord_mlo,:,2)==l)) cycle
+         lj = lj + 1
+         map%lj2l(lj) = l
+
+         mi = 0
+         do m=0,l_max
+         
+            if (map%ml2i(m,l)<0) cycle
+            mi = mi + 1
+            
+            map%milj2m(mi,lj) = m
+            map%milj2i(mi,lj) = map%ml2i(m,l)
+         end do
+         map%n_mi(lj) = mi
       end do
       
    end subroutine set_mlmapping

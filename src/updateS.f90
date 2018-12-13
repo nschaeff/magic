@@ -6,7 +6,7 @@ module updateS_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb, n_mlo_loc
    use radial_functions, only: orho1, or1, or2, beta, dentropy0, rscheme_oc,  &
-       &                       kappa, dLkappa, dLtemp0, temp0
+       & rscheme_oc_new, kappa, dLkappa, dLtemp0, temp0
    use physical_parameters, only: opr, kbots, ktops
    use num_param, only: alpha
    use init_fields, only: tops,bots
@@ -17,7 +17,7 @@ module updateS_mod
    use parallel_mod, only: coord_r,chunksize
    use algebra, only: cgeslML,sgesl, sgefa
    use radial_der, only: get_ddr, get_dr
-   use fields, only:  work_LMloc
+   use fields, only:  work_LMloc, work_LMloc_new
    use constants, only: zero, one, two
    use useful, only: abortRun
    use LMmapping, only: map_glbl_st, map_mlo
@@ -30,43 +30,43 @@ module updateS_mod
    private
 
    !-- Local variables
-   complex(cp), allocatable :: rhs1(:,:,:)
-   real(cp), allocatable :: s0Mat(:,:)     ! for l=m=0  
-   real(cp), allocatable :: sMat(:,:,:)
-   integer, allocatable :: s0Pivot(:)
-   integer, allocatable :: sPivot(:,:)
+   complex(cp), allocatable :: rhs1(:,:,:), rhs1_new(:,:)
+   real(cp), allocatable :: s0Mat(:,:), s0Mat_new(:,:)     ! for l=m=0  
+   real(cp), allocatable :: sMat(:,:,:), sMat_new(:,:,:)
+   integer, allocatable :: s0Pivot(:), s0Pivot_new(:)
+   integer, allocatable :: sPivot(:,:), sPivot_new(:,:)
 #ifdef WITH_PRECOND_S
-   real(cp), allocatable :: sMat_fac(:,:)
+   real(cp), allocatable :: sMat_fac(:,:), sMat_fac_new(:,:)
 #endif
 #ifdef WITH_PRECOND_S0
-   real(cp), allocatable :: s0Mat_fac(:)
+   real(cp), allocatable :: s0Mat_fac(:), s0Mat_fac_new(:)
 #endif
-   logical, public, allocatable :: lSmat(:)
+   logical, public, allocatable :: lSmat(:), lSmat_new(:)
    
    integer :: maxThreads
    
-   public :: initialize_updateS, updateS, updateS_ala, finalize_updateS
+   public :: initialize_updateS, updateS, updateS_ala, finalize_updateS, updateS_new
 
 contains
 
    subroutine initialize_updateS
 
-      allocate( s0Mat(n_r_max,n_r_max) )      ! for l=m=0  
-      allocate( sMat(n_r_max,n_r_max,l_max) )
+      allocate( s0Mat(n_r_max,n_r_max), s0Mat_new(n_r_max,n_r_max) )      ! for l=m=0  
+      allocate( sMat(n_r_max,n_r_max,l_max), sMat_new(n_r_max,n_r_max,l_max) )
       bytes_allocated = bytes_allocated+(n_r_max*n_r_max*(1+l_max))* &
       &                 SIZEOF_DEF_REAL
-      allocate( s0Pivot(n_r_max) )
-      allocate( sPivot(n_r_max,l_max) )
+      allocate( s0Pivot(n_r_max), s0Pivot_new(n_r_max) )
+      allocate( sPivot(n_r_max,l_max), sPivot_new(n_r_max,l_max) )
       bytes_allocated = bytes_allocated+(n_r_max+n_r_max*l_max)*SIZEOF_INTEGER
 #ifdef WITH_PRECOND_S
-      allocate(sMat_fac(n_r_max,l_max))
+      allocate(sMat_fac(n_r_max,l_max), sMat_fac_new(n_r_max,l_max))
       bytes_allocated = bytes_allocated+n_r_max*l_max*SIZEOF_DEF_REAL
 #endif
 #ifdef WITH_PRECOND_S0
-      allocate(s0Mat_fac(n_r_max))
+      allocate(s0Mat_fac(n_r_max), s0Mat_fac_new(n_r_max))
       bytes_allocated = bytes_allocated+n_r_max*SIZEOF_DEF_REAL
 #endif
-      allocate( lSmat(0:l_max) )
+      allocate( lSmat(0:l_max), lSmat_new(0:l_max) )
       bytes_allocated = bytes_allocated+(l_max+1)*SIZEOF_LOGICAL
 
 #ifdef WITHOMP
@@ -75,6 +75,7 @@ contains
       maxThreads=1
 #endif
       allocate( rhs1(n_r_max,lo_sub_map%sizeLMB2max,0:maxThreads-1) )
+      allocate( rhs1_new(n_r_max,n_mlo_loc) )
       bytes_allocated = bytes_allocated + n_r_max*lo_sub_map%sizeLMB2max*&
       &                 maxThreads*SIZEOF_DEF_COMPLEX
 
@@ -131,61 +132,6 @@ contains
 
       integer :: iThread,all_lms,start_lm,stop_lm
       integer :: iChunk,nChunks,size_of_last_chunk,lmB0
-      
-      
-      
-      !!! New layout  TMP
-      !!!----------------------------------
-      !!!! SAME !!!
-      
-      real(cp) :: s0Mat_new(n_r_max,n_r_max)     ! for l=m=0  
-      real(cp) :: sMat_new(n_r_max,n_r_max,n_r_max)
-      integer  :: s0Pivot_new(n_r_max)
-      integer  :: sPivot_new(n_r_max,l_max)
-#ifdef WITH_PRECOND_S
-      real(cp) :: sMat_fac_new(n_r_max,l_max)
-#endif
-#ifdef WITH_PRECOND_S0
-      real(cp) :: s0Mat_fac_new(n_r_max)
-#endif
-      logical :: lSmat_new(0:l_max)
-      
-      real(cp)    :: rhs_new(n_r_max)
-      complex(cp) :: rhs1_new(n_r_max,n_mlo_loc)
-      
-      complex(cp) :: w_new(n_mlo_loc,n_r_max)
-      complex(cp) :: dVSrLM_new(n_mlo_loc,n_r_max)
-      complex(cp) :: work_LMloc_new(n_mlo_loc,n_r_max)
-      
-      !-- Input/output of scalar fields:
-      complex(cp) :: s_new(n_mlo_loc,n_r_max)
-      complex(cp) :: dsdt_new(n_mlo_loc,n_r_max)
-      complex(cp) :: dsdtLast_new(n_mlo_loc,n_r_max)
-      !-- Output: udpated s,ds,dsdtLast
-      complex(cp) :: ds_new(n_mlo_loc,n_r_max)
-      
-      complex(cp) :: test_new(n_mlo_loc,n_r_max), test_old(llm:ulm, n_r_max)
-      real(cp) :: test_norm
-      
-      integer ::  ilm, ir, irank, ierr, i, r, l, m, ml
-      
-      s0Mat_new     = s0Mat
-      sMat_new      = sMat
-      s0Pivot_new   = s0Pivot
-      sPivot_new    = sPivot
-      sMat_fac_new  = sMat_fac
-      s0Mat_fac_new = s0Mat_fac
-      lSmat_new = lSmat
-      
-      call transform_old2new(w, w_new)
-      call transform_old2new(dVSrLM, dVSrLM_new)
-      call transform_old2new(s, s_new)
-      call transform_old2new(dsdt, dsdt_new)
-      call transform_old2new(dsdtLast, dsdtLast_new)
-      call transform_old2new(ds, ds_new)
-      
-      !!! END New layout  TMP
-      !!!----------------------------------
       
       if ( .not. l_update_s ) return
 
@@ -270,10 +216,7 @@ contains
 #ifdef WITH_PRECOND_S0
                   rhs = s0Mat_fac*rhs
 #endif
-
                   call sgesl(s0Mat,n_r_max,n_r_max,s0Pivot,rhs)
-                  test_norm = ABS(SUM(rhs(:)))
-                  IF (test_norm>0.0) print *, "* Norm: ", l1, m1, test_norm  
                else ! l1  /=  0
                   lmB=lmB+1
 
@@ -293,8 +236,6 @@ contains
                      rhs1(nR,lmB,0) = sMat_fac(nR,l1)*rhs1(nR,lmB,0)
 #endif
                   end do
-                  test_norm = ABS(SUM(rhs1(:,lmB,0)))
-                  IF (test_norm>0.0) print *, "* Norm: ", l1, m1, test_norm
                end if
             end do
             !PERFOFF
@@ -339,114 +280,6 @@ contains
       !$OMP END SINGLE
       !$OMP END PARALLEL
       
-      !--- [NEW LAYOUT]
-      !--- Finish calculation of dsdt:
-      !------------------------------------------------
-      call get_dr( dVSrLM_new,work_LMloc_new,n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc, nocopy=.true. )
-
-      do r=1,n_r_max
-         do i=1,n_mlo_loc
-            dsdt_new(i,r)=orho1(r)*(dsdt_new(i,r)-or2(r)*work_LMloc_new(i,r))
-         end do
-      end do
-      !--- Finish calculation of dsdt: 
-      
-      do i=1,n_mlo_loc
-         l = map_mlo%i2l(i)
-         m = map_mlo%i2m(i)
-         ml = map_mlo%i2ml(i)
-         lm = map_glbl_st%lm2(l,m)
-         
-         if ( .not. lSmat_new(l) ) then
-            if ( l == 0 ) then
-#ifdef WITH_PRECOND_S0
-               call get_s0Mat(dt,s0Mat_new,s0Pivot_new,s0Mat_fac_new)
-#else
-               call get_s0Mat(dt,s0Mat_new,s0Pivot_new)
-#endif
-            else
-#ifdef WITH_PRECOND_S
-               call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)),sMat_new(1,1,l),sPivot_new(1,l),sMat_fac_new(1,l))
-#else
-               call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)),sMat_new(1,1,l),sPivot_new(1,l))
-#endif
-            end if
-            lSmat_new(l)=.true.
-         end if
-         
-         if ( l == 0 ) then
-            ! This computation is independet from m. 
-            ! It can be skipped if it was computed for any (m,0)
-            rhs_new(1)=      real(tops(0,0))
-            rhs_new(n_r_max)=real(bots(0,0))
-            do r=2,n_r_max-1
-               rhs_new(r) = real(s_new(i,r))*O_dt    &
-                       + w1*real(dsdt_new(i,r))      &
-                       + w2*real(dsdtLast_new(i,r))
-            end do
-
-#ifdef WITH_PRECOND_S0
-            rhs_new = s0Mat_fac_new*rhs_new
-#endif
-
-            call sgesl(s0Mat_new,n_r_max,n_r_max,s0Pivot_new,rhs_new)
-            test_norm = ABS(SUM(rhs_new))
-            IF (test_norm>0.0) print *, "Norm: ", l, m, test_norm
-         else ! l1  /=  0
-            rhs1_new(1,i)=      tops(l,m)
-            rhs1_new(n_r_max,i)=bots(l,m)
-#ifdef WITH_PRECOND_S
-            rhs1_new(1,i)=      sMat_fac_new(1,l)*rhs1_new(1,i)
-            rhs1_new(n_r_max,i)=sMat_fac_new(1,l)*rhs1_new(n_r_max,i)
-#endif
-            do r=2,n_r_max-1
-               rhs1_new(r,i)=s_new(i,r)*O_dt +             &
-               & w1*dsdt_new(i,r) + w2*dsdtLast_new(i,r) - &
-               & alpha*dLh(lm)*or2(r)*orho1(r)*dentropy0(r)*w_new(i,r)
-#ifdef WITH_PRECOND_S
-               rhs1_new(r,i) = sMat_fac_new(r,l)*rhs1_new(r,i)
-#endif
-            end do
-            test_norm = ABS(SUM(rhs1_new(:,i)))
-            IF (test_norm>0.0) print *, "Norm: ", l, m, test_norm
-         end if
-      end do
-      
-      
-      
-      
-      !--- [END NEW LAYOUT]
-      !------------------------------------------------
-      
-      
-      
-      
-      
-      
-      
-      
-!       CALL transform_new2old(s_new, test_old)
-!       test_norm = ABS(SUM(test_old-s))
-!       PRINT *, "Test Norm: ", test_norm
-      print *, "Round OVER!!"
-!       STOP
-      
-      
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
-
       !write(*,"(A,2ES22.12)") "s after = ",SUM(s)
       !-- set cheb modes > rscheme_oc%n_max to zero (dealiazing)
       do n_r_out=rscheme_oc%n_max+1,n_r_max
@@ -454,12 +287,15 @@ contains
             s(lm1,n_r_out)=zero
          end do
       end do
-
+      
       !PERFON('upS_drv')
       call rscheme_oc%costf1(s,ulm-llm+1,lmStart-llm+1,lmStop-llm+1)
       call get_ddr(s, ds, work_LMloc, ulm-llm+1, lmStart-llm+1, lmStop-llm+1, &
             &        n_r_max, rscheme_oc)
-
+      do lm1=lmStart,lmStop
+         print "(A,2I3,F,F)", " * ds norm: ", lm2l(lm1), lm2m(lm1), abs(sum(ds(lm1,:))), abs(sum(work_LMloc(lm1,:)))
+      end do
+            
       !-- Calculate explicit time step part:
       do nR=n_r_cmb+1,n_r_icb-1
          do lm1=lmStart,lmStop
@@ -474,8 +310,187 @@ contains
                  &    *orho1(nR)*dentropy0(nR)*               w(lm1,nR)
          end do
       end do
-
    end subroutine updateS
+   
+!------------------------------------------------------------------------------
+   subroutine updateS_new(s_new,ds_new,w_new,dVSrLM_new,dsdt_new,dsdtLast_new,w1,coex,dt,nLMB)
+      !
+      !  updates the entropy field s and its radial derivatives
+      !  adds explicit part to time derivatives of s
+      !
+
+      !-- Input of variables:
+      real(cp),    intent(in) :: w1        ! weight for time step !
+      real(cp),    intent(in) :: coex      ! factor depending on alpha
+      real(cp),    intent(in) :: dt        ! time step
+      integer,     intent(in) :: nLMB
+      complex(cp), intent(in) :: w_new(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: dVSrLM_new(n_mlo_loc,n_r_max)
+
+      !-- Input/output of scalar fields:
+      complex(cp), intent(inout) :: s_new(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: dsdt_new(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: dsdtLast_new(n_mlo_loc,n_r_max)
+      !-- Output: udpated s,ds,dsdtLast
+      complex(cp), intent(out) :: ds_new(n_mlo_loc,n_r_max)
+
+      !-- Local variables:
+      real(cp) :: w2            ! weight of second time step
+      real(cp) :: O_dt
+      integer :: l, m, lm, r, i, lj, mi, nRHS, m0lj
+      real(cp) ::  rhs_new(n_r_max) ! real RHS for l=m=0
+
+      integer :: iThread,all_lms,start_lm,stop_lm
+      integer :: iChunk,nChunks,size_of_last_chunk,lmB0
+      
+      !!! New layout  TMP
+      !!!----------------------------------
+      complex(cp) :: test_new(n_mlo_loc,n_r_max), test_old(llm:ulm, n_r_max)
+      real(cp) :: test_norm
+      
+      ! Notes about conversion:
+      ! ulm - llm + 1 => n_mlo_loc
+      ! lmStart-llm+1 => 1
+      ! lmStop-llm+1  => n_mlo_loc
+      
+      !!! END New layout  TMP
+      !!!----------------------------------
+      
+      if ( .not. l_update_s ) return
+
+      w2  =one-w1
+      O_dt=one/dt
+
+      !-- Get radial derivatives of s: work_LMloc,dsdtLast used as work arrays
+      call get_dr( dVSrLM_new,work_LMloc_new,n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc_new, nocopy=.true. )
+
+      do r=1,n_r_max
+         do i=1,n_mlo_loc
+            dsdt_new(i,r)=orho1(r)*(dsdt_new(i,r)-or2(r)*work_LMloc_new(i,r))
+         end do
+      end do
+      !--- Finish calculation of dsdt: 
+      
+      do lj=1,n_lo_loc
+         l = map_mlo%lj2l(lj)
+         
+         nRHS = map_mlo%n_mi(lj)
+         do mi=1,nRHS
+            m = map_mlo%milj2m(mi,lj)
+            i = map_mlo%milj2i(mi,lj)
+            lm = map_glbl_st%lm2(l,m)
+            
+            if ( .not. lSmat_new(l) ) then
+               if ( l == 0 ) then
+#ifdef WITH_PRECOND_S0
+                  call get_s0Mat(dt,s0Mat_new,s0Pivot_new,s0Mat_fac_new)
+#else
+                  call get_s0Mat(dt,s0Mat_new,s0Pivot_new)
+#endif
+               else
+#ifdef WITH_PRECOND_S
+                  call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)),sMat_new(1,1,l),sPivot_new(1,l),sMat_fac_new(1,l))
+#else
+                  call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)),sMat_new(1,1,l),sPivot_new(1,l))
+#endif
+               end if
+               lSmat_new(l)=.true.
+            end if
+            
+            if ( l == 0 ) then
+               ! This computation is independet from m. 
+               ! It can be skipped if it was computed for any (m,0)
+               rhs_new(1)=      real(tops(0,0))
+               rhs_new(2:n_r_max-1) = real(s_new(i,2:n_r_max-1))*O_dt    &
+                  + w1*real(dsdt_new(i,2:n_r_max-1))                     &
+                  + w2*real(dsdtLast_new(i,2:n_r_max-1))
+               rhs_new(n_r_max)=real(bots(0,0))
+
+#ifdef WITH_PRECOND_S0
+               rhs_new = s0Mat_fac_new*rhs_new
+#endif
+               call sgesl(s0Mat_new,n_r_max,n_r_max,s0Pivot_new,rhs_new)
+               s_new(i,1:rscheme_oc_new%n_max)=rhs_new(1:rscheme_oc_new%n_max)
+            else ! l1  /=  0
+               rhs1_new(1,mi)=      tops(l,m)
+               rhs1_new(n_r_max,mi)=bots(l,m)
+#ifdef WITH_PRECOND_S
+               rhs1_new(1,mi)=      sMat_fac_new(1,l)*rhs1_new(1,mi)
+               rhs1_new(n_r_max,mi)=sMat_fac_new(1,l)*rhs1_new(n_r_max,mi)
+#endif
+               do r=2,n_r_max-1
+                  rhs1_new(r,mi)=s_new(i,r)*O_dt +             &
+                  & w1*dsdt_new(i,r) + w2*dsdtLast_new(i,r) - &
+                  & alpha*dLh(lm)*or2(r)*orho1(r)*dentropy0(r)*w_new(i,r)
+#ifdef WITH_PRECOND_S
+                  rhs1_new(r,mi) = sMat_fac_new(r,l)*rhs1_new(r,mi)
+#endif
+               end do
+            end if
+         end do  ! loop over m's
+         
+         
+         ! In the following loop, m0lj+mi will work if all (.,lj) tuples are contiguous
+         ! in memory. If not, you'd have to use map_mlo%milj2i(lj,mi) instead which 
+         ! would be rather slow!
+         m0lj = map_mlo%milj2i(1,lj) - 1
+         if ( l > 0 ) then
+            call cgeslML(sMat_new(:,:,l),n_r_max,n_r_max,sPivot_new(:,l),rhs1_new(:,1:nRHS),nRHS)
+            if ( m > 0 ) then
+               do mi=1,nRHS
+                  do r=1,rscheme_oc_new%n_max
+                     s_new(m0lj+mi,r)=rhs1_new(r,mi)
+                  end do
+               end do
+            else
+               do mi=1,nRHS
+                  do r=1,rscheme_oc_new%n_max
+                     s_new(m0lj+mi,r)= cmplx(real(rhs1_new(r,mi)), 0.0_cp,kind=cp)
+                  end do
+               end do
+            end if
+         end if
+      end do     ! loop over l's
+      
+      s_new(:,rscheme_oc_new%n_max+1:n_r_max) = zero
+      
+      !PERFON('upS_drv')
+      call rscheme_oc_new%costf1(s_new,n_mlo_loc,1,n_mlo_loc)
+      call get_ddr(s_new, ds_new, work_LMloc_new, n_mlo_loc, 1, n_mlo_loc, n_r_max, rscheme_oc_new)
+      do i=1,n_mlo_loc
+         print "(A,2I3,F,F)", "   ds norm: ", map_mlo%i2l(i), map_mlo%i2m(i), abs(sum(ds_new(i,:))), abs(sum(work_LMloc_new(i,:)))
+      end do
+
+      !-- Calculate explicit time step part:
+      do r=n_r_cmb+1,n_r_icb-1
+         do i=1,n_mlo_loc
+            lm = map_mlo%i2ml(i)
+            dsdtLast_new(i,r)=dsdt_new(i,r) &
+                 & - coex*opr*hdif_S(lm) * kappa(r)*( work_LMloc_new(i,r)         &
+                 &   + ( beta(r)+dLtemp0(r)+two*or1(r)+dLkappa(r) ) * ds_new(i,r) &
+                 &   - dLh(lm)*or2(r)*  s_new(i,r) )+coex*dLh(lm)*or2(r)          &
+                 &    *orho1(r)*dentropy0(r)*w_new(i,r)
+         end do
+      end do
+      
+   end subroutine updateS_new
+
+!------------------------------------------------------------------------------
+   function estimate_error(vec_new, vec_old) result(value)
+      complex(cp) :: vec_new(n_r_max), vec_old(n_r_max)
+      real(cp) :: value, res(n_r_max)
+      integer :: i
+      
+      res = cmplx(0.0,0.0)
+      do i=1,n_r_max
+         if (abs(vec_old(i))>0) then
+            res(i) = abs(vec_new(i)-vec_old(i))/abs(vec_old(i))
+         end if
+      end do
+      value = maxval(res)
+      
+   end function
+
 !------------------------------------------------------------------------------
    subroutine updateS_ala(s,ds,w,dVSrLM,dsdt,dsdtLast,w1,coex,dt,nLMB)
       !
