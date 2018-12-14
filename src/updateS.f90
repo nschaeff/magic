@@ -6,7 +6,7 @@ module updateS_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb, n_mlo_loc
    use radial_functions, only: orho1, or1, or2, beta, dentropy0, rscheme_oc,  &
-       & rscheme_oc_new, kappa, dLkappa, dLtemp0, temp0
+       & rscheme_oc, kappa, dLkappa, dLtemp0, temp0
    use physical_parameters, only: opr, kbots, ktops
    use num_param, only: alpha
    use init_fields, only: tops,bots
@@ -292,9 +292,6 @@ contains
       call rscheme_oc%costf1(s,ulm-llm+1,lmStart-llm+1,lmStop-llm+1)
       call get_ddr(s, ds, work_LMloc, ulm-llm+1, lmStart-llm+1, lmStop-llm+1, &
             &        n_r_max, rscheme_oc)
-      do lm1=lmStart,lmStop
-         print "(A,2I3,F,F)", " * ds norm: ", lm2l(lm1), lm2m(lm1), abs(sum(ds(lm1,:))), abs(sum(work_LMloc(lm1,:)))
-      end do
             
       !-- Calculate explicit time step part:
       do nR=n_r_cmb+1,n_r_icb-1
@@ -313,7 +310,7 @@ contains
    end subroutine updateS
    
 !------------------------------------------------------------------------------
-   subroutine updateS_new(s_new,ds_new,w_new,dVSrLM_new,dsdt_new,dsdtLast_new,w1,coex,dt,nLMB)
+   subroutine updateS_new(s,ds,w,dVSrLM,dsdt,dsdtLast,w1,coex,dt,nLMB)
       !
       !  updates the entropy field s and its radial derivatives
       !  adds explicit part to time derivatives of s
@@ -324,37 +321,29 @@ contains
       real(cp),    intent(in) :: coex      ! factor depending on alpha
       real(cp),    intent(in) :: dt        ! time step
       integer,     intent(in) :: nLMB
-      complex(cp), intent(in) :: w_new(n_mlo_loc,n_r_max)
-      complex(cp), intent(inout) :: dVSrLM_new(n_mlo_loc,n_r_max)
+      complex(cp), intent(in) :: w(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: dVSrLM(n_mlo_loc,n_r_max)
 
       !-- Input/output of scalar fields:
-      complex(cp), intent(inout) :: s_new(n_mlo_loc,n_r_max)
-      complex(cp), intent(inout) :: dsdt_new(n_mlo_loc,n_r_max)
-      complex(cp), intent(inout) :: dsdtLast_new(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: s(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: dsdt(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: dsdtLast(n_mlo_loc,n_r_max)
       !-- Output: udpated s,ds,dsdtLast
-      complex(cp), intent(out) :: ds_new(n_mlo_loc,n_r_max)
+      complex(cp), intent(out) :: ds(n_mlo_loc,n_r_max)
 
       !-- Local variables:
       real(cp) :: w2            ! weight of second time step
       real(cp) :: O_dt
       integer :: l, m, lm, r, i, lj, mi, nRHS, m0lj
-      real(cp) ::  rhs_new(n_r_max) ! real RHS for l=m=0
+      real(cp) ::  rhs(n_r_max) ! real RHS for l=m=0
 
       integer :: iThread,all_lms,start_lm,stop_lm
       integer :: iChunk,nChunks,size_of_last_chunk,lmB0
-      
-      !!! New layout  TMP
-      !!!----------------------------------
-      complex(cp) :: test_new(n_mlo_loc,n_r_max), test_old(llm:ulm, n_r_max)
-      real(cp) :: test_norm
       
       ! Notes about conversion:
       ! ulm - llm + 1 => n_mlo_loc
       ! lmStart-llm+1 => 1
       ! lmStop-llm+1  => n_mlo_loc
-      
-      !!! END New layout  TMP
-      !!!----------------------------------
       
       if ( .not. l_update_s ) return
 
@@ -362,11 +351,11 @@ contains
       O_dt=one/dt
 
       !-- Get radial derivatives of s: work_LMloc,dsdtLast used as work arrays
-      call get_dr( dVSrLM_new,work_LMloc_new,n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc_new, nocopy=.true. )
+      call get_dr( dVSrLM,work_LMloc_new,n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc, nocopy=.true. )
 
       do r=1,n_r_max
          do i=1,n_mlo_loc
-            dsdt_new(i,r)=orho1(r)*(dsdt_new(i,r)-or2(r)*work_LMloc_new(i,r))
+            dsdt(i,r)=orho1(r)*(dsdt(i,r)-or2(r)*work_LMloc_new(i,r))
          end do
       end do
       !--- Finish calculation of dsdt: 
@@ -400,17 +389,17 @@ contains
             if ( l == 0 ) then
                ! This computation is independet from m. 
                ! It can be skipped if it was computed for any (m,0)
-               rhs_new(1)=      real(tops(0,0))
-               rhs_new(2:n_r_max-1) = real(s_new(i,2:n_r_max-1))*O_dt    &
-                  + w1*real(dsdt_new(i,2:n_r_max-1))                     &
-                  + w2*real(dsdtLast_new(i,2:n_r_max-1))
-               rhs_new(n_r_max)=real(bots(0,0))
+               rhs(1)=      real(tops(0,0))
+               rhs(2:n_r_max-1) = real(s(i,2:n_r_max-1))*O_dt    &
+                  + w1*real(dsdt(i,2:n_r_max-1))                     &
+                  + w2*real(dsdtLast(i,2:n_r_max-1))
+               rhs(n_r_max)=real(bots(0,0))
 
 #ifdef WITH_PRECOND_S0
-               rhs_new = s0Mat_fac_new*rhs_new
+               rhs = s0Mat_fac_new*rhs
 #endif
-               call sgesl(s0Mat_new,n_r_max,n_r_max,s0Pivot_new,rhs_new)
-               s_new(i,1:rscheme_oc_new%n_max)=rhs_new(1:rscheme_oc_new%n_max)
+               call sgesl(s0Mat_new,n_r_max,n_r_max,s0Pivot_new,rhs)
+               s(i,1:rscheme_oc%n_max)=rhs(1:rscheme_oc%n_max)
             else ! l1  /=  0
                rhs1_new(1,mi)=      tops(l,m)
                rhs1_new(n_r_max,mi)=bots(l,m)
@@ -419,9 +408,9 @@ contains
                rhs1_new(n_r_max,mi)=sMat_fac_new(1,l)*rhs1_new(n_r_max,mi)
 #endif
                do r=2,n_r_max-1
-                  rhs1_new(r,mi)=s_new(i,r)*O_dt +             &
-                  & w1*dsdt_new(i,r) + w2*dsdtLast_new(i,r) - &
-                  & alpha*dLh(lm)*or2(r)*orho1(r)*dentropy0(r)*w_new(i,r)
+                  rhs1_new(r,mi)=s(i,r)*O_dt +             &
+                  & w1*dsdt(i,r) + w2*dsdtLast(i,r) - &
+                  & alpha*dLh(lm)*or2(r)*orho1(r)*dentropy0(r)*w(i,r)
 #ifdef WITH_PRECOND_S
                   rhs1_new(r,mi) = sMat_fac_new(r,l)*rhs1_new(r,mi)
 #endif
@@ -438,38 +427,35 @@ contains
             call cgeslML(sMat_new(:,:,l),n_r_max,n_r_max,sPivot_new(:,l),rhs1_new(:,1:nRHS),nRHS)
             if ( m > 0 ) then
                do mi=1,nRHS
-                  do r=1,rscheme_oc_new%n_max
-                     s_new(m0lj+mi,r)=rhs1_new(r,mi)
+                  do r=1,rscheme_oc%n_max
+                     s(m0lj+mi,r)=rhs1_new(r,mi)
                   end do
                end do
             else
                do mi=1,nRHS
-                  do r=1,rscheme_oc_new%n_max
-                     s_new(m0lj+mi,r)= cmplx(real(rhs1_new(r,mi)), 0.0_cp,kind=cp)
+                  do r=1,rscheme_oc%n_max
+                     s(m0lj+mi,r)= cmplx(real(rhs1_new(r,mi)), 0.0_cp,kind=cp)
                   end do
                end do
             end if
          end if
       end do     ! loop over l's
       
-      s_new(:,rscheme_oc_new%n_max+1:n_r_max) = zero
+      s(:,rscheme_oc%n_max+1:n_r_max) = zero
       
       !PERFON('upS_drv')
-      call rscheme_oc_new%costf1(s_new,n_mlo_loc,1,n_mlo_loc)
-      call get_ddr(s_new, ds_new, work_LMloc_new, n_mlo_loc, 1, n_mlo_loc, n_r_max, rscheme_oc_new)
-      do i=1,n_mlo_loc
-         print "(A,2I3,F,F)", "   ds norm: ", map_mlo%i2l(i), map_mlo%i2m(i), abs(sum(ds_new(i,:))), abs(sum(work_LMloc_new(i,:)))
-      end do
+      call rscheme_oc%costf1(s,n_mlo_loc,1,n_mlo_loc)
+      call get_ddr(s, ds, work_LMloc_new, n_mlo_loc, 1, n_mlo_loc, n_r_max, rscheme_oc)
 
       !-- Calculate explicit time step part:
       do r=n_r_cmb+1,n_r_icb-1
          do i=1,n_mlo_loc
             lm = map_mlo%i2ml(i)
-            dsdtLast_new(i,r)=dsdt_new(i,r) &
+            dsdtLast(i,r)=dsdt(i,r) &
                  & - coex*opr*hdif_S(lm) * kappa(r)*( work_LMloc_new(i,r)         &
-                 &   + ( beta(r)+dLtemp0(r)+two*or1(r)+dLkappa(r) ) * ds_new(i,r) &
-                 &   - dLh(lm)*or2(r)*  s_new(i,r) )+coex*dLh(lm)*or2(r)          &
-                 &    *orho1(r)*dentropy0(r)*w_new(i,r)
+                 &   + ( beta(r)+dLtemp0(r)+two*or1(r)+dLkappa(r) ) * ds(i,r) &
+                 &   - dLh(lm)*or2(r)*  s(i,r) )+coex*dLh(lm)*or2(r)          &
+                 &    *orho1(r)*dentropy0(r)*w(i,r)
          end do
       end do
       

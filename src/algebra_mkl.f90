@@ -8,7 +8,7 @@ module algebra
 
    private
 
-   logical :: multiple_rhs = .false.   ! read the comment in cgeslML subroutine!
+   logical :: multiple_rhs = .true.   ! read the comment in cgeslML subroutine!
    public :: sgefa, sgesl, cgesl, cgeslML
 
 contains

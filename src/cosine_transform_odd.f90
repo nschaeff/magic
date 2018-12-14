@@ -24,6 +24,7 @@ module cosine_transform_odd
       generic :: costf1 => costf1_complex,costf1_real,costf1_real_1d,costf1_complex_1d
    end type costf_odd_t
 
+   logical, public :: l_cosdebug = .false.
 contains
 
    subroutine initialize(this, n, ni, nd)
@@ -240,6 +241,7 @@ contains
       !   post-processing (again sum over two f2's).
       fac_norm=one/sqrt(8.0_cp*real(n,cp))
     
+      if (l_cosdebug) write (*,"(E11.4)", ADVANCE="NO") abs(sum(f(n_f_start:n_f_stop,1)+f(n_f_start:n_f_stop,n_P1)+f(n_f_start:n_f_stop,n_O2_P1)))
     
       !-- Build auxiliary function for cos transform
       !   and shuffle data according to k2k in the process:
@@ -250,6 +252,7 @@ contains
          f2(n_f,j1)=f(n_f,1)+f(n_f,n_P1)
          f2(n_f,j2)=two*f(n_f,n_O2_P1)
       end do
+      if (l_cosdebug) write (*,"(E11.4)", ADVANCE="NO") abs(sum(abs(f(n_f_start:n_f_stop,1)+f(n_f_start:n_f_stop,n_P1)+f(n_f_start:n_f_stop,n_O2_P1))))
     
       do j=1,n/2-3,2    ! step 2 unrolling
          j1=this%i_costf_init(j+2)    ! first step

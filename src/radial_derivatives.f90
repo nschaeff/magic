@@ -26,12 +26,11 @@ module radial_der
 
    public :: get_ddr, get_dddr, get_dcheb, get_dr, initialize_der_arrays, &
    &         finalize_der_arrays
-
+   
    complex(cp), allocatable :: work(:,:)
    real(cp), allocatable :: work_1d_real(:)
 
 contains
-
 !------------------------------------------------------------------------------
    subroutine initialize_der_arrays(n_r_max,llm,ulm)
       !
@@ -448,10 +447,10 @@ contains
          end do
     
          !-- Transform f to cheb space:
-         call r_scheme%costf1(work,n_f_max,n_f_start,n_f_stop)
-    
+         call r_scheme%costf1(work(1:n_f_max,1:n_r_max),n_f_max,n_f_start,n_f_stop)
+         
          !-- Get derivatives:
-         call get_ddcheb(work,df,ddf,n_f_max,n_f_start,n_f_stop, &
+         call get_ddcheb(work(1:n_f_max,1:n_r_max),df,ddf,n_f_max,n_f_start,n_f_stop, &
               &          n_r_max,r_scheme%n_max,one)
     
          !-- Transform back:
