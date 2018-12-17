@@ -25,7 +25,7 @@ module updateB_mod
    use RMS, only: dtBPolLMr, dtBPol2hInt, dtBTor2hInt
    use constants, only: pi, zero, one, two, three, half
    use special
-   use algebra, only: cgeslML, sgefa
+   use algebra, only: cgeslML, prepare_mat
    use LMLoop_data, only: llmMag,ulmMag
    use parallel_mod, only:  coord_r,chunksize
    use RMS_helpers, only: hInt2PolLM, hInt2TorLM
@@ -1165,14 +1165,14 @@ contains
 #endif
 
       !----- LU decomposition:
-      call sgefa(bMat,n_r_tot,nRall,bPivot,info)
+      call prepare_mat(bMat,n_r_tot,nRall,bPivot,info)
 
       if ( info /= 0 ) then
          call abortRun('Singular matrix bMat in get_bmat')
       end if
 
       !----- LU decomposition:
-      call sgefa(jMat,n_r_tot,nRall,jPivot,info)
+      call prepare_mat(jMat,n_r_tot,nRall,jPivot,info)
       if ( info /= 0 ) then
          call abortRun('! Singular matrix ajmat in get_bmat!')
       end if

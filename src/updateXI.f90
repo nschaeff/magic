@@ -13,7 +13,7 @@ module updateXi_mod
    use logic, only: l_update_xi
    use LMLoop_data, only: llm,ulm
    use parallel_mod, only: coord_r,chunksize
-   use algebra, only: cgeslML,sgesl, sgefa
+   use algebra, only: cgeslML,solve_mat, prepare_mat
    use radial_der, only: get_ddr, get_dr
    use constants, only: zero, one, two
    use fields, only: work_LMloc
@@ -254,7 +254,7 @@ contains
                   rhs = xi0Mat_fac*rhs
 #endif
 
-                  call sgesl(xi0Mat,n_r_max,n_r_max,xi0Pivot,rhs)
+                  call solve_mat(xi0Mat,n_r_max,n_r_max,xi0Pivot,rhs)
 
                else ! l1  /=  0
                   lmB=lmB+1
@@ -457,7 +457,7 @@ contains
 #endif
     
       !---- LU decomposition:
-      call sgefa(xiMat,n_r_max,n_r_max,xiPivot,info)
+      call prepare_mat(xiMat,n_r_max,n_r_max,xiPivot,info)
       if ( info /= 0 ) then
          call abortRun('! Singular matrix xiMat0!')
       end if
@@ -557,7 +557,7 @@ contains
 #endif
 
       !----- LU decomposition:
-      call sgefa(xiMat,n_r_max,n_r_max,xiPivot,info)
+      call prepare_mat(xiMat,n_r_max,n_r_max,xiPivot,info)
       if ( info /= 0 ) then
          call abortRun('Singular matrix xiMat!')
       end if

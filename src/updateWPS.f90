@@ -20,7 +20,7 @@ module updateWPS_mod
    use logic, only: l_update_v, l_temperature_diff, l_RMS
    use RMS, only: DifPol2hInt, dtVPolLMr, dtVPol2hInt, DifPolLMr
    use RMS_helpers, only:  hInt2Pol
-   use algebra, only: cgeslML, sgefa, sgesl
+   use algebra, only: cgeslML, prepare_mat, solve_mat
    use LMLoop_data, only: llm, ulm
    use communications, only: get_global_sum
    use parallel_mod, only: chunksize, coord_r
@@ -286,7 +286,7 @@ contains
                      rhs(nR)=rhs(nR)*ps0Mat_fac(nR,1)
                   end do
 
-                  call sgesl(ps0Mat,2*n_r_max,2*n_r_max,ps0Pivot,rhs)
+                  call solve_mat(ps0Mat,2*n_r_max,2*n_r_max,ps0Pivot,rhs)
 
                   do nR=1,2*n_r_max
                      rhs(nR)=rhs(nR)*ps0Mat_fac(nR,2)
@@ -914,7 +914,7 @@ contains
          wpsMat(:,nR) = wpsMat(:,nR)*wpsMat_fac(nR,2)
       end do
 
-      call sgefa(wpsMat,3*n_r_max,3*n_r_max,wpsPivot,info)
+      call prepare_mat(wpsMat,3*n_r_max,3*n_r_max,wpsPivot,info)
       if ( info /= 0 ) then
          call abortRun('Singular matrix wpsMat!')
       end if
@@ -1165,7 +1165,7 @@ contains
 
 
       !---- LU decomposition:
-      call sgefa(psMat,2*n_r_max,2*n_r_max,psPivot,info)
+      call prepare_mat(psMat,2*n_r_max,2*n_r_max,psPivot,info)
       if ( info /= 0 ) then
          call abortRun('! Singular matrix ps0Mat!')
       end if

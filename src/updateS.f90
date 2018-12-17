@@ -6,67 +6,63 @@ module updateS_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb, n_mlo_loc
    use radial_functions, only: orho1, or1, or2, beta, dentropy0, rscheme_oc,  &
-       & rscheme_oc, kappa, dLkappa, dLtemp0, temp0
+       &                       kappa, dLkappa, dLtemp0, temp0
    use physical_parameters, only: opr, kbots, ktops
    use num_param, only: alpha
    use init_fields, only: tops,bots
-   use blocking, only: nLMBs,lo_map,lo_sub_map,lmStartB,lmStopB
+   use blocking, only: nLMBs,st_map,lo_map,lo_sub_map,lmStartB,lmStopB
    use horizontal_data, only: dLh,hdif_S
    use logic, only: l_update_s, l_anelastic_liquid
    use LMLoop_data, only: llm, ulm
-   use parallel_mod, only: coord_r,chunksize
-   use algebra, only: cgeslML,sgesl, sgefa
+   use parallel_mod, only: rank,chunksize
+   use algebra, only: prepare_mat, solve_mat
    use radial_der, only: get_ddr, get_dr
-   use fields, only:  work_LMloc, work_LMloc_new
+   use fields, only:  work_LMloc
    use constants, only: zero, one, two
    use useful, only: abortRun
-   use LMmapping, only: map_glbl_st, map_mlo
-   
-   use communications ! added by Lago; maybe remove later?
-   use parallel_mod
 
    implicit none
 
    private
 
    !-- Local variables
-   complex(cp), allocatable :: rhs1(:,:,:), rhs1_new(:,:)
-   real(cp), allocatable :: s0Mat(:,:), s0Mat_new(:,:)     ! for l=m=0  
-   real(cp), allocatable :: sMat(:,:,:), sMat_new(:,:,:)
-   integer, allocatable :: s0Pivot(:), s0Pivot_new(:)
-   integer, allocatable :: sPivot(:,:), sPivot_new(:,:)
+   complex(cp), allocatable :: rhs1(:,:,:)
+   real(cp), allocatable :: s0Mat(:,:)     ! for l=m=0  
+   real(cp), allocatable :: sMat(:,:,:)
+   integer, allocatable :: s0Pivot(:)
+   integer, allocatable :: sPivot(:,:)
 #ifdef WITH_PRECOND_S
-   real(cp), allocatable :: sMat_fac(:,:), sMat_fac_new(:,:)
+   real(cp), allocatable :: sMat_fac(:,:)
 #endif
 #ifdef WITH_PRECOND_S0
-   real(cp), allocatable :: s0Mat_fac(:), s0Mat_fac_new(:)
+   real(cp), allocatable :: s0Mat_fac(:)
 #endif
-   logical, public, allocatable :: lSmat(:), lSmat_new(:)
-   
+   logical, public, allocatable :: lSmat(:)
+
    integer :: maxThreads
-   
-   public :: initialize_updateS, updateS, updateS_ala, finalize_updateS, updateS_new
+
+   public :: initialize_updateS, updateS, updateS_ala, finalize_updateS
 
 contains
 
    subroutine initialize_updateS
 
-      allocate( s0Mat(n_r_max,n_r_max), s0Mat_new(n_r_max,n_r_max) )      ! for l=m=0  
-      allocate( sMat(n_r_max,n_r_max,l_max), sMat_new(n_r_max,n_r_max,l_max) )
+      allocate( s0Mat(n_r_max,n_r_max) )      ! for l=m=0  
+      allocate( sMat(n_r_max,n_r_max,l_max) )
       bytes_allocated = bytes_allocated+(n_r_max*n_r_max*(1+l_max))* &
       &                 SIZEOF_DEF_REAL
-      allocate( s0Pivot(n_r_max), s0Pivot_new(n_r_max) )
-      allocate( sPivot(n_r_max,l_max), sPivot_new(n_r_max,l_max) )
+      allocate( s0Pivot(n_r_max) )
+      allocate( sPivot(n_r_max,l_max) )
       bytes_allocated = bytes_allocated+(n_r_max+n_r_max*l_max)*SIZEOF_INTEGER
 #ifdef WITH_PRECOND_S
-      allocate(sMat_fac(n_r_max,l_max), sMat_fac_new(n_r_max,l_max))
+      allocate(sMat_fac(n_r_max,l_max))
       bytes_allocated = bytes_allocated+n_r_max*l_max*SIZEOF_DEF_REAL
 #endif
 #ifdef WITH_PRECOND_S0
-      allocate(s0Mat_fac(n_r_max), s0Mat_fac_new(n_r_max))
+      allocate(s0Mat_fac(n_r_max))
       bytes_allocated = bytes_allocated+n_r_max*SIZEOF_DEF_REAL
 #endif
-      allocate( lSmat(0:l_max), lSmat_new(0:l_max) )
+      allocate( lSmat(0:l_max) )
       bytes_allocated = bytes_allocated+(l_max+1)*SIZEOF_LOGICAL
 
 #ifdef WITHOMP
@@ -75,7 +71,6 @@ contains
       maxThreads=1
 #endif
       allocate( rhs1(n_r_max,lo_sub_map%sizeLMB2max,0:maxThreads-1) )
-      allocate( rhs1_new(n_r_max,n_mlo_loc) )
       bytes_allocated = bytes_allocated + n_r_max*lo_sub_map%sizeLMB2max*&
       &                 maxThreads*SIZEOF_DEF_COMPLEX
 
@@ -130,9 +125,9 @@ contains
       integer, pointer :: sizeLMB2(:,:),lm2(:,:)
       integer, pointer :: lm22lm(:,:,:),lm22l(:,:,:),lm22m(:,:,:)
 
-      integer :: iThread,all_lms,start_lm,stop_lm
+      integer :: threadid,nThreads,iThread,all_lms,per_thread,start_lm,stop_lm
       integer :: iChunk,nChunks,size_of_last_chunk,lmB0
-      
+
       if ( .not. l_update_s ) return
 
       nLMBs2(1:nLMBs) => lo_sub_map%nLMBs2
@@ -148,29 +143,65 @@ contains
       lmStop      =lmStopB(nLMB)
       w2  =one-w1
       O_dt=one/dt
-      all_lms=lmStop-lmStart+1
 
+
+      !PERFON('upS_fin')
+      !$OMP PARALLEL  &
+      !$OMP private(iThread,start_lm,stop_lm,nR,lm)       &
+      !$OMP shared(all_lms,per_thread,lmStart,lmStop)     &
+      !$OMP shared(dVSrLM,dsdt,orho1,or2,dentropy0,w,dLh) &
+      !$OMP shared(n_r_max,rscheme_oc,work_LMloc,nThreads,llm,ulm)
+      !$OMP SINGLE
+#ifdef WITHOMP
+      nThreads=omp_get_num_threads()
+#else
+      nThreads=1
+#endif
       !-- Get radial derivatives of s: work_LMloc,dsdtLast used as work arrays
+      all_lms=lmStop-lmStart+1
+      per_thread=all_lms/nThreads
+      !$OMP END SINGLE
+      !$OMP BARRIER
+      !$OMP DO
+      do iThread=0,nThreads-1
+         start_lm=lmStart+iThread*per_thread
+         stop_lm = start_lm+per_thread-1
+         if (iThread == nThreads-1) stop_lm=lmStop
 
-      !--- Finish calculation of dsdt:
-      call get_dr( dVSrLM,work_LMloc,ulm-llm+1,lmStart-llm+1,  &
-            &       lmStop-llm+1,n_r_max,rscheme_oc, nocopy=.true. )
+         !--- Finish calculation of dsdt:
+         call get_dr( dVSrLM,work_LMloc,ulm-llm+1,start_lm-llm+1,  &
+              &       stop_lm-llm+1,n_r_max,rscheme_oc, nocopy=.true. )
+      end do
+      !$OMP end do
 
+      !$OMP DO
       do nR=1,n_r_max
          do lm=lmStart,lmStop
-            dsdt(lm,nR)=orho1(nR)*(dsdt(lm,nR)-or2(nR)*work_LMloc(lm,nR))
+            dsdt(lm,nR)=orho1(nR)*(dsdt(lm,nR)-or2(nR)*work_LMloc(lm,nR)- &
+            &           dLh(st_map%lm2(lm2l(lm),lm2m(lm)))*or2(nR)*       &
+            &           dentropy0(nR)*w(lm,nR))
          end do
       end do
-      
+      !$OMP end do
+      !$OMP END PARALLEL
+      !PERFOFF
+
       ! one subblock is linked to one l value and needs therefore once the matrix
+      !$OMP PARALLEL default(shared)
+      !$OMP SINGLE
       do nLMB2=1,nLMBs2(nLMB)
          ! this inner loop is in principle over the m values which belong to the
          ! l value
+         !$OMP TASK default(shared) &
+         !$OMP firstprivate(nLMB2) &
+         !$OMP private(lm,lm1,l1,m1,lmB,threadid) &
+         !$OMP private(nChunks,size_of_last_chunk,iChunk)
          nChunks = (sizeLMB2(nLMB2,nLMB)+chunksize-1)/chunksize
          size_of_last_chunk = chunksize + (sizeLMB2(nLMB2,nLMB)-nChunks*chunksize)
 
          ! This task treats one l given by l1
          l1=lm22l(1,nLMB2,nLMB)
+         !write(*,"(3(A,I3),A)") "Launching task for nLMB2=",nLMB2," (l=",l1,") and scheduling ",nChunks," subtasks."
 
          if ( l1 == 0 ) then
             if ( .not. lSmat(l1) ) then
@@ -184,17 +215,27 @@ contains
          else
             if ( .not. lSmat(l1) ) then
 #ifdef WITH_PRECOND_S
-               call get_sMat(dt,l1,hdif_S(map_glbl_st%lm2(l1,0)), &
-                    sMat(1,1,l1),sPivot(1,l1),sMat_fac(1,l1))
+               call get_sMat(dt,l1,hdif_S(st_map%lm2(l1,0)), &
+                    &        sMat(:,:,l1),sPivot(:,l1),sMat_fac(:,l1))
 #else
-               call get_sMat(dt,l1,hdif_S(map_glbl_st%lm2(l1,0)), &
-                    sMat(1,1,l1),sPivot(1,l1))
+               call get_sMat(dt,l1,hdif_S(st_map%lm2(l1,0)), &
+                    &        sMat(:,:,l1),sPivot(:,l1))
 #endif
                lSmat(l1)=.true.
+               !write(*,"(A,I3,ES22.14)") "sMat: ",l1,SUM( sMat(:,:,l1) )
             end if
           end if
 
          do iChunk=1,nChunks
+            !$OMP TASK default(shared) &
+            !$OMP firstprivate(iChunk) &
+            !$OMP private(lmB0,lmB,lm,lm1,m1,nR,n_r_out) &
+            !$OMP private(threadid)
+#ifdef WITHOMP
+            threadid = omp_get_thread_num()
+#else
+            threadid = 0
+#endif
             lmB0=(iChunk-1)*chunksize
             lmB=lmB0
 
@@ -208,32 +249,30 @@ contains
                   rhs(1)=      real(tops(0,0))
                   rhs(n_r_max)=real(bots(0,0))
                   do nR=2,n_r_max-1
-                     rhs(nR)=real(s(lm1,nR))*O_dt+ &
-                     &    w1*real(dsdt(lm1,nR))  + &
-                     &    w2*real(dsdtLast(lm1,nR))
+                     rhs(nR)=real(s(lm1,nR))*O_dt+w1*real(dsdt(lm1,nR))  + &
+                     &       w2*real(dsdtLast(lm1,nR))
                   end do
 
 #ifdef WITH_PRECOND_S0
                   rhs = s0Mat_fac*rhs
 #endif
-                  call sgesl(s0Mat,n_r_max,n_r_max,s0Pivot,rhs)
+
+                  call solve_mat(s0Mat,n_r_max,n_r_max,s0Pivot,rhs)
+
                else ! l1  /=  0
                   lmB=lmB+1
 
-                  rhs1(1,lmB,0)=      tops(l1,m1)
-                  rhs1(n_r_max,lmB,0)=bots(l1,m1)
+                  rhs1(1,lmB,threadid)=      tops(l1,m1)
+                  rhs1(n_r_max,lmB,threadid)=bots(l1,m1)
 #ifdef WITH_PRECOND_S
-                  rhs1(1,lmB,0)=      sMat_fac(1,l1)*rhs1(1,lmB,0)
-                  rhs1(n_r_max,lmB,0)=sMat_fac(1,l1)*rhs1(n_r_max,lmB,0)
+                  rhs1(1,lmB,threadid)=      sMat_fac(1,l1)*rhs1(1,lmB,threadid)
+                  rhs1(n_r_max,lmB,threadid)=sMat_fac(1,l1)*rhs1(n_r_max,lmB,threadid)
 #endif
                   do nR=2,n_r_max-1
-                     rhs1(nR,lmB,0)=s(lm1,nR)*O_dt +            &
-                         &                w1*dsdt(lm1,nR) +            &
-                         &                w2*dsdtLast(lm1,nR) -        &
-                         &  alpha*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))) &
-                         &  *or2(nR)*orho1(nR)*dentropy0(nR)*w(lm1,nR)
+                     rhs1(nR,lmB,threadid)=s(lm1,nR)*O_dt+w1*dsdt(lm1,nR)  &
+                     &                     +w2*dsdtLast(lm1,nR)
 #ifdef WITH_PRECOND_S
-                     rhs1(nR,lmB,0) = sMat_fac(nR,l1)*rhs1(nR,lmB,0)
+                     rhs1(nR,lmB,threadid) = sMat_fac(nR,l1)*rhs1(nR,lmB,threadid)
 #endif
                   end do
                end if
@@ -242,8 +281,8 @@ contains
 
             !PERFON('upS_sol')
             if ( lmB  >  lmB0 ) then
-               call cgeslML(sMat(:,:,l1),n_r_max,n_r_max, &
-                    &       sPivot(:,l1),rhs1(:,lmB0+1:lmB,0),lmB-lmB0)
+               call solve_mat(sMat(:,:,l1),n_r_max,n_r_max, &
+                    &         sPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
             end if
             !PERFOFF
 
@@ -262,12 +301,12 @@ contains
                   lmB=lmB+1
                   if ( m1 > 0 ) then
                      do n_r_out=1,rscheme_oc%n_max
-                        s(lm1,n_r_out)=rhs1(n_r_out,lmB,0)
+                        s(lm1,n_r_out)=rhs1(n_r_out,lmB,threadid)
                      end do
                   else
                      do n_r_out=1,rscheme_oc%n_max
-                        s(lm1,n_r_out)= cmplx(real(rhs1(n_r_out,lmB,0)), &
-                                       &     0.0_cp,kind=cp)
+                        s(lm1,n_r_out)= cmplx(real(rhs1(n_r_out,lmB,threadid)), &
+                        &                    0.0_cp,kind=cp)
                      end do
                   end if
                end if
@@ -279,7 +318,7 @@ contains
       end do     ! loop over lm blocks
       !$OMP END SINGLE
       !$OMP END PARALLEL
-      
+
       !write(*,"(A,2ES22.12)") "s after = ",SUM(s)
       !-- set cheb modes > rscheme_oc%n_max to zero (dealiazing)
       do n_r_out=rscheme_oc%n_max+1,n_r_max
@@ -287,196 +326,59 @@ contains
             s(lm1,n_r_out)=zero
          end do
       end do
-      
+
       !PERFON('upS_drv')
-      call rscheme_oc%costf1(s,ulm-llm+1,lmStart-llm+1,lmStop-llm+1)
-      call get_ddr(s, ds, work_LMloc, ulm-llm+1, lmStart-llm+1, lmStop-llm+1, &
-            &        n_r_max, rscheme_oc)
-            
+      all_lms=lmStop-lmStart+1
+#ifdef WITHOMP
+      if (all_lms < maxThreads) then
+         call omp_set_num_threads(all_lms)
+         per_thread=1
+      else
+         per_thread=all_lms/omp_get_max_threads()
+      end if
+#else
+      per_thread=all_lms
+#endif
+      !$OMP PARALLEL &
+      !$OMP private(iThread,start_lm,stop_lm) &
+      !$OMP shared(per_thread,lmStart,lmStop,nThreads) &
+      !$OMP shared(s,ds,dsdtLast,rscheme_oc) &
+      !$OMP shared(n_r_max,work_LMloc,llm,ulm) &
+      !$OMP shared(n_r_cmb,n_r_icb,dsdt,coex,opr,hdif_S) &
+      !$OMP shared(st_map,lm2l,lm2m,kappa,beta,dLtemp0,or1) &
+      !$OMP shared(dLkappa,dLh,or2)
+      !$OMP DO
+      do iThread=0,nThreads-1
+         start_lm=lmStart+iThread*per_thread
+         stop_lm = start_lm+per_thread-1
+         if (iThread == nThreads-1) stop_lm=lmStop
+         call get_ddr(s, ds, work_LMloc, ulm-llm+1, start_lm-llm+1, &
+              &       stop_lm-llm+1, n_r_max, rscheme_oc, l_dct_in=.false.)
+         call rscheme_oc%costf1(s,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
+      end do
+      !$OMP end do
+
       !-- Calculate explicit time step part:
+      !$OMP do private(nR,lm1)
       do nR=n_r_cmb+1,n_r_icb-1
          do lm1=lmStart,lmStop
-            dsdtLast(lm1,nR)=dsdt(lm1,nR) &
-                 & - coex*opr*hdif_S(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))) * &
-                 &   kappa(nR) *                   ( work_LMloc(lm1,nR) &
-                 &   + ( beta(nR)+dLtemp0(nR)+two*or1(nR)+dLkappa(nR) ) &
-                 &                                         * ds(lm1,nR) &
-                 &   - dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)     &
-                 &                                         *  s(lm1,nR) &
-                 &   )+coex*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)&
-                 &    *orho1(nR)*dentropy0(nR)*               w(lm1,nR)
+            dsdtLast(lm1,nR)=                              dsdt(lm1,nR) &
+            &      - coex*opr*hdif_S(st_map%lm2(lm2l(lm1),lm2m(lm1))) * &
+            &        kappa(nR) *                   ( work_LMloc(lm1,nR) &
+            &        + ( beta(nR)+dLtemp0(nR)+two*or1(nR)+dLkappa(nR) ) &
+            &                                              * ds(lm1,nR) &
+            &        - dLh(st_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)     &
+            &                                              *  s(lm1,nR) )
          end do
       end do
+      !$OMP end do
+      !$OMP END PARALLEL
+#ifdef WITHOMP
+      call omp_set_num_threads(maxThreads)
+#endif
+      !PERFOFF
+
    end subroutine updateS
-   
-!------------------------------------------------------------------------------
-   subroutine updateS_new(s,ds,w,dVSrLM,dsdt,dsdtLast,w1,coex,dt,nLMB)
-      !
-      !  updates the entropy field s and its radial derivatives
-      !  adds explicit part to time derivatives of s
-      !
-
-      !-- Input of variables:
-      real(cp),    intent(in) :: w1        ! weight for time step !
-      real(cp),    intent(in) :: coex      ! factor depending on alpha
-      real(cp),    intent(in) :: dt        ! time step
-      integer,     intent(in) :: nLMB
-      complex(cp), intent(in) :: w(n_mlo_loc,n_r_max)
-      complex(cp), intent(inout) :: dVSrLM(n_mlo_loc,n_r_max)
-
-      !-- Input/output of scalar fields:
-      complex(cp), intent(inout) :: s(n_mlo_loc,n_r_max)
-      complex(cp), intent(inout) :: dsdt(n_mlo_loc,n_r_max)
-      complex(cp), intent(inout) :: dsdtLast(n_mlo_loc,n_r_max)
-      !-- Output: udpated s,ds,dsdtLast
-      complex(cp), intent(out) :: ds(n_mlo_loc,n_r_max)
-
-      !-- Local variables:
-      real(cp) :: w2            ! weight of second time step
-      real(cp) :: O_dt
-      integer :: l, m, lm, r, i, lj, mi, nRHS, m0lj
-      real(cp) ::  rhs(n_r_max) ! real RHS for l=m=0
-
-      integer :: iThread,all_lms,start_lm,stop_lm
-      integer :: iChunk,nChunks,size_of_last_chunk,lmB0
-      
-      ! Notes about conversion:
-      ! ulm - llm + 1 => n_mlo_loc
-      ! lmStart-llm+1 => 1
-      ! lmStop-llm+1  => n_mlo_loc
-      
-      if ( .not. l_update_s ) return
-
-      w2  =one-w1
-      O_dt=one/dt
-
-      !-- Get radial derivatives of s: work_LMloc,dsdtLast used as work arrays
-      call get_dr( dVSrLM,work_LMloc_new,n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc, nocopy=.true. )
-
-      do r=1,n_r_max
-         do i=1,n_mlo_loc
-            dsdt(i,r)=orho1(r)*(dsdt(i,r)-or2(r)*work_LMloc_new(i,r))
-         end do
-      end do
-      !--- Finish calculation of dsdt: 
-      
-      do lj=1,n_lo_loc
-         l = map_mlo%lj2l(lj)
-         
-         nRHS = map_mlo%n_mi(lj)
-         do mi=1,nRHS
-            m = map_mlo%milj2m(mi,lj)
-            i = map_mlo%milj2i(mi,lj)
-            lm = map_glbl_st%lm2(l,m)
-            
-            if ( .not. lSmat_new(l) ) then
-               if ( l == 0 ) then
-#ifdef WITH_PRECOND_S0
-                  call get_s0Mat(dt,s0Mat_new,s0Pivot_new,s0Mat_fac_new)
-#else
-                  call get_s0Mat(dt,s0Mat_new,s0Pivot_new)
-#endif
-               else
-#ifdef WITH_PRECOND_S
-                  call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)),sMat_new(1,1,l),sPivot_new(1,l),sMat_fac_new(1,l))
-#else
-                  call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)),sMat_new(1,1,l),sPivot_new(1,l))
-#endif
-               end if
-               lSmat_new(l)=.true.
-            end if
-            
-            if ( l == 0 ) then
-               ! This computation is independet from m. 
-               ! It can be skipped if it was computed for any (m,0)
-               rhs(1)=      real(tops(0,0))
-               rhs(2:n_r_max-1) = real(s(i,2:n_r_max-1))*O_dt    &
-                  + w1*real(dsdt(i,2:n_r_max-1))                     &
-                  + w2*real(dsdtLast(i,2:n_r_max-1))
-               rhs(n_r_max)=real(bots(0,0))
-
-#ifdef WITH_PRECOND_S0
-               rhs = s0Mat_fac_new*rhs
-#endif
-               call sgesl(s0Mat_new,n_r_max,n_r_max,s0Pivot_new,rhs)
-               s(i,1:rscheme_oc%n_max)=rhs(1:rscheme_oc%n_max)
-            else ! l1  /=  0
-               rhs1_new(1,mi)=      tops(l,m)
-               rhs1_new(n_r_max,mi)=bots(l,m)
-#ifdef WITH_PRECOND_S
-               rhs1_new(1,mi)=      sMat_fac_new(1,l)*rhs1_new(1,mi)
-               rhs1_new(n_r_max,mi)=sMat_fac_new(1,l)*rhs1_new(n_r_max,mi)
-#endif
-               do r=2,n_r_max-1
-                  rhs1_new(r,mi)=s(i,r)*O_dt +             &
-                  & w1*dsdt(i,r) + w2*dsdtLast(i,r) - &
-                  & alpha*dLh(lm)*or2(r)*orho1(r)*dentropy0(r)*w(i,r)
-#ifdef WITH_PRECOND_S
-                  rhs1_new(r,mi) = sMat_fac_new(r,l)*rhs1_new(r,mi)
-#endif
-               end do
-            end if
-         end do  ! loop over m's
-         
-         
-         ! In the following loop, m0lj+mi will work if all (.,lj) tuples are contiguous
-         ! in memory. If not, you'd have to use map_mlo%milj2i(lj,mi) instead which 
-         ! would be rather slow!
-         m0lj = map_mlo%milj2i(1,lj) - 1
-         if ( l > 0 ) then
-            call cgeslML(sMat_new(:,:,l),n_r_max,n_r_max,sPivot_new(:,l),rhs1_new(:,1:nRHS),nRHS)
-            if ( m > 0 ) then
-               do mi=1,nRHS
-                  do r=1,rscheme_oc%n_max
-                     s(m0lj+mi,r)=rhs1_new(r,mi)
-                  end do
-               end do
-            else
-               do mi=1,nRHS
-                  do r=1,rscheme_oc%n_max
-                     s(m0lj+mi,r)= cmplx(real(rhs1_new(r,mi)), 0.0_cp,kind=cp)
-                  end do
-               end do
-            end if
-         end if
-      end do     ! loop over l's
-      
-      s(:,rscheme_oc%n_max+1:n_r_max) = zero
-      
-      !PERFON('upS_drv')
-      call rscheme_oc%costf1(s,n_mlo_loc,1,n_mlo_loc)
-      call get_ddr(s, ds, work_LMloc_new, n_mlo_loc, 1, n_mlo_loc, n_r_max, rscheme_oc)
-
-      !-- Calculate explicit time step part:
-      do r=n_r_cmb+1,n_r_icb-1
-         do i=1,n_mlo_loc
-            lm = map_mlo%i2ml(i)
-            dsdtLast(i,r)=dsdt(i,r) &
-                 & - coex*opr*hdif_S(lm) * kappa(r)*( work_LMloc_new(i,r)         &
-                 &   + ( beta(r)+dLtemp0(r)+two*or1(r)+dLkappa(r) ) * ds(i,r) &
-                 &   - dLh(lm)*or2(r)*  s(i,r) )+coex*dLh(lm)*or2(r)          &
-                 &    *orho1(r)*dentropy0(r)*w(i,r)
-         end do
-      end do
-      
-   end subroutine updateS_new
-
-!------------------------------------------------------------------------------
-   function estimate_error(vec_new, vec_old) result(value)
-      complex(cp) :: vec_new(n_r_max), vec_old(n_r_max)
-      real(cp) :: value, res(n_r_max)
-      integer :: i
-      
-      res = cmplx(0.0,0.0)
-      do i=1,n_r_max
-         if (abs(vec_old(i))>0) then
-            res(i) = abs(vec_new(i)-vec_old(i))/abs(vec_old(i))
-         end if
-      end do
-      value = maxval(res)
-      
-   end function
-
 !------------------------------------------------------------------------------
    subroutine updateS_ala(s,ds,w,dVSrLM,dsdt,dsdtLast,w1,coex,dt,nLMB)
       !
@@ -537,10 +439,10 @@ contains
 
       !PERFON('upS_fin')
       !$OMP PARALLEL  &
-      !$OMP private(iThread,start_lm,stop_lm,nR,lm) &
-      !$OMP shared(all_lms,per_thread) &
-      !$OMP shared(dVSrLM,rscheme_oc,dsdt,orho1) &
-      !$OMP shared(dLtemp0,or2,lmStart,lmStop) &
+      !$OMP private(iThread,start_lm,stop_lm,nR,lm)        &
+      !$OMP shared(all_lms,per_thread)                     &
+      !$OMP shared(dVSrLM,rscheme_oc,dsdt,orho1,dentropy0) &
+      !$OMP shared(dLtemp0,w,or2,lmStart,lmStop,temp0,dLh) &
       !$OMP shared(n_r_max,work_LMloc,nThreads,llm,ulm)
       !$OMP SINGLE
 #ifdef WITHOMP
@@ -568,9 +470,12 @@ contains
       !$OMP DO
       do nR=1,n_r_max
          do lm=lmStart,lmStop
-            dsdt(lm,nR)=          orho1(nR)*dsdt(lm,nR)  - & 
-                &     or2(nR)*orho1(nR)*work_LMloc(lm,nR) + &
-                &         or2(nR)*orho1(nR)*dLtemp0(nR)*dVSrLM(lm,nR)
+            dsdt(lm,nR)=           orho1(nR)*        dsdt(lm,nR) - & 
+            &        or2(nR)*orho1(nR)*        work_LMloc(lm,nR) + &
+            &        or2(nR)*orho1(nR)*dLtemp0(nR)*dVSrLM(lm,nR) - &
+            &        dLh(st_map%lm2(lm2l(lm),lm2m(lm)))*or2(nR)*   &
+            &        orho1(nR)*temp0(nR)*dentropy0(nR)*w(lm,nR)
+
          end do
       end do
       !$OMP end do
@@ -606,11 +511,11 @@ contains
          else
             if ( .not. lSmat(l1) ) then
 #ifdef WITH_PRECOND_S
-               call get_sMat(dt,l1,hdif_S(map_glbl_st%lm2(l1,0)), &
-                             sMat(1,1,l1),sPivot(1,l1),sMat_fac(1,l1))
+               call get_sMat(dt,l1,hdif_S(st_map%lm2(l1,0)), &
+                    &        sMat(:,:,l1),sPivot(:,l1),sMat_fac(:,l1))
 #else
-               call get_sMat(dt,l1,hdif_S(map_glbl_st%lm2(l1,0)), &
-                             sMat(1,1,l1),sPivot(1,l1))
+               call get_sMat(dt,l1,hdif_S(st_map%lm2(l1,0)), &
+                    &        sMat(:,:,l1),sPivot(:,l1))
 #endif
                lSmat(l1)=.true.
              !write(*,"(A,I3,ES22.14)") "sMat: ",l1,SUM( sMat(:,:,l1) )
@@ -640,16 +545,15 @@ contains
                   rhs(1)=      real(tops(0,0))
                   rhs(n_r_max)=real(bots(0,0))
                   do nR=2,n_r_max-1
-                     rhs(nR)=real(s(lm1,nR))*O_dt+ &
-                          w1*real(dsdt(lm1,nR)) + &
-                          w2*real(dsdtLast(lm1,nR))
+                     rhs(nR)=real(s(lm1,nR))*O_dt+w1*real(dsdt(lm1,nR)) + &
+                     &       w2*real(dsdtLast(lm1,nR))
                   end do
 
 #ifdef WITH_PRECOND_S0
                   rhs = s0Mat_fac*rhs
 #endif
 
-                  call sgesl(s0Mat,n_r_max,n_r_max,s0Pivot,rhs)
+                  call solve_mat(s0Mat,n_r_max,n_r_max,s0Pivot,rhs)
 
                else ! l1  /=  0
                   lmB=lmB+1
@@ -661,12 +565,8 @@ contains
                   rhs1(n_r_max,lmB,threadid)=sMat_fac(1,l1)*rhs1(n_r_max,lmB,threadid)
 #endif
                   do nR=2,n_r_max-1
-                     rhs1(nR,lmB,threadid)=s(lm1,nR)*O_dt +            &
-                         &                w1*dsdt(lm1,nR) +            &
-                         &            w2*dsdtLast(lm1,nR) -            &
-                         &  alpha*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1))) &
-                         &  *or2(nR)*orho1(nR)*temp0(nR)*              &
-                         &        dentropy0(nR)*w(lm1,nR)
+                     rhs1(nR,lmB,threadid)=s(lm1,nR)*O_dt + w1*dsdt(lm1,nR)  &
+                     &                     + w2*dsdtLast(lm1,nR)
 #ifdef WITH_PRECOND_S
                      rhs1(nR,lmB,threadid) = sMat_fac(nR,l1)*rhs1(nR,lmB,threadid)
 #endif
@@ -677,8 +577,8 @@ contains
 
             !PERFON('upS_sol')
             if ( lmB  >  lmB0 ) then
-               call cgeslML(sMat(1,1,l1),n_r_max,n_r_max, &
-                    &       sPivot(1,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
+               call solve_mat(sMat(:,:,l1),n_r_max,n_r_max, &
+                    &         sPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
             end if
             !PERFOFF
 
@@ -739,18 +639,18 @@ contains
       !$OMP private(iThread,start_lm,stop_lm) &
       !$OMP shared(per_thread,nThreads) &
       !$OMP shared(s,ds,w,dsdtLast,rscheme_oc) &
-      !$OMP shared(n_r_max,work_LMloc,llm,ulm,temp0) &
-      !$OMP shared(n_r_cmb,n_r_icb,lmStart,lmStop,dsdt,coex,opr,hdif_S,dentropy0) &
-      !$OMP shared(map_glbl_st,lm2l,lm2m,kappa,beta,dLtemp0,or1,dLkappa,dLh,or2) &
+      !$OMP shared(n_r_max,work_LMloc,llm,ulm) &
+      !$OMP shared(n_r_cmb,n_r_icb,lmStart,lmStop,dsdt,coex,opr,hdif_S) &
+      !$OMP shared(st_map,lm2l,lm2m,kappa,beta,or1,dLkappa,dLh,or2) &
       !$OMP shared(orho1)
       !$OMP DO
       do iThread=0,nThreads-1
          start_lm=lmStart+iThread*per_thread
          stop_lm = start_lm+per_thread-1
          if (iThread == nThreads-1) stop_lm=lmStop
+         call get_ddr(s, ds, work_LMloc, ulm-llm+1, start_lm-llm+1, &
+              &       stop_lm-llm+1, n_r_max, rscheme_oc, l_dct_in=.false.)
          call rscheme_oc%costf1(s,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
-         call get_ddr(s, ds, work_LMloc, ulm-llm+1, start_lm-llm+1, stop_lm-llm+1, &
-              &       n_r_max, rscheme_oc)
       end do
       !$OMP end do
 
@@ -759,12 +659,10 @@ contains
       do nR=n_r_cmb+1,n_r_icb-1
          do lm1=lmStart,lmStop
            dsdtLast(lm1,nR)=dsdt(lm1,nR) &
-                & - coex*opr*hdif_S(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*kappa(nR) * &
-                &   (                                         work_LMloc(lm1,nR) &
-                &           + ( beta(nR)+two*or1(nR)+dLkappa(nR) ) *  ds(lm1,nR) &
-                &     - dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*  s(lm1,nR) &
-                &   ) + coex*dLh(map_glbl_st%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)        &
-                &           *orho1(nR)*temp0(nR)*dentropy0(nR)*        w(lm1,nR)
+           &      - coex*opr*hdif_S(st_map%lm2(lm2l(lm1),lm2m(lm1)))*kappa(nR) * &
+           &        (                                         work_LMloc(lm1,nR) &
+           &                + ( beta(nR)+two*or1(nR)+dLkappa(nR) ) *  ds(lm1,nR) &
+           &          - dLh(st_map%lm2(lm2l(lm1),lm2m(lm1)))*or2(nR)*  s(lm1,nR) ) 
          end do
       end do
       !$OMP end do
@@ -833,20 +731,20 @@ contains
          do nR_out=1,n_r_max
             do nR=2,n_r_max-1
                sMat(nR,nR_out)= rscheme_oc%rnorm * (                          &
-              &                             O_dt*rscheme_oc%rMat(nR,nR_out) - & 
-              &       alpha*opr*kappa(nR)*(    rscheme_oc%d2rMat(nR,nR_out) + &
-              &  (beta(nR)+two*or1(nR)+dLkappa(nR))*                          &
-              &                                 rscheme_oc%drMat(nR,nR_out) ) )
+               &                            O_dt*rscheme_oc%rMat(nR,nR_out) - & 
+               &      alpha*opr*kappa(nR)*(    rscheme_oc%d2rMat(nR,nR_out) + &
+               & (beta(nR)+two*or1(nR)+dLkappa(nR))*                          &
+               &                                rscheme_oc%drMat(nR,nR_out) ) )
             end do
          end do
       else
          do nR_out=1,n_r_max
             do nR=2,n_r_max-1
                sMat(nR,nR_out)= rscheme_oc%rnorm * (                         &
-              &                            O_dt*rscheme_oc%rMat(nR,nR_out) - & 
-              &      alpha*opr*kappa(nR)*(    rscheme_oc%d2rMat(nR,nR_out) + &
-              &  (beta(nR)+dLtemp0(nR)+two*or1(nR)+dLkappa(nR))*             &
-              &                                rscheme_oc%drMat(nR,nR_out) ) )
+               &                           O_dt*rscheme_oc%rMat(nR,nR_out) - & 
+               &     alpha*opr*kappa(nR)*(    rscheme_oc%d2rMat(nR,nR_out) + &
+               & (beta(nR)+dLtemp0(nR)+two*or1(nR)+dLkappa(nR))*             &
+               &                               rscheme_oc%drMat(nR,nR_out) ) )
             end do
          end do
       end if
@@ -869,7 +767,7 @@ contains
 #endif
     
       !---- LU decomposition:
-      call sgefa(sMat,n_r_max,n_r_max,sPivot,info)
+      call prepare_mat(sMat,n_r_max,n_r_max,sPivot,info)
       if ( info /= 0 ) then
          call abortRun('! Singular matrix sMat0!')
       end if
@@ -1012,7 +910,7 @@ contains
 #endif
 
 !----- LU decomposition:
-      call sgefa(sMat,n_r_max,n_r_max,sPivot,info)
+      call prepare_mat(sMat,n_r_max,n_r_max,sPivot,info)
       if ( info /= 0 ) then
          call abortRun('Singular matrix sMat!')
       end if

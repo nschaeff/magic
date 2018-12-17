@@ -17,7 +17,7 @@ module updateWP_mod
    use logic, only: l_update_v, l_chemical_conv, l_RMS, l_double_curl, &
        &            l_fluxProfs
    use RMS, only: DifPol2hInt, dtVPolLMr, dtVPol2hInt, DifPolLMr
-   use algebra, only: cgeslML, sgefa, sgesl
+   use algebra, only: cgeslML, prepare_mat, solve_mat
    use LMLoop_data, only: llm, ulm
    use communications, only: get_global_sum
    use parallel_mod, only: chunksize
@@ -311,7 +311,7 @@ contains
                      end do
                   end if
 
-                  call sgesl(p0Mat,n_r_max,n_r_max,p0Pivot,rhs)
+                  call solve_mat(p0Mat,n_r_max,n_r_max,p0Pivot,rhs)
 
                else ! l1 /= 0
                   lmB=lmB+1
@@ -904,7 +904,7 @@ contains
       write(*,"(A,I3,A,ES11.3)") "inverse condition number of wpMat for l=",l," is ",rcond
 #endif
 
-      call sgefa(wpMat,2*n_r_max,2*n_r_max,wpPivot,info)
+      call prepare_mat(wpMat,2*n_r_max,2*n_r_max,wpPivot,info)
       if ( info /= 0 ) then
          call abortRun('Singular matrix wpMat!')
       end if
@@ -1057,7 +1057,7 @@ contains
          wMat(:,nR) = wMat(:,nR)*wMat_fac(nR,2)
       end do
 
-      call sgefa(wMat,2*n_r_max,2*n_r_max,wPivot,info)
+      call prepare_mat(wMat,2*n_r_max,2*n_r_max,wPivot,info)
 
       if ( info /= 0 ) then
          call abortRun('Singular matrix wMat!')
@@ -1138,7 +1138,7 @@ contains
       end do
 
       !---- LU decomposition:
-      call sgefa(pMat,n_r_max,n_r_max,pPivot,info)
+      call prepare_mat(pMat,n_r_max,n_r_max,pPivot,info)
       if ( info /= 0 ) then
          call abortRun('! Singular matrix p0Mat!')
       end if

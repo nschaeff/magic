@@ -22,7 +22,7 @@ module updateZ_mod
        &                c_moi_oc, y10_norm, y11_norm, zero, one, two, four,   &
        &                pi, third
    use parallel_mod
-   use algebra, only: cgeslML, cgesl, sgefa
+   use algebra, only: cgeslML, cgesl, prepare_mat
    use LMLoop_data, only: llm,ulm
    use communications, only:get_global_sum
    use outRot, only: get_angular_moment
@@ -1350,7 +1350,7 @@ contains
 #endif
 
 !-- LU-decomposition of z10mat:
-      call sgefa(zMat,n_r_max,n_r_max,zPivot,info)
+      call prepare_mat(zMat,n_r_max,n_r_max,zPivot,info)
 
       if ( info /= 0 ) then
          call abortRun('Error from get_z10Mat: singular matrix!')
@@ -1490,7 +1490,7 @@ contains
 #endif
 
   !----- LU decomposition:
-      call sgefa(zMat,n_r_max,n_r_max,zPivot,info)
+      call prepare_mat(zMat,n_r_max,n_r_max,zPivot,info)
 
       if ( info /= 0 ) then
          write(str, *) l
