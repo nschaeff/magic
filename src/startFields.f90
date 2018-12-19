@@ -2,7 +2,7 @@
 module start_fields
 
 #ifdef WITH_MPI
-   use mpi
+   use mpimod
 #endif
    use geometry
    use precision_mod

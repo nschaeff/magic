@@ -131,7 +131,7 @@ module geometry
    integer, allocatable, protected :: dist_theta(:,:)
    integer, allocatable, protected :: dist_r(:,:)
    integer, protected :: n_theta_loc, l_theta, u_theta
-   integer, protected :: n_r_loc,     l_r,     u_r
+   integer, protected :: n_r_loc, l_r, u_r
    
    !   Helpers
    integer, protected :: l_r_Mag

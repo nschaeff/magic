@@ -7,6 +7,7 @@ module radial_functions
    use geometry, only: n_r_max, n_cheb_max, n_r_ic_max, fd_ratio, &
        &                 fd_stretch, fd_order, fd_order_bound
    use algebra, only: solve_mat,prepare_mat
+   use algebra, only: prepare_mat, solve_mat
    use constants, only: sq4pi, one, two, three, four, half
    use physical_parameters
    use logic, only: l_mag, l_cond_ic, l_heat, l_anelastic_liquid,  &
@@ -486,6 +487,9 @@ contains
          ! N.B. rgrav is not gravity but alpha * grav
          rgrav = alpha0*rgrav
 
+         !-- ogrun
+         ogrun(:)=one/GrunNb
+
          l_non_adia = .true.
 
       else  !-- Usual polytropic reference state
@@ -517,12 +521,15 @@ contains
                dLtemp0 = dtemp0/temp0
                ddLtemp0 =-(dtemp0/temp0)**2+d2temp0/temp0
 
+               ogrun(:) = one/GrunNb
+
             else !-- Adiabatic reference state
 
                if ( l_isothermal ) then ! Gruneisen is zero in this limit
                   fac        =strat /( g0+half*g1*(one+radratio) +g2/radratio )
                   DissNb     =0.0_cp
                   GrunNb     =0.0_cp
+                  ogrun(:)   =0.0_cp
                   temp0(:)   =one
                   rho0(:)    =exp(-fac*(g0*(r(:)-r_cmb) +         &
                   &           g1/(two*r_cmb)*(r(:)**2-r_cmb**2) - &
@@ -543,6 +550,7 @@ contains
                             ( g0+half*g1*(one+radratio) +g2/radratio )
                   end if
                   GrunNb      =one/polind
+                  ogrun(:)    =one/GrunNb
                   temp0(:)    =-DissNb*( g0*r(:)+half*g1*r(:)**2/r_cmb- &
                   &            g2*r_cmb**2/r(:) ) + one + DissNb*r_cmb*(g0+half*g1-g2)
                   rho0(:)     =temp0**polind
@@ -567,7 +575,6 @@ contains
 
             !-- Thermal expansion coefficient (1/T for an ideal gas)
             alpha0(:)   =one/temp0(:)
-            ogrun(:)    =one
             dLalpha0(:) =-dLtemp0(:)
             ddLalpha0(:)=-ddLtemp0(:)
 
@@ -617,14 +624,14 @@ contains
          else
             OhmLossFac=0.0_cp
          end if
-      else
+      else ! Boussinesq
          rho0(:)     =one
          temp0(:)    =one
          otemp1(:)   =one
          orho1(:)    =one
          orho2(:)    =one
          alpha0(:)   =one
-         ogrun(:)    =one
+         ogrun(:)    =0.0_cp
          beta(:)     =0.0_cp
          dbeta(:)    =0.0_cp
          ddbeta(:)   =0.0_cp
@@ -1056,28 +1063,38 @@ contains
 
    end subroutine getBackground
 !------------------------------------------------------------------------------
-   subroutine polynomialBackground(coeffDens,coeffTemp)
+   subroutine polynomialBackground(coeffDens,coeffTemp,coeffGrav)
       !
       ! This subroutine allows to calculate a reference state based on an input
       ! polynomial function.
       !
 
       !-- Input variables
-      real(cp), intent(in) :: coeffDens(:)
-      real(cp), intent(in) :: coeffTemp(:)
+      real(cp),           intent(in) :: coeffDens(:)
+      real(cp),           intent(in) :: coeffTemp(:)
+      real(cp), optional, intent(in) :: coeffGrav(:)
 
       !-- Local variables
       real(cp) :: rrOcmb(n_r_max),gravFit(n_r_max)
       real(cp) :: drho0(n_r_max),dtemp0(n_r_max)
+      integer :: nGrav,nDens,nTemp,i
 
-      integer ::  nDens,nTemp,i
-
-      nDens = size(coeffDens)
-      nTemp = size(coeffTemp)
       rrOcmb(:) = r(:)*r_cut_model/r_cmb
-      gravFit(:)=four*rrOcmb(:)-three*rrOcmb(:)**2
+
+      !-- Assemble gravity profile
+      if ( present(coeffGrav) ) then
+         nGrav=size(coeffGrav)
+         gravFit(:)=0.0_cp
+         do i=1,nGrav
+            gravFit(:) = gravFit(:)+coeffGrav(i)*rrOcmb(:)**(i-1)
+         end do
+      else
+         gravFit(:)=four*rrOcmb(:)-three*rrOcmb(:)**2
+      end if
 
       ! Set to zero initially
+      nDens = size(coeffDens)
+      nTemp = size(coeffTemp)
       rho0(:) =0.0_cp
       temp0(:)=0.0_cp
 
@@ -1100,10 +1117,8 @@ contains
       alpha0(:)=-dtemp0(:)/(gravFit(:)*temp0(:))
 
       ! Dissipation number
-      DissNb=alpha0(1)
+      DissNb   =alpha0(1)
       alpha0(:)=alpha0(:)/alpha0(1)
-
-      ogrun(:)=alpha0(:)*temp0(:)
 
       ! Adiabatic: buoyancy term is linked to the temperature gradient
 
@@ -1123,6 +1138,12 @@ contains
       dLtemp0(:)=dtemp0(:)/temp0(:)
       call get_dr(dLtemp0,ddLtemp0,n_r_max,rscheme_oc)
       dentropy0(:)=0.0_cp
+
+      !- \Gamma = 1/\rho/c_v ( \partial p/\partial T)_\rho = (d\ln T/d \ln \rho)_s
+      ogrun(:)=beta(:)/dLtemp0(:)
+      GrunNb  =one/ogrun(1)
+      strat   =log(rho0(n_r_max)/rho0(1))
+      polind  =ogrun(1)
 
    end subroutine polynomialBackground
 !------------------------------------------------------------------------------

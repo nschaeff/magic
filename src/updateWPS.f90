@@ -20,7 +20,7 @@ module updateWPS_mod
    use logic, only: l_update_v, l_temperature_diff, l_RMS
    use RMS, only: DifPol2hInt, dtVPolLMr, dtVPol2hInt, DifPolLMr
    use RMS_helpers, only:  hInt2Pol
-   use algebra, only: cgeslML, prepare_mat, solve_mat
+   use algebra, only: prepare_mat, solve_mat
    use LMLoop_data, only: llm, ulm
    use communications, only: get_global_sum
    use parallel_mod, only: chunksize, coord_r
@@ -241,8 +241,8 @@ contains
             if ( .not. lWPSmat(l1) ) then
                call get_wpsMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
                     &          hdif_S(map_glbl_st%lm2(l1,0)),       &
-                    &          wpsMat(1,1,l1),wpsPivot(1,l1),  &
-                    &          wpsMat_fac(1,1,l1))
+                    &          wpsMat(:,:,l1),wpsPivot(:,l1),  &
+                    &          wpsMat_fac(:,:,l1))
                lWPSmat(l1)=.true.
             end if
          end if
@@ -327,9 +327,9 @@ contains
                      rhs1(nR,lm,threadid)=rhs1(nR,lm,threadid)*wpsMat_fac(nR,1,l1)
                   end do
                end do
-               call cgeslML(wpsMat(:,:,l1),3*n_r_max,3*n_r_max,        &
-                    &       wpsPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),&
-                    &       lmB-lmB0)
+               call solve_mat(wpsMat(:,:,l1),3*n_r_max,3*n_r_max,        &
+                    &         wpsPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),&
+                    &         lmB-lmB0)
                ! rescale the solution with mat_fac(:,2)
                do lm=lmB0+1,lmB
                   do nR=1,3*n_r_max
@@ -431,18 +431,15 @@ contains
          !-- Transform to radial space and get radial derivatives
          !   using dwdtLast, dpdtLast as work arrays:
 
-         call rscheme_oc%costf1(w,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
          call get_dddr( w, dw, ddw, work_LMloc, ulm-llm+1, start_lm-llm+1,  &
-              &         stop_lm-llm+1, n_r_max, rscheme_oc )
-         call rscheme_oc%costf1(p,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
-
+              &         stop_lm-llm+1, n_r_max, rscheme_oc, l_dct_in=.false. )
          call get_ddr( p, dp, workC,ulm-llm+1, start_lm-llm+1, stop_lm-llm+1, &
-              &       n_r_max,rscheme_oc)
-
-         call rscheme_oc%costf1(s,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
+              &       n_r_max,rscheme_oc, l_dct_in=.false.)
          call get_ddr(s, ds, workB, ulm-llm+1, start_lm-llm+1, stop_lm-llm+1, &
-              &       n_r_max, rscheme_oc)
-
+              &       n_r_max, rscheme_oc, l_dct_in=.false.)
+         call rscheme_oc%costf1(w,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
+         call rscheme_oc%costf1(p,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
+         call rscheme_oc%costf1(s,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
       end do
       !$OMP end do
       !$OMP END PARALLEL
@@ -1051,10 +1048,6 @@ contains
             &            beta(n_r_max))*rscheme_oc%rMat(n_r_max,nR_out) )
          end if
 
-         if ( rscheme_oc%version == 'cheb' ) then
-            psMat(2*n_r_max,nR_out)  =0.0_cp
-            psMat(2*n_r_max,nR_out_p)=0.0_cp
-         end if
       end do
 
       ! In case density perturbations feed back on pressure (non-Boussinesq)

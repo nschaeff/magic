@@ -198,7 +198,7 @@ contains
       
       call this%nl_lm%set_zero()
 
-      call this%transform_to_grid_space_shtns
+      call this%transform_to_grid_space_shtns(time)
 
       !--------- Calculation of nonlinear products in grid space:
       if ( (.not.this%isRadialBoundaryPoint) .or. this%lMagNlBc .or. &
@@ -481,12 +481,12 @@ contains
 ! Distributed Update - Lago
 ! 
 !-------------------------------------------------------------------------------
-   subroutine transform_to_grid_space_shtns(this)
+   subroutine transform_to_grid_space_shtns(this,time)
 !@>author Rafael Lago, MPCDF, December 2017
 !-------------------------------------------------------------------------------
 
       class(rIterThetaBlocking_shtns_t) :: this
-
+      real(cp), intent(in) :: time
       integer :: nR
 
       nR = this%nR
@@ -555,11 +555,11 @@ contains
             if ( this%nR == n_r_cmb ) then
                call v_rigid_boundary(this%nR,this%leg_helper%omegaMA,this%lDeriv, &
                     &                this%gsa%vrc,this%gsa%vtc,this%gsa%vpc,this%gsa%cvrc,this%gsa%dvrdtc, &
-                    &                this%gsa%dvrdpc,this%gsa%dvtdpc,this%gsa%dvpdpc)
+                    &                this%gsa%dvrdpc,this%gsa%dvtdpc,this%gsa%dvpdpc,time)
             else if ( this%nR == n_r_icb ) then
                call v_rigid_boundary(this%nR,this%leg_helper%omegaIC,this%lDeriv, &
                     &                this%gsa%vrc,this%gsa%vtc,this%gsa%vpc,this%gsa%cvrc,this%gsa%dvrdtc, &
-                    &                this%gsa%dvrdpc,this%gsa%dvtdpc,this%gsa%dvpdpc)
+                    &                this%gsa%dvrdpc,this%gsa%dvtdpc,this%gsa%dvpdpc,time)
             end if
             if ( this%lDeriv ) then
                call torpol_to_spat_dist(dw_Rdist(:, nR), ddw_Rdist(:, nR), dz_Rdist(:, nR), &

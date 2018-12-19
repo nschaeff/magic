@@ -8,21 +8,23 @@ module updateZ_mod
    use geometry, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb
    use radial_functions, only: visc, or1, or2, rscheme_oc, dLvisc, beta, &
        &                       rho0, r_icb, r_cmb, r, beta, dbeta
-   use physical_parameters, only: kbotv, ktopv, LFfac, prec_angle, po, oek
+   use physical_parameters, only: kbotv, ktopv, LFfac, prec_angle, po, oek, &
+       &                          po_diff, diff_prec_angle
    use num_param, only: alpha, AMstart
    use torsional_oscillations, only: ddzASL
    use blocking, only: nLMBs,lo_sub_map,lo_map,st_sub_map, &
                      & lmStartB,lmStopB
    use horizontal_data, only: dLh, hdif_V
    use logic, only: l_rot_ma, l_rot_ic, l_SRMA, l_SRIC, l_z10mat, l_precession, &
-       &            l_correct_AMe, l_correct_AMz, l_update_v, l_TO, l_RMS
+       &            l_diff_prec, l_correct_AMe, l_correct_AMz, l_update_v, l_TO,&
+       &            l_RMS
    use RMS, only: DifTor2hInt, dtVTor2hInt
    use constants, only: c_lorentz_ma, c_lorentz_ic, c_dt_z10_ma, c_dt_z10_ic, &
        &                c_moi_ma, c_moi_ic, c_z10_omega_ma, c_z10_omega_ic,   &
        &                c_moi_oc, y10_norm, y11_norm, zero, one, two, four,   &
        &                pi, third
    use parallel_mod
-   use algebra, only: cgeslML, cgesl, prepare_mat
+   use algebra, only: prepare_mat, solve_mat
    use LMLoop_data, only: llm,ulm
    use communications, only:get_global_sum
    use outRot, only: get_angular_moment
@@ -177,7 +179,7 @@ contains
       complex(cp) :: corr_l1m1      ! correction factor for z(l=1,m=1)
       real(cp) :: r_E_2             ! =r**2
       real(cp) :: nomi              ! nominator for Z10 AM correction
-      real(cp) :: prec_fac
+      real(cp) :: prec_fac,diff_prec_fac
       integer :: l1m0,l1m1          ! position of (l=1,m=0) and (l=1,m=1) in lm.
       integer :: i                  ! counter
       logical :: l10
@@ -203,9 +205,15 @@ contains
       if ( l_precession ) then
          prec_fac=sqrt(8.0_cp*pi*third)*po*oek*oek*sin(prec_angle)
       else
-         prec_fac=0.0_cp
+         prec_fac = 0.0_cp
       end if
-    
+
+      if (l_diff_prec) then
+         diff_prec_fac=two*sqrt(8.0_cp*pi*third)*oek*sin(diff_prec_angle)
+      else
+         diff_prec_fac = 0.0_cp
+      end if
+
       if ( .not. l_update_v ) return
     
       nLMBs2(1:nLMBs) => lo_sub_map%nLMBs2
@@ -249,10 +257,10 @@ contains
             if ( .not. lZmat(l1) ) then
 #ifdef WITH_PRECOND_Z
                call get_zMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
-                    &        zMat(1,1,l1),zPivot(1,l1),zMat_fac(1,l1))
+                    &        zMat(:,:,l1),zPivot(:,l1),zMat_fac(:,l1))
 #else
                call get_zMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
-                    &        zMat(1,1,l1),zPivot(1,l1))
+                    &        zMat(:,:,l1),zPivot(:,l1))
 #endif
                lZmat(l1)=.true.
             !write(*,"(A,I3,A,2ES20.12)") "zMat(",l1,") = ",SUM(zMat(:,:,l1))
@@ -308,7 +316,8 @@ contains
                      tOmega_ma1=time+tShift_ma1
                      tOmega_ma2=time+tShift_ma2
                      omega_ma= omega_ma1*cos(omegaOsz_ma1*tOmega_ma1) + &
-                     &         omega_ma2*cos(omegaOsz_ma2*tOmega_ma2)
+                     &         omega_ma2*cos(omegaOsz_ma2*tOmega_ma2) + &
+                     &         omega_diff
                      rhs(1)=omega_ma
                   else if ( ktopv == 2 .and. l_rot_ma ) then  ! time integration
                      d_omega_ma_dt=LFfac*c_lorentz_ma*lorentz_torque_ma
@@ -322,7 +331,8 @@ contains
                      tOmega_ic1=time+tShift_ic1
                      tOmega_ic2=time+tShift_ic2
                      omega_ic= omega_ic1*cos(omegaOsz_ic1*tOmega_ic1) + &
-                     &         omega_ic2*cos(omegaOsz_ic2*tOmega_ic2)
+                     &         omega_ic2*cos(omegaOsz_ic2*tOmega_ic2) + &
+                     &         omega_diff
                      rhs(n_r_max)=omega_ic
                   else if ( kbotv == 2 .and. l_rot_ic ) then  ! time integration
                      d_omega_ic_dt = LFfac*c_lorentz_ic*lorentz_torque_ic
@@ -358,7 +368,7 @@ contains
                      !        & EXPONENT(AIMAG(rhs(nR))),FRACTION(AIMAG(rhs(nR)))
                      !end do
                   end if
-                  call cgesl(z10Mat,n_r_max,n_r_max,z10Pivot,rhs)
+                  call solve_mat(z10Mat,n_r_max,n_r_max,z10Pivot,rhs)
                   if ( DEBUG_OUTPUT ) then
                      !do nR=1,n_r_max
                      !   write(*,"(3I4,A,2(I4,F20.16))")                        &
@@ -419,6 +429,13 @@ contains
                      end if
                   end if
 
+                  if ( l_diff_prec .and. l1 == 1 .and. m1 == 1 ) then
+                     rhs1(1,lmB,threadid)       =rhs1(1,lmB,threadid)+diff_prec_fac* &
+                     &    cmplx(-cos(po_diff*oek*time),sin(po_diff*oek*time),kind=cp)
+                     rhs1(n_r_max,lmB,threadid) =rhs1(n_r_max,lmB,threadid)+diff_prec_fac* &
+                     &    cmplx(-cos(po_diff*oek*time),sin(po_diff*oek*time),kind=cp)
+                  end if
+
                   do nR=2,n_r_max-1
                      rhs1(nR,lmB,threadid)=O_dt*dLh(map_glbl_st%lm2(lm2l(lm1),  &
                      &                     lm2m(lm1)))*or2(nR)*z(lm1,nR) + &
@@ -428,6 +445,7 @@ contains
                         rhs1(nR,lmB,threadid)=rhs1(nR,lmB,threadid)+prec_fac* &
                         &    cmplx(sin(oek*time),-cos(oek*time),kind=cp)
                      end if
+
 #ifdef WITH_PRECOND_Z
                      rhs1(nR,lmB,threadid)=zMat_fac(nR,l1)*rhs1(nR,lmB,threadid)
 #endif
@@ -438,8 +456,8 @@ contains
 
             !PERFON('upZ_sol')
             if ( lmB > lmB0 ) then
-               call cgeslML(zMat(:,:,l1),n_r_max,n_r_max, &
-                    &       zPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
+               call solve_mat(zMat(:,:,l1),n_r_max,n_r_max, &
+                    &         zPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
             end if
             !PERFOFF
             if ( lRmsNext ) then ! Store old z
@@ -524,9 +542,9 @@ contains
          if (iThread == nThreads-1) stop_lm=lmStop
          !write(*,"(3(A,I5))") "thread ",omp_get_thread_num()," from ",start_lm," to ",stop_lm
          !-- Get derivatives:
-         call rscheme_oc%costf1(z,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
          call get_ddr(z, dz, work_LMloc, ulm-llm+1, start_lm-llm+1,     &
-              &       stop_lm-llm+1,n_r_max, rscheme_oc)
+              &       stop_lm-llm+1,n_r_max, rscheme_oc, l_dct_in=.false.)
+         call rscheme_oc%costf1(z,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
       end do
       !$OMP end do
       !$OMP END PARALLEL
@@ -933,7 +951,7 @@ contains
                      rhs(nR) = z10Mat_fac(nR)*rhs(nR)
                   end do
 #endif
-                  call cgesl(z10Mat,n_r_max,n_r_max,z10Pivot,rhs)
+                  call solve_mat(z10Mat,n_r_max,n_r_max,z10Pivot,rhs)
     
                else if ( l1 /= 0 ) then
                   lmB=lmB+1
@@ -996,7 +1014,7 @@ contains
             end do
 
             if ( lmB > lmB0 ) then
-               call cgeslML(zMat(:,:,l1),n_r_max,n_r_max, &
+               call solve_mat(zMat(:,:,l1),n_r_max,n_r_max, &
                     &       zPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
             end if
             if ( lRmsNext ) then ! Store old z

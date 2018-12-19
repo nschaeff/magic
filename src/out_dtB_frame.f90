@@ -3,15 +3,15 @@ module out_dtB_frame
    use geometry
    use precision_mod
    use radial_functions, only: r, or1, chebt_ic, r_ic, rscheme_oc, r_icb, &
-                               dr_fac_ic, chebt_ic_even
+       &                       dr_fac_ic, chebt_ic_even
    use blocking, only: nThetaBs, sizeThetaB, nfs
    use horizontal_data, only: cosTheta, n_theta_cal2ord, sinTheta, osn1, &
-                              dPlm, Plm, dPhi, dLh, D_lP1
-   use dtB_mod,only: PstrLM, PadvLM, PdifLM, TstrLM, TadvLM, TdifLM, &
-                     PadvLMIC, PdifLMIC, TadvLMIC, TomeLM, TdifLMIC
-   use movie_data,only: n_movie_type, n_movie_fields, n_movie_fields_ic, &
-                        n_movie_file, n_movie_const, n_movie_surface,    &
-                        movie_const, n_movie_field_type
+       &                      dPlm, Plm, dPhi, dLh, D_lP1
+   use dtB_mod, only: PstrLM, PadvLM, PdifLM, TstrLM, TadvLM, TdifLM, &
+       &              PadvLMIC, PdifLMIC, TadvLMIC, TomeLM, TdifLMIC
+   use movie_data, only: n_movie_type, n_movie_fields, n_movie_fields_ic, &
+       &                 n_movie_file, n_movie_const, n_movie_surface,    &
+       &                 movie_const, n_movie_field_type
    use logic, only: l_cond_ic
    use fft
    use constants, only: zero, one, ci
@@ -52,7 +52,7 @@ contains
       integer :: n_fields,n_field
       integer :: n_const
     
-      integer :: n_r_loc,n_rC,n_r_loop_max
+      integer :: n_r,n_rC,n_r_loop_max
       integer :: n_theta_loc,n_theta_start,n_theta_block,n_theta_cal
       integer :: n_phi
       integer :: n,n_pos,n_or
@@ -87,7 +87,7 @@ contains
       !--- Axisymmetric dtFL or dtAB:
     
       if ( n_type == 31 .or. n_type == 32 .or. n_type == 33 .or. &
-           n_type == 41 .or. n_type == 42 .or. n_type == 43 ) then
+      &    n_type == 41 .or. n_type == 42 .or. n_type == 43 ) then
     
          n_field_size=n_theta_max*(n_r_max+n_r_ic_max-2)
     
@@ -96,42 +96,46 @@ contains
             n_field_type=n_movie_field_type(n_field,n_movie)
     
             !--- OC contribution:
-            do n_r_loc=1,n_r_max
+            do n_r=1,n_r_max
     
                if ( n_field_type == 20 ) then
-                  call get_dtB(dtB,PstrLM,lm_max,n_r_max,n_r_loc,1,n_theta_max,.false.)
+                  call get_dtB(dtB,PstrLM,lm_max,n_r_max,n_r,1,n_theta_max,.false.)
                else if ( n_field_type == 21 ) then
-                  call get_dtB(dtB,PadvLM,lm_max,n_r_max,n_r_loc,1,n_theta_max,.false.)
+                  call get_dtB(dtB,PadvLM,lm_max,n_r_max,n_r,1,n_theta_max,.false.)
                else if ( n_field_type == 22 ) then
-                  call get_dtB(dtB,PdifLM,lm_max,n_r_max,n_r_loc,1,n_theta_max,.false.)
+                  call get_dtB(dtB,PdifLM,lm_max,n_r_max,n_r,1,n_theta_max,.false.)
                else if ( n_field_type == 23 ) then
-                  call get_dtB(dtB,TstrLM,lm_max,n_r_max,n_r_loc,1,n_theta_max,.false.)
+                  call get_dtB(dtB,TstrLM,lm_max,n_r_max,n_r,1,n_theta_max,.false.)
                else if ( n_field_type == 25 ) then
-                  call get_dtB(dtB,TadvLM,lm_max,n_r_max,n_r_loc,1,n_theta_max,.false.)
+                  call get_dtB(dtB,TadvLM,lm_max,n_r_max,n_r,1,n_theta_max,.false.)
                else if ( n_field_type == 26 ) then
-                  call get_dtB(dtB,TdifLM,lm_max,n_r_max,n_r_loc,1,n_theta_max,.false.)
+                  call get_dtB(dtB,TdifLM,lm_max,n_r_max,n_r,1,n_theta_max,.false.)
                end if
     
                !--- Store in frame field:
                do n_theta_cal=1,n_theta_max
                   n_theta_loc=n_theta_cal2ord(n_theta_cal)
-                  n_pos  =(n_r_loc-1)*n_theta_max+n_theta_loc
+                  n_pos  =(n_r-1)*n_theta_max+n_theta_loc
                   dtBframe(n_pos)=dtB(n_theta_loc)
                end do
     
             end do
     
             !--- Now IC contribution:
-            do n_r_loc=2,n_r_ic_max-1
+            do n_r=2,n_r_ic_max-1
     
                if ( n_field_type == 21 ) then
-                  call get_dtB(dtB,PadvLMIC,lm_max,n_r_ic_max,n_r_loc,1,n_theta_max,.true.)
+                  call get_dtB(dtB,PadvLMIC,lm_max,n_r_ic_max,n_r,1,n_theta_max, &
+                       &       .true.)
                else if ( n_field_type == 22 ) then
-                  call get_dtB(dtB,PdifLMIC,lm_max,n_r_ic_max,n_r_loc,1,n_theta_max,.true.)
+                  call get_dtB(dtB,PdifLMIC,lm_max,n_r_ic_max,n_r,1,n_theta_max, &
+                       &       .true.)
                else if ( n_field_type == 25 ) then
-                  call get_dtB(dtB,TadvLMIC,lm_max,n_r_ic_max,n_r_loc,1,n_theta_max,.true.)
+                  call get_dtB(dtB,TadvLMIC,lm_max,n_r_ic_max,n_r,1,n_theta_max, &
+                       &       .true.)
                else if ( n_field_type == 26 ) then
-                  call get_dtB(dtB,TdifLMIC,lm_max,n_r_ic_max,n_r_loc,1,n_theta_max,.true.)
+                  call get_dtB(dtB,TdifLMIC,lm_max,n_r_ic_max,n_r,1,n_theta_max, &
+                       &       .true.)
                else
                   do n_theta_loc=1,n_theta_max
                      dtB(n_theta_loc)=0.0_cp
@@ -141,7 +145,7 @@ contains
                !--- Store in frame field:
                do n_theta_cal=1,n_theta_max
                   n_theta_loc=n_theta_cal2ord(n_theta_cal)
-                  n_pos  =(n_r_max+n_r_loc-2)*n_theta_max+n_theta_loc
+                  n_pos  =(n_r_max+n_r-2)*n_theta_max+n_theta_loc
                   dtBframe(n_pos)=dtB(n_theta_loc)
                end do
     
@@ -161,25 +165,25 @@ contains
     
             if ( n_field_type == 24 ) then
                ! This reduces omega effect to field production of axisymm. toroidal field:
-               do n_r_loc=1,n_r_max
+               do n_r=1,n_r_max
                   do lm=1,lm_max
                      m=map_glbl_st%lm2m(lm)
                      if ( m == 0 ) then
-                        workA(lm,n_r_loc)=TomeLM(lm,n_r_loc)
+                        workA(lm,n_r)=TomeLM(lm,n_r)
                      else
-                        workA(lm,n_r_loc)=zero
+                        workA(lm,n_r)=zero
                      end if
                   end do
                end do
             else if ( n_field_type == 81 ) then
                ! This reduces poloidal field to the dipole contribution:
-               do n_r_loc=1,n_r_max
+               do n_r=1,n_r_max
                   do lm=1,lm_max
                      l=map_glbl_st%lm2l(lm)
                      if ( l == 1 ) then
-                        workA(lm,n_r_loc)=b(lm,n_r_loc)
+                        workA(lm,n_r)=b(lm,n_r)
                      else
-                        workA(lm,n_r_loc)=zero
+                        workA(lm,n_r)=zero
                      end if
                   end do
                end do
@@ -220,12 +224,12 @@ contains
             end if
     
             do n_rC=1,n_r_loop_max
-               n_r_loc=n_rC
+               n_r=n_rC
                if ( n_surface == 0 ) then
-                  rMov=r(n_r_loc)
-                  n_or=(n_r_loc-1)*n_theta_max*n_phi_max
+                  rMov=r(n_r)
+                  n_or=(n_r-1)*n_theta_max*n_phi_max
                else if ( n_surface == 1 ) then
-                  n_r_loc=n_const
+                  n_r=n_const
                   rMov=const
                   n_or=0
                end if
@@ -234,99 +238,99 @@ contains
                   n_theta_start=(n-1)*sizeThetaB+1
                   !-- Br:
                   if ( n_field_type == 27 ) then
-                     call get_Bpol(PstrLM(1,n_r_loc),workA(1,n_r_loc),dtBr,dtBt,dtBp,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(PstrLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp,rMov, &
+                          &        n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 28 ) then
-                     call get_Bpol(PadvLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(PadvLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 29 ) then
-                     call get_Bpol(PdifLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(PdifLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 81 ) then
                      !---------- get radial field diffusion and radial dipole field:
-                     call get_Bpol(PdifLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
-                     call get_Bpol(workA(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBt,dtBp,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(PdifLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(workA(:,n_r),workA(:,n_r),dtBt,dtBp,dtBp,  &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                      !-- Jr:
                   else if ( n_field_type == 30 ) then
-                     call get_Bpol(aj(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(aj(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp,  &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 31 ) then
-                     call get_Bpol(TstrLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(TstrLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 32 ) then
-                     call get_Bpol(workA(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(workA(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 33 ) then
-                     call get_Bpol(TadvLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(TadvLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 34 ) then
-                     call get_Bpol(TdifLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(TdifLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                      !-- Bz poloidal
                   else if ( n_field_type == 13 ) then
-                     call get_Bpol(b(1,n_r_loc),db(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(b(:,n_r),db(:,n_r),dtBr,dtBt,dtBp,rMov, &
+                          &        n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 35 ) then
-                     call get_Bpol(PstrLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(PstrLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 36 ) then
-                     call get_Bpol(PadvLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(PadvLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 37 ) then
-                     call get_Bpol(PdifLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(PdifLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
     
                      !-- Jz poloidal
                   else if ( n_field_type == 14 ) then
-                     call get_Bpol(aj(1,n_r_loc),dj(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(aj(:,n_r),dj(:,n_r),dtBr,dtBt,dtBp,rMov, &
+                          &        n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 38 ) then
-                     call get_Bpol(TstrLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(TstrLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 39 ) then
-                     call get_Bpol(workA(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(workA(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 40 ) then
-                     call get_Bpol(TadvLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
+                     call get_Bpol(TadvLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
                   else if ( n_field_type == 41 ) then
-                     call get_Bpol(TdifLM(1,n_r_loc),workA(1,n_r_loc), &
-                                   dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.false.)
-                     !--- Bp toriodal:
+                     call get_Bpol(TdifLM(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                          &        rMov,n_theta_start,sizeThetaB,.false.)
+                     !--- Bp toroidal:
                   else if ( n_field_type == 24 ) then
-                     call get_Btor(workA(1,n_r_loc),dtBt,dtBr,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Btor(workA(:,n_r),dtBt,dtBr,rMov,n_theta_start, &
+                          &        sizeThetaB,.false.)
                   else if ( n_field_type == 42 ) then
-                     call get_Btor(aj(1,n_r_loc),dtBt,dtBr,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Btor(aj(:,n_r),dtBt,dtBr,rMov,n_theta_start, &
+                          &        sizeThetaB,.false.)
                   else if ( n_field_type == 43 ) then
-                     call get_Btor(TstrLM(1,n_r_loc),dtBt,dtBr,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Btor(TstrLM(:,n_r),dtBt,dtBr,rMov,n_theta_start, &
+                          &        sizeThetaB,.false.)
                   else if ( n_field_type == 44 ) then
-                     call get_Btor(workA(1,n_r_loc),dtBt,dtBr,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Btor(workA(:,n_r),dtBt,dtBr,rMov,n_theta_start, &
+                          &        sizeThetaB,.false.)
                   else if ( n_field_type == 45 ) then
-                     call get_Btor(TadvLM(1,n_r_loc),dtBt,dtBr,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Btor(TadvLM(:,n_r),dtBt,dtBr,rMov,n_theta_start, &
+                          &        sizeThetaB,.false.)
                   else if ( n_field_type == 46 ) then
-                     call get_Btor(TdifLM(1,n_r_loc),dtBt,dtBr,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Btor(TdifLM(:,n_r),dtBt,dtBr,rMov,n_theta_start, &
+                          &        sizeThetaB,.false.)
                   else if ( n_field_type == 49 ) then
-                     call get_Btor(TomeLM(1,n_r_loc),dtBt,dtBr,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Btor(TomeLM(:,n_r),dtBt,dtBr,rMov,n_theta_start, &
+                          &        sizeThetaB,.false.)
                      !--- Bt toroidal
                   else if ( n_field_type == 50 ) then
-                     call get_Btor(aj(1,n_r_loc),dtBr,dtBt,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Btor(aj(:,n_r),dtBr,dtBt,rMov,n_theta_start, &
+                          &        sizeThetaB,.false.)
                      !--- Toroidal Potential
                   else if ( n_field_type == 51 ) then
-                     call lm2pt(aj(1,n_r_loc),dtBr,rMov,n_theta_start,.false.,.false.)
+                     call lm2pt(aj(:,n_r),dtBr,rMov,n_theta_start,.false.,.false.)
                      !--- Fieldlines for theta=const.
                   else if ( n_field_type == 52 ) then
-                     call get_Btor(b(1,n_r_loc),dtBr,dtBt,rMov, &
-                                   n_theta_start,sizeThetaB,.false.)
+                     call get_Btor(b(:,n_r),dtBr,dtBt,rMov,n_theta_start, &
+                          &        sizeThetaB,.false.)
                   end if
     
                   !--- Now store the stuff of theta block to dtBrframe:
@@ -336,13 +340,13 @@ contains
                      do n_phi=1,n_phi_max
                         n_pos=n_or+n_phi+(n_theta_loc-1)*n_phi_max
                         if ( n_field_type == 13 .or. n_field_type == 35 .or. &
-                             n_field_type == 36 .or. n_field_type == 37 .or. &
-                             n_field_type == 14 .or. n_field_type == 38 .or. &
-                             n_field_type == 39 .or. n_field_type == 40 .or. &
-                             n_field_type == 41 ) then
-                           dtBrframe(n_pos) = &
-                                cosTheta(n_theta_cal)*dtBr(n_phi,n_theta_block) - &
-                                sinTheta(n_theta_cal)*dtBt(n_phi,n_theta_block)
+                        &    n_field_type == 36 .or. n_field_type == 37 .or. &
+                        &    n_field_type == 14 .or. n_field_type == 38 .or. &
+                        &    n_field_type == 39 .or. n_field_type == 40 .or. &
+                        &    n_field_type == 41 ) then
+                           dtBrframe(n_pos) =                                     &
+                           &    cosTheta(n_theta_cal)*dtBr(n_phi,n_theta_block) - &
+                           &    sinTheta(n_theta_cal)*dtBt(n_phi,n_theta_block)
                         else if ( n_field_type == 81 ) then
                            if ( dtBr(n_phi,n_theta_block) * &
                                 dtBt(n_phi,n_theta_block) < 0.0_cp ) then
@@ -371,34 +375,30 @@ contains
     
                !------ Calculate needed radial derivatives:
                if ( n_field_type == 36 ) then
-                  call get_drNS_even(       PadvLMIC,workA, &
-                       lm_max,1,lm_max, &
-                       n_r_ic_max,n_cheb_ic_max,dr_fac_ic,workB, &
-                       chebt_ic, chebt_ic_even)
+                  call get_drNS_even(PadvLMIC,workA,lm_max,1,lm_max,n_r_ic_max, &
+                       &             n_cheb_ic_max,dr_fac_ic,workB,chebt_ic,    &
+                       &             chebt_ic_even)
                else if ( n_field_type == 37 ) then
-                  call get_drNS_even(       PdifLMIC,workA, &
-                       lm_max,1,lm_max, &
-                       n_r_ic_max,n_cheb_ic_max,dr_fac_ic,workB, &
-                       chebt_ic, chebt_ic_even)
+                  call get_drNS_even(PdifLMIC,workA,lm_max,1,lm_max,n_r_ic_max, &
+                       &             n_cheb_ic_max,dr_fac_ic,workB,chebt_ic,    &
+                       &             chebt_ic_even)
                else if ( n_field_type == 40 ) then
-                  call get_drNS_even(       TadvLMIC,workA, &
-                       lm_max,1,lm_max, &
-                       n_r_ic_max,n_cheb_ic_max,dr_fac_ic,workB, &
-                       chebt_ic, chebt_ic_even)
+                  call get_drNS_even(TadvLMIC,workA,lm_max,1,lm_max,n_r_ic_max, &
+                       &             n_cheb_ic_max,dr_fac_ic,workB,chebt_ic,    &
+                       &             chebt_ic_even)
                else if ( n_field_type == 41 ) then
-                  call get_drNS_even(       TdifLMIC,workA, &
-                       lm_max,1,lm_max, &
-                       n_r_ic_max,n_cheb_ic_max,dr_fac_ic,workB, &
-                       chebt_ic, chebt_ic_even)
+                  call get_drNS_even(TdifLMIC,workA,lm_max,1,lm_max,n_r_ic_max, &
+                       &             n_cheb_ic_max,dr_fac_ic,workB,chebt_ic,    &
+                       &             chebt_ic_even)
                end if
     
                do n_rC=2,n_r_loop_max
-                  n_r_loc=n_rC
+                  n_r=n_rC
                   if ( n_surface == 0 ) then
-                     rMov=r_ic(n_r_loc)
-                     n_or=(n_r_max+n_r_loc-2) * n_theta_max*n_phi_max
+                     rMov=r_ic(n_r)
+                     n_or=(n_r_max+n_r-2) * n_theta_max*n_phi_max
                   else if ( n_surface == 1 ) then
-                     n_r_loc=n_const
+                     n_r=n_const
                      rMov=const
                      n_or=0
                   end if
@@ -406,10 +406,10 @@ contains
                      n_theta_start=(n-1)*sizeThetaB+1
     
                      if ( n_field_type == 35 .or. n_field_type == 43 .or. &
-                          n_field_type == 44 .or. n_field_type == 27 .or. &
-                          n_field_type == 31 .or. n_field_type == 32 .or. &
-                          n_field_type == 38 .or. n_field_type == 49 .or. &
-                          n_field_type == 39 ) then
+                     &    n_field_type == 44 .or. n_field_type == 27 .or. &
+                     &    n_field_type == 31 .or. n_field_type == 32 .or. &
+                     &    n_field_type == 38 .or. n_field_type == 49 .or. &
+                     &    n_field_type == 39 ) then
     
                         do n_theta_loc=1,sizeThetaB ! no stretching !
                            do n_phi=1,n_phi_max
@@ -420,64 +420,63 @@ contains
                         end do
                         !--- Br:
                      else if ( n_field_type == 28 ) then
-                        call get_Bpol(PadvLMIC(1,n_r_loc),workA(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(PadvLMIC(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp,&
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                      else if ( n_field_type == 29 ) then
-                        call get_Bpol(PdifLMIC(1,n_r_loc),workA(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(PdifLMIC(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp,&
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                         !--- Jr:
                      else if ( n_field_type == 30 ) then
-                        call get_Bpol(aj_ic(1,n_r_loc),workA(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(aj_ic(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                      else if ( n_field_type == 33 ) then
-                        call get_Bpol(TadvLMIC(1,n_r_loc),workA(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(TadvLMIC(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp,&
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                      else if ( n_field_type == 34 ) then
-                        call get_Bpol(TdifLMIC(1,n_r_loc),workA(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(TdifLMIC(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp,&
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                         !- Bz poloidal:
                      else if ( n_field_type == 13 ) then
-                        call get_Bpol(b_ic(1,n_r_loc),db_ic(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(b_ic(:,n_r),db_ic(:,n_r),dtBr,dtBt,dtBp, &
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                      else if ( n_field_type == 36 ) then
-                        call get_Bpol(PadvLMIC(1,n_r_loc),workA(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(PadvLMIC(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                      else if ( n_field_type == 37 ) then
-                        call get_Bpol(PdifLMIC(1,n_r_loc),workA(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(PdifLMIC(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp, &
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                         !--- Jz poloidal:
                      else if ( n_field_type == 14 ) then
-                        call get_Bpol(aj_ic(1,n_r_loc),dj_ic(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(aj_ic(:,n_r),dj_ic(:,n_r),dtBr,dtBt,dtBp, &
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                      else if ( n_field_type == 40 ) then
-                        call get_Bpol(TadvLMIC(1,n_r_loc),workA(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(TadvLMIC(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp,&
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                      else if ( n_field_type == 41 ) then
-                        call get_Bpol(TdifLMIC(1,n_r_loc),workA(1,n_r_loc), &
-                                    dtBr,dtBt,dtBp,rMov,n_theta_start,sizeThetaB,.true.)
+                        call get_Bpol(TdifLMIC(:,n_r),workA(:,n_r),dtBr,dtBt,dtBp,&
+                             &        rMov,n_theta_start,sizeThetaB,.true.)
                         !--- Bphi toroidal:
                      else if ( n_field_type == 42 ) then
-                        call get_Btor(aj_ic(1,n_r_loc),dtBt,dtBr,rMov, &
-                                      n_theta_start,sizeThetaB,.true.)
+                        call get_Btor(aj_ic(:,n_r),dtBt,dtBr,rMov,n_theta_start,&
+                             &        sizeThetaB,.true.)
                      else if ( n_field_type == 45 ) then
-                        call get_Btor(TadvLMIC(1,n_r_loc),dtBt,dtBr,rMov, &
-                                      n_theta_start,sizeThetaB,.true.)
+                        call get_Btor(TadvLMIC(:,n_r),dtBt,dtBr,rMov,n_theta_start,&
+                             &        sizeThetaB,.true.)
                      else if ( n_field_type == 46 ) then
-                        call get_Btor(TdifLMIC(1,n_r_loc),dtBt,dtBr,rMov, &
-                                      n_theta_start,sizeThetaB,.true.)
+                        call get_Btor(TdifLMIC(:,n_r),dtBt,dtBr,rMov,n_theta_start,&
+                             &        sizeThetaB,.true.)
                         !--- Btheta toroidal:
                      else if ( n_field_type == 50 ) then
-                        call get_Btor(aj_ic(1,n_r_loc),dtBr,dtBt,rMov, &
-                                      n_theta_start,sizeThetaB,.true.)
+                        call get_Btor(aj_ic(:,n_r),dtBr,dtBt,rMov,n_theta_start,&
+                             &        sizeThetaB,.true.)
                         !--- Toroidal Potential
                      else if ( n_field_type == 51 ) then
-                        call lm2pt(aj_ic(1,n_r_loc),dtBr,r_ic(n_r_loc), &
-                                   n_theta_start,.true.,.false.)
+                        call lm2pt(aj_ic(:,n_r),dtBr,r_ic(n_r),n_theta_start,&
+                             &     .true.,.false.)
                         !--- Fieldlines for theta=const.
                      else if ( n_field_type == 52 ) then
-                        call get_Btor(b_ic(1,n_r_loc),dtBr,dtBt,rMov, &
-                                      n_theta_start,sizeThetaB,.true.)
-    
+                        call get_Btor(b_ic(:,n_r),dtBr,dtBt,rMov,n_theta_start,&
+                             &        sizeThetaB,.true.)
                      end if
     
                      !--- Now store the stuff:
@@ -487,11 +486,11 @@ contains
                         do n_phi=1,n_phi_max
                            n_pos=n_or+n_phi+(n_theta_loc-1)*n_phi_max
                            if ( n_field_type == 13 .or. n_field_type == 36 .or. &
-                                n_field_type == 37 .or. n_field_type == 14 .or. &
-                                n_field_type == 40 .or. n_field_type == 41 ) then
-                              dtBrframe(n_pos) = &
-                                   cosTheta(n_theta_cal)*dtBr(n_phi,n_theta_block) - &
-                                   sinTheta(n_theta_cal)*dtBt(n_phi,n_theta_block)
+                           &    n_field_type == 37 .or. n_field_type == 14 .or. &
+                           &    n_field_type == 40 .or. n_field_type == 41 ) then
+                              dtBrframe(n_pos) =                                    &
+                              &    cosTheta(n_theta_cal)*dtBr(n_phi,n_theta_block) -&
+                              &    sinTheta(n_theta_cal)*dtBt(n_phi,n_theta_block)
                            else
                               dtBrframe(n_pos)=dtBr(n_phi,n_theta_block)
                            end if ! Br or Bz ?
@@ -512,10 +511,10 @@ contains
 
    end subroutine write_dtB_frame
 !----------------------------------------------------------------------------
-   subroutine get_dtB(dtB,dtBLM,DimB1,DimB2,n_r_loc,n_theta_start,n_theta_block,l_ic)
+   subroutine get_dtB(dtB,dtBLM,DimB1,DimB2,n_r,n_theta_start,n_theta_block,l_ic)
 
       !-- Input variables:
-      integer,     intent(in) :: n_r_loc             ! No. of radial grid point
+      integer,     intent(in) :: n_r             ! No. of radial grid point
       integer,     intent(in) :: n_theta_start   ! No. of theta to start with
       integer,     intent(in) :: n_theta_block   ! Size of theta block
       logical,     intent(in) :: l_ic            ! =true if inner core field
@@ -540,13 +539,13 @@ contains
       !     for IC: (r/r_ICB)**l / r_ICB
       !     for OC: 1/r
       if ( l_ic ) then
-         r_ratio =r_ic(n_r_loc)/r_icb
+         r_ratio =r_ic(n_r)/r_icb
          r_dep(1)=r_ratio/r_icb
          do l=2,l_max
             r_dep(l)=r_dep(l-1)*r_ratio
          end do
       else
-         O_r=or1(n_r_loc)
+         O_r=or1(n_r)
       end if
     
       !----- Loop over colatitudes:
@@ -561,9 +560,9 @@ contains
             lm=lm+1
             sign=-sign
             if ( l_ic ) then ! Inner Core
-               fl_1=r_dep(l)*real(dtBLM(lm,n_r_loc))*dPlm(lm,n_theta_nhs)
+               fl_1=r_dep(l)*real(dtBLM(lm,n_r))*dPlm(lm,n_theta_nhs)
             else             ! Outer Core
-               fl_1=O_r*real(dtBLM(lm,n_r_loc))*dPlm(lm,n_theta_nhs)
+               fl_1=O_r*real(dtBLM(lm,n_r))*dPlm(lm,n_theta_nhs)
             end if
             !-------- Northern hemisphere:
             fl_n=fl_n+fl_1
@@ -747,11 +746,8 @@ contains
       call fft_thetab(Bt,1)
       call fft_thetab(Bp,1)
 #else
-      do m=0,m_max,minc
-         do l=m,l_max
-            lm=map_glbl_st%lm2(l,m)
-            zeros(lm)=zero
-         end do
+      do lm=1,lm_max
+         zeros(lm)=zero
       end do
 
       call shtns_qst_to_spat(cs1, cs2, zeros, Br, Bt, Bp)
@@ -828,7 +824,7 @@ contains
             lm=map_glbl_st%lm2(l,m)
             cs1(lm)=rDep(l)*Tlm(lm)
 #ifdef WITH_SHTNS
-            zeros(lm)=0.0_cp
+            zeros(lm)=zero
 #endif
          end do
       end do

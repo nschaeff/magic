@@ -403,13 +403,10 @@ contains
       integer :: nR_i1,nR_i2
       ! MPI related variables
       integer :: info
-      !integer :: lmStart_on_rank,lmStop_on_rank,nR
       integer, allocatable :: recvcounts(:),displs(:)
-      !character(len=MPI_max_ERROR_STRING) :: error_string
       integer :: nLMB
-      !integer :: nR,length_of_error
 
-      complex(cp) :: dbdt_CMB(1:lm_max)
+      complex(cp) :: dbdt_CMB(1:lm_max)          ! Temporary - Lago
       !real(cp) :: start_time, end_time
 
       !integer :: signal_window
@@ -423,7 +420,6 @@ contains
       complex(cp) :: b_nl_cmb_Rdist(n_lm_loc)         ! nonlinear bc for b at CMB
       complex(cp) :: aj_nl_cmb_Rdist(n_lm_loc)        ! nonlinear bc for aj at CMB
       complex(cp) :: aj_nl_icb_Rdist(n_lm_loc)        ! nonlinear bc for dr aj at ICB
-
 
       if ( lVerbose ) write(*,'(/,'' ! STARTING STEP_TIME !'')')
 
@@ -847,7 +843,21 @@ contains
                if ( l_save_out ) close(n_log_file)
             end if
 #ifdef WITH_MPI
-            call MPI_File_open(comm_gs,graph_file,                  &
+            !-- Enable collective buffering
+            call MPI_Info_set(info, "romio_cb_write", "automatic",ierr)
+            call MPI_Info_set(info, "romio_cb_read", "automatic",ierr)
+
+            !-- Disable data sieving (let the filesystem handles it)
+            call MPI_Info_set(info, "romio_ds_write", "disable",ierr)
+            call MPI_Info_set(info, "romio_ds_read", "disable",ierr)
+
+            !-- Set the stripping unit to 4M
+            call MPI_Info_set(info, "stripping_unit", "4194304",ierr)
+
+            !-- Set the buffer size to 4M
+            call MPI_Info_set(info,"cb_buffer_size","4194304",ierr)
+
+            call MPI_File_open(comm_gs,graph_file,             &
                  &             IOR(MPI_MODE_WRONLY,MPI_MODE_CREATE),  &
                  &             MPI_INFO_NULL,graph_mpi_fh,ierr)
 #else
@@ -972,7 +982,6 @@ contains
                     & get_global_sum_dist( dVxBhLM_dist(1:n_lm_loc,:) )
             end if
          end if
-         
          ! ===================================== BARRIER =======================
          !PERFON('barr_rad')
          !call MPI_Barrier(comm_r,ierr)
@@ -1060,7 +1069,7 @@ contains
          if ( lVerbose ) write(*,*) "! start output"
          if ( lVerbose ) write(*,*) "This part needs to be reviewed!", __LINE__, __FILE__
          PERFON('output')
-         if ( l_r <= n_r_cmb .and. l_cmb .and. l_dt_cmb_field ) then
+         if ( l_cmb .and. l_dt_cmb_field ) then
             call gather_Flm(dbdt_dist(1:n_lm_loc,n_r_cmb), dbdt_CMB(1:lm_max))
             call scatter_from_rank0_to_lo(dbdt_CMB, dbdt_CMB_LMloc)
          end if
@@ -1078,7 +1087,7 @@ contains
               &      EperpaxiLMr_Rloc,EparaxiLMr_Rloc)
          PERFOFF
          if ( lVerbose ) write(*,*) "! output finished"
-         
+
          if ( l_graph ) then
 #ifdef WITH_MPI
             PERFON('graph')
@@ -1230,7 +1239,7 @@ contains
          end if
          
          call gather_all
-
+         
          call LMLoop(w1,coex,time,dt,lMat,lRmsNext,lPressNext,dVxVhLM_LMloc, &
               &      dVxBhLM_LMloc,dVSrLM_LMloc,dVPrLM_LMloc,dVXirLM_LMloc,  &
               &      dsdt_LMloc,dwdt_LMloc,dzdt_LMloc,dpdt_LMloc,dxidt_LMloc,&

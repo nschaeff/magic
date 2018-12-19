@@ -82,7 +82,8 @@ contains
          & strat,polind,DissNb,g0,g1,g2,r_cut_model,thickStrat, &
          & epsS,slopeStrat,rStrat,ampStrat,cmbHflux,r_LCR,      &
          & nVarDiff,nVarVisc,difExp,nVarEps,interior_model,     &
-         & nVarEntropyGrad,l_isothermal,ktopp,po,prec_angle
+         & nVarEntropyGrad,l_isothermal,ktopp,po,prec_angle,    &
+         & po_diff,diff_prec_angle
 
       namelist/B_external/                                    &
          & rrMP,amp_imp,expo_imp,bmax_imp,n_imp,l_imp,        &
@@ -530,6 +531,20 @@ contains
 
       if ( l_precession ) prec_angle = prec_angle*pi/180.0_cp
 
+      !-- Same as above for differential precession
+
+      if ( po_diff == 0.0_cp ) then
+         l_diff_prec = .false.
+      else
+         l_diff_prec = .true.
+         l_rot_ma = .true.
+         l_rot_ic = .true.
+         l_SRMA = .true.
+         l_SRIC = .true.
+      end if
+
+      if ( l_diff_prec ) diff_prec_angle = diff_prec_angle*pi/180.0_cp
+
       !-- New checking of magnetic boundary condition.
       if ( kbotb > 4 ) then
          call abortRun('! Only outer boundary conditions kbotb<=4 implemented!')
@@ -839,13 +854,15 @@ contains
       write(n_out,'(''  ek              ='',ES14.6,'','')') ek
       write(n_out,'(''  po              ='',ES14.6,'','')') po
       write(n_out,'(''  prec_angle      ='',ES14.6,'','')') prec_angle
+      write(n_out,'(''  po_diff         ='',ES14.6,'','')') po_diff
+      write(n_out,'(''  diff_prec_angle ='',ES14.6,'','')') diff_prec_angle
       write(n_out,'(''  epsc0           ='',ES14.6,'','')') epsc0/sq4pi
       write(n_out,'(''  epscxi0         ='',ES14.6,'','')') epscxi0/sq4pi
       write(n_out,'(''  DissNb          ='',ES14.6,'','')') DissNb
       write(n_out,'(''  strat           ='',ES14.6,'','')') strat
       write(n_out,'(''  polind          ='',ES14.6,'','')') polind
       write(n_out,'(''  ThExpNb         ='',ES14.6,'','')') ThExpNb
-      write(n_out,'(''  GrunNb          ='',ES14.6,'','')') GrunNb
+      !write(n_out,'(''  GrunNb          ='',ES14.6,'','')') GrunNb
       write(n_out,'(''  epsS            ='',ES14.6,'','')') epsS
       write(n_out,'(''  cmbHflux        ='',ES14.6,'','')') cmbHflux
       write(n_out,'(''  slopeStrat      ='',ES14.6,'','')') slopeStrat
@@ -1232,6 +1249,8 @@ contains
       prmag      =5.0_cp
       po         =0.0_cp
       prec_angle =23.5_cp
+      po_diff    =0.0_cp
+      diff_prec_angle =23.5_cp
       epsc0      =0.0_cp
       epscxi0    =0.0_cp
       radratio   =0.35_cp
@@ -1516,7 +1535,7 @@ contains
       sDens         =one     ! relative s-grid point density 
       zDens         =one     ! relative z-grid point density 
 
-      !----- Potential vortivity:
+      !----- Potential vorticity:
       l_PV          =.false.
 
       !----- Different output, output times same as for log outout:

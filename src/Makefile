@@ -55,16 +55,16 @@ endif
 ifeq ($(COMPILER),intel)
 	FFLAG_TRACEBACK = -traceback
 	FFLAG_ARCH_OPT = -xHost
-	FFLAG_OPENMP = -openmp
+	FFLAG_OPENMP = -qopenmp
 	FFLAG_OPENMP_STUBS = -openmp-stubs
 	FFLAG_CHECK_ALL = -check all
 	FFLAG_FPE = -fpe0 -fp-stack-check -ftrapuv
-	FFLAG_WARN_ALL  = -warn all,nointerfaces
+	FFLAG_WARN_ALL  = -warn all,nointerfaces 
 	FFLAG_PREPROCESSOR = -fpp
 	FFLAG_CONVERT = -convert big
 	FFLAG_PROFILING = -prof-gen=srcpos
 	FFLAG_REPORT = -vec-report6
-	FFLAG_STD = -stand f08  -diag-disable 7025
+	FFLAG_STD = -stand f08  -diag-disable 7025,406
 	ifneq ($(PRODRUN),yes)
 		FFLAG_STD += -fp-model source
 	endif
@@ -251,8 +251,8 @@ else ifeq ($(USE_FFTLIB),MKL)
 endif
 
 ifeq ($(USE_LAPACKLIB),MKL)
-	RED_SOURCES += algebra_mkl.f90
-	LAPACK_OBJS += algebra_mkl.o
+	RED_SOURCES += algebra_lapack.f90
+	LAPACK_OBJS += algebra_lapack.o
 else ifeq ($(USE_LAPACKLIB),LAPACK)
 	RED_SOURCES += algebra_lapack.f90
 	LAPACK_OBJS += algebra_lapack.o
@@ -296,6 +296,7 @@ timing.o: timing.f90
 # cancelling the implicit rule for .F files
 #%.f: %.F
 
+precision_mod.o       : mpimod.o
 truncation.o          : precision_mod.o logic.o useful.o
 magnetic_energy.o     : truncation.o blocking.o horizontal.o\
                         phys_param.o num_param.o constants.o radial.o\
@@ -575,11 +576,6 @@ $(FFT_OBJS)           : truncation.o blocking.o useful.o constants.o
 Namelists.o           : constants.o truncation.o phys_param.o num_param.o logic.o \
 			init_fields.o output_data.o parallel.o movie.o\
 			TO.o special.o radial.o char_manip.o probes.o
-
-ifeq ($(USE_MPI),yes)
-mpi.mod: $(MPI_INCPATH)/mpif.h
-	$(FC) -c -o mpi.o -I$(MPI_INCPATH) mpimod.f90
-endif
 
 ifeq ($(USE_SHTNS),yes)
 rIterThetaBlocking_shtns.o : rIterThetaBlocking.o TO.o dtB.o shtns.o\

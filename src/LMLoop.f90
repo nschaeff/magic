@@ -163,6 +163,7 @@ contains
       complex(cp) :: test_old(llm:ulm,n_r_max)
       real(cp) :: test_norm, error_threshold
       
+
       call transform_old2new(s_LMloc, s_LMloc_new)
       call transform_old2new(ds_LMloc, ds_LMloc_new)
       call transform_old2new(w_LMloc, w_LMloc_new)
@@ -241,31 +242,31 @@ contains
                call updateS( s_LMloc, ds_LMloc, w_LMloc, dVSrLM,dsdt, &
                     &        dsdtLast_LMloc, w1, coex, dt, nLMB )
                
-!                call updateS_new( s_LMloc_new, ds_LMloc_new, w_LMloc_new, dVSrLM_new, dsdt_new, &
-!                     &             dsdtLast_LMloc_new, w1, coex, dt, nLMB)
+               call updateS_new( s_LMloc_new, ds_LMloc_new, w_LMloc_new, dVSrLM_new, dsdt_new, &
+                    &             dsdtLast_LMloc_new, w1, coex, dt, nLMB)
                
-!                error_threshold = 0.0
-!                error_threshold = EPSILON(1.0_cp)
+               error_threshold = 0.0
+               error_threshold = EPSILON(1.0_cp)
                
-!                call transform_new2old(s_LMloc_new, test_old)
-!                test_norm = ABS(SUM(s_LMloc - test_old))
-!                IF (test_norm>error_threshold) print *, "|| s_new - s || : ", test_norm
-!                
-!                call transform_new2old(ds_LMloc_new, test_old)
-!                test_norm = ABS(SUM(ds_LMloc - test_old))
-!                IF (test_norm>error_threshold) print *, "|| ds_new - ds || : ", test_norm
-!                
-!                call transform_new2old(dsdt_new, test_old)
-!                test_norm = ABS(SUM(dsdt - test_old))
-!                IF (test_norm>error_threshold) print *, "|| dsdt_new - dsdt || : ", test_norm
-!                
-!                call transform_new2old(dsdtLast_LMloc_new, test_old)
-!                test_norm = ABS(SUM(dsdtLast_LMloc - test_old))
-!                IF (test_norm>error_threshold) print *, "|| dtLast_new - dtLast || : ", test_norm
-!                
-!                call transform_new2old(dVSrLM_new, test_old)
-!                test_norm = ABS(SUM(dVSrLM - test_old))
-!                IF (test_norm>error_threshold) print *, "|| dVSrLM_new - dVSrLM || : ", test_norm
+               call transform_new2old(s_LMloc_new, test_old)
+               test_norm = ABS(SUM(s_LMloc - test_old))
+               IF (test_norm>error_threshold) print *, "|| s_new - s || : ", test_norm
+               
+               call transform_new2old(ds_LMloc_new, test_old)
+               test_norm = ABS(SUM(ds_LMloc - test_old))
+               IF (test_norm>error_threshold) print *, "|| ds_new - ds || : ", test_norm
+               
+               call transform_new2old(dsdt_new, test_old)
+               test_norm = ABS(SUM(dsdt - test_old))
+               IF (test_norm>error_threshold) print *, "|| dsdt_new - dsdt || : ", test_norm
+               
+               call transform_new2old(dsdtLast_LMloc_new, test_old)
+               test_norm = ABS(SUM(dsdtLast_LMloc - test_old))
+               IF (test_norm>error_threshold) print *, "|| dtLast_new - dtLast || : ", test_norm
+               
+               call transform_new2old(dVSrLM_new, test_old)
+               test_norm = ABS(SUM(dVSrLM - test_old))
+               IF (test_norm>error_threshold) print *, "|| dVSrLM_new - dVSrLM || : ", test_norm
                
             end if
             PERFOFF
@@ -314,12 +315,12 @@ contains
          d_omega_ma_dtLast_dist = d_omega_ma_dtLast
          d_omega_ic_dtLast_dist = d_omega_ic_dtLast
          
-         call updateZ_dist( z_LMloc_dist, dz_LMloc_dist, dzdt, dzdtLast_lo_dist, time, &
-              &        omega_ma_dist,d_omega_ma_dtLast_dist,            &
-              &        omega_ic_dist,d_omega_ic_dtLast_dist,            &
-              &        lorentz_torque_ma,lorentz_torque_maLast,    &
-              &        lorentz_torque_ic,lorentz_torque_icLast,    &
-              &        w1,coex,dt,lRmsNext )
+!          call updateZ_dist( z_LMloc_dist, dz_LMloc_dist, dzdt, dzdtLast_lo_dist, time, &
+!               &        omega_ma_dist,d_omega_ma_dtLast_dist,            &
+!               &        omega_ic_dist,d_omega_ic_dtLast_dist,            &
+!               &        lorentz_torque_ma,lorentz_torque_maLast,    &
+!               &        lorentz_torque_ic,lorentz_torque_icLast,    &
+!               &        w1,coex,dt,lRmsNext )
               
          ! dp, dVSrLM, workA used as work arrays
          call updateZ( z_LMloc, dz_LMloc, dzdt, dzdtLast_lo, time, &

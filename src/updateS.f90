@@ -4,7 +4,8 @@ module updateS_mod
    use omp_lib
    use precision_mod
    use mem_alloc, only: bytes_allocated
-   use geometry, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb, n_mlo_loc
+   use geometry, only: n_r_max, lm_max, l_max, n_r_cmb, n_r_icb, n_mlo_loc,   &
+       &               n_lo_loc
    use radial_functions, only: orho1, or1, or2, beta, dentropy0, rscheme_oc,  &
        &                       kappa, dLkappa, dLtemp0, temp0
    use physical_parameters, only: opr, kbots, ktops
@@ -17,52 +18,54 @@ module updateS_mod
    use parallel_mod, only: rank,chunksize
    use algebra, only: prepare_mat, solve_mat
    use radial_der, only: get_ddr, get_dr
-   use fields, only:  work_LMloc
+   use fields, only:  work_LMloc, work_LMloc_new
    use constants, only: zero, one, two
    use useful, only: abortRun
+   
+   use LMMapping, only: map_mlo, map_glbl_st
 
    implicit none
 
    private
 
-   !-- Local variables
-   complex(cp), allocatable :: rhs1(:,:,:)
-   real(cp), allocatable :: s0Mat(:,:)     ! for l=m=0  
-   real(cp), allocatable :: sMat(:,:,:)
-   integer, allocatable :: s0Pivot(:)
-   integer, allocatable :: sPivot(:,:)
+ !-- Local variables
+   complex(cp), allocatable :: rhs1(:,:,:), rhs1_new(:,:)
+   real(cp), allocatable :: s0Mat(:,:), s0Mat_new(:,:)     ! for l=m=0  
+   real(cp), allocatable :: sMat(:,:,:), sMat_new(:,:,:)
+   integer, allocatable :: s0Pivot(:), s0Pivot_new(:)
+   integer, allocatable :: sPivot(:,:), sPivot_new(:,:)
 #ifdef WITH_PRECOND_S
-   real(cp), allocatable :: sMat_fac(:,:)
+   real(cp), allocatable :: sMat_fac(:,:), sMat_fac_new(:,:)
 #endif
 #ifdef WITH_PRECOND_S0
-   real(cp), allocatable :: s0Mat_fac(:)
+   real(cp), allocatable :: s0Mat_fac(:), s0Mat_fac_new(:)
 #endif
-   logical, public, allocatable :: lSmat(:)
+   logical, public, allocatable :: lSmat(:), lSmat_new(:)
 
    integer :: maxThreads
 
-   public :: initialize_updateS, updateS, updateS_ala, finalize_updateS
+   public :: initialize_updateS, updateS, updateS_ala, finalize_updateS, updateS_new
 
 contains
 
    subroutine initialize_updateS
 
-      allocate( s0Mat(n_r_max,n_r_max) )      ! for l=m=0  
-      allocate( sMat(n_r_max,n_r_max,l_max) )
+      allocate( s0Mat(n_r_max,n_r_max), s0Mat_new(n_r_max,n_r_max) )      ! for l=m=0  
+      allocate( sMat(n_r_max,n_r_max,l_max), sMat_new(n_r_max,n_r_max,l_max) )
       bytes_allocated = bytes_allocated+(n_r_max*n_r_max*(1+l_max))* &
       &                 SIZEOF_DEF_REAL
-      allocate( s0Pivot(n_r_max) )
-      allocate( sPivot(n_r_max,l_max) )
+      allocate( s0Pivot(n_r_max), s0Pivot_new(n_r_max) )
+      allocate( sPivot(n_r_max,l_max), sPivot_new(n_r_max,l_max) )
       bytes_allocated = bytes_allocated+(n_r_max+n_r_max*l_max)*SIZEOF_INTEGER
 #ifdef WITH_PRECOND_S
-      allocate(sMat_fac(n_r_max,l_max))
+      allocate(sMat_fac(n_r_max,l_max), sMat_fac_new(n_r_max,l_max))
       bytes_allocated = bytes_allocated+n_r_max*l_max*SIZEOF_DEF_REAL
 #endif
 #ifdef WITH_PRECOND_S0
-      allocate(s0Mat_fac(n_r_max))
+      allocate(s0Mat_fac(n_r_max), s0Mat_fac_new(n_r_max))
       bytes_allocated = bytes_allocated+n_r_max*SIZEOF_DEF_REAL
 #endif
-      allocate( lSmat(0:l_max) )
+      allocate( lSmat(0:l_max), lSmat_new(0:l_max) )
       bytes_allocated = bytes_allocated+(l_max+1)*SIZEOF_LOGICAL
 
 #ifdef WITHOMP
@@ -71,6 +74,7 @@ contains
       maxThreads=1
 #endif
       allocate( rhs1(n_r_max,lo_sub_map%sizeLMB2max,0:maxThreads-1) )
+      allocate( rhs1_new(n_r_max,n_mlo_loc) )
       bytes_allocated = bytes_allocated + n_r_max*lo_sub_map%sizeLMB2max*&
       &                 maxThreads*SIZEOF_DEF_COMPLEX
 
@@ -224,7 +228,7 @@ contains
                lSmat(l1)=.true.
                !write(*,"(A,I3,ES22.14)") "sMat: ",l1,SUM( sMat(:,:,l1) )
             end if
-          end if
+         end if
 
          do iChunk=1,nChunks
             !$OMP TASK default(shared) &
@@ -379,6 +383,174 @@ contains
       !PERFOFF
 
    end subroutine updateS
+   
+!------------------------------------------------------------------------------
+   subroutine updateS_new(s,ds,w,dVSrLM,dsdt,dsdtLast,w1,coex,dt,nLMB)
+      !
+      !  updates the entropy field s and its radial derivatives
+      !  adds explicit part to time derivatives of s
+      !
+
+      !-- Input of variables:
+      real(cp),    intent(in) :: w1        ! weight for time step !
+      real(cp),    intent(in) :: coex      ! factor depending on alpha
+      real(cp),    intent(in) :: dt        ! time step
+      integer,     intent(in) :: nLMB
+      complex(cp), intent(in) :: w(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: dVSrLM(n_mlo_loc,n_r_max)
+
+      !-- Input/output of scalar fields:
+      complex(cp), intent(inout) :: s(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: dsdt(n_mlo_loc,n_r_max)
+      complex(cp), intent(inout) :: dsdtLast(n_mlo_loc,n_r_max)
+      !-- Output: udpated s,ds,dsdtLast
+      complex(cp), intent(out) :: ds(n_mlo_loc,n_r_max)
+
+      !-- Local variables:
+      real(cp) :: w2            ! weight of second time step
+      real(cp) :: O_dt
+      integer  :: l, m, lm, r, i, lj, mi, nRHS, m0lj
+      real(cp) ::  rhs(n_r_max) ! real RHS for l=m=0
+
+
+      integer :: threadid,nThreads,iThread,all_lms,per_thread,start_lm,stop_lm
+      integer :: iChunk,nChunks,size_of_last_chunk,lmB0
+
+      if ( .not. l_update_s ) return
+
+      w2  =one-w1
+      O_dt=one/dt
+
+
+      call get_dr( dVSrLM, work_LMloc_new, n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc, nocopy=.true. )
+      !-- Get radial derivatives of s: work_LMloc,dsdtLast used as work arrays
+      do r=1,n_r_max
+         do i=1,n_mlo_loc
+            dsdt(i,r)=orho1(r)*(dsdt(i,r)-or2(r)*work_LMloc_new(i,r)- &
+            &           dLh(map_mlo%i2ml(i))*or2(r)*       &
+            &           dentropy0(r)*w(i,r))
+         end do
+      end do
+
+      ! Loops over the local l
+      !---------------------------
+      do lj=1,n_lo_loc
+         l = map_mlo%lj2l(lj)
+         
+         if ( .not. lSmat_new(l) ) then
+            if ( l == 0 ) then
+#ifdef WITH_PRECOND_S0
+               call get_s0Mat(dt,s0Mat_new,s0Pivot_new,s0Mat_fac_new)
+#else
+               call get_s0Mat(dt,s0Mat_new,s0Pivot_new)
+#endif
+            else
+#ifdef WITH_PRECOND_S
+               call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)), sMat_new(:,:,l),sPivot_new(:,l),sMat_fac_new(:,l))
+#else
+               call get_sMat(dt,l,hdif_S(map_glbl_st%lm2(l,0)), sMat_new(:,:,l),sPivot_new(:,l))
+#endif
+            end if
+            lSmat_new(l)=.true.
+         end if
+         
+         ! Loops over the local m's associated with this l
+         ! This loop will merely build the RHS
+         !--------------------------------------------------
+         nRHS = map_mlo%n_mi(lj)
+         do mi=1,nRHS
+            m = map_mlo%milj2m(mi,lj)
+            i = map_mlo%milj2i(mi,lj)
+            lm = map_glbl_st%lm2(l,m)
+
+            if ( l == 0 ) then
+               rhs(1)=      real(tops(0,0))
+               rhs(n_r_max)=real(bots(0,0))
+               do r=2,n_r_max-1
+                  rhs(r)=real(s(i,r))*O_dt+w1*real(dsdt(i,r))  + &
+                  &       w2*real(dsdtLast(i,r))
+               end do
+
+#ifdef WITH_PRECOND_S0
+               rhs = s0Mat_fac_new*rhs
+#endif
+               call solve_mat(s0Mat_new,n_r_max,n_r_max,s0Pivot_new,rhs)
+
+            else ! l  /=  0
+               rhs1_new(1,mi)      =tops(l,m)
+               rhs1_new(n_r_max,mi)=bots(l,m)
+#ifdef WITH_PRECOND_S
+               rhs1_new(1,mi)=      sMat_fac_new(1,l)*rhs1_new(1,mi)
+               rhs1_new(n_r_max,mi)=sMat_fac_new(1,l)*rhs1_new(n_r_max,mi)
+#endif
+               do r=2,n_r_max-1
+                  rhs1_new(r,mi)=s(i,r)*O_dt+w1*dsdt(i,r)  &
+                  &                     +w2*dsdtLast(i,r)
+#ifdef WITH_PRECOND_S
+                  rhs1_new(r,mi) = sMat_fac_new(r,l)*rhs1_new(r,mi)
+#endif
+               end do
+            end if
+         end do ! loop over local m's
+         
+         ! Now we solve all linear systems in a block
+         if ( l > 0 ) then
+            call solve_mat(sMat_new(:,:,l),n_r_max,n_r_max, &
+                 &         sPivot_new(:,l),rhs1_new(:,1:nRHS),nRHS)
+         end if
+         
+         ! Loops over the local m's associated with this l (again)
+         ! This will copy the solution of each RHS into s
+         !--------------------------------------------------------
+         ! In the following loop, m0lj+mi will work if all (.,lj) tuples are contiguous
+         ! in memory. If not, you'd have to use map_mlo%milj2i(lj,mi) instead which 
+         ! would be rather slow!
+         
+         m0lj = map_mlo%milj2i(1,lj) - 1
+         do mi=1,nRHS
+            m = map_mlo%milj2m(mi,lj)
+            !@> TODO: place this l==0 into the previous l==0 and do this mi loop inside 
+            !@> of the "solve_mat" loop
+            if ( l == 0 ) then
+               do r=1,rscheme_oc%n_max
+                  s(m0lj+mi,r)=rhs(r)
+               end do
+            else
+               if ( m > 0 ) then
+                  do r=1,rscheme_oc%n_max
+                     s(m0lj+mi,r)=rhs1_new(r,mi)
+                  end do
+               else
+                  do r=1,rscheme_oc%n_max
+                     s(m0lj+mi,r)= cmplx(real(rhs1_new(r,mi)), 0.0_cp,kind=cp)
+                  end do
+               end if
+            end if
+         end do  ! loop over local m's (again)
+      end do     ! loop over local l
+
+      !-- set cheb modes > rscheme_oc%n_max to zero (dealiazing)
+      s(:,rscheme_oc%n_max+1:n_r_max)=zero
+
+      call get_ddr(s, ds, work_LMloc_new, n_mlo_loc, 1,  &
+            &       n_mlo_loc, n_r_max, rscheme_oc, l_dct_in=.false.)
+      call rscheme_oc%costf1(s,n_mlo_loc,1,n_mlo_loc)
+
+      !-- Calculate explicit time step part:
+      do r=n_r_cmb+1,n_r_icb-1
+         do i=1, n_mlo_loc
+            lm = map_mlo%i2ml(i)
+            dsdtLast(i,r)=                         dsdt(i,r) &
+            &                        - coex*opr*hdif_S(lm) * &
+            &               kappa(r) * ( work_LMloc_new(i,r) &
+            & + ( beta(r)+dLtemp0(r)+two*or1(r)+dLkappa(r) ) &
+            &                                      * ds(i,r) &
+            &                               - dLh(lm)*or2(r) &
+            &                                      *  s(i,r) )
+         end do
+      end do
+
+   end subroutine updateS_new
 !------------------------------------------------------------------------------
    subroutine updateS_ala(s,ds,w,dVSrLM,dsdt,dsdtLast,w1,coex,dt,nLMB)
       !

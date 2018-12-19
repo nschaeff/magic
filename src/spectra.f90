@@ -4,7 +4,7 @@ module spectra
    use precision_mod
    use mem_alloc, only: bytes_allocated
    use geometry, only: n_r_max, n_r_ic_maxMag, n_r_maxMag, &
-       &                 n_r_ic_max, l_max, minc, n_r_cmb, n_r_icb
+       &               n_r_ic_max, l_max, minc, n_r_cmb, n_r_icb
    use radial_functions, only: orho1, orho2, r_ic, chebt_ic, r,   &
        &                       rscheme_oc, or2, r_icb, dr_fac_ic
    use physical_parameters, only: LFfac
@@ -15,7 +15,7 @@ module spectra
        &            l_energy_modes
    use output_data, only: tag, log_file, n_log_file, m_max_modes
    use LMLoop_data,only: llm, ulm, llmMag, ulmMag
-   use useful, only: cc2real, cc22real, abortRun
+   use useful, only: cc2real, cc22real, abortRun, get_mean_sd
    use integration, only: rInt_R, rIntIC
    use constants, only: pi, vol_oc, half, one, four
    use LMmapping, only: map_glbl_st
@@ -24,24 +24,22 @@ module spectra
   
    private
  
-   real(cp), allocatable :: e_p_l_ave(:),e_p_m_ave(:)
-   real(cp), allocatable :: e_p2_l_ave(:),e_p2_m_ave(:)
-   real(cp), allocatable :: e_t_l_ave(:),e_t_m_ave(:)
-   real(cp), allocatable :: e_t2_l_ave(:),e_t2_m_ave(:)
-   real(cp), allocatable :: e_cmb_l_ave(:),e_cmb_m_ave(:)
-   real(cp), allocatable :: e_cmb2_l_ave(:),e_cmb2_m_ave(:)
+   real(cp), allocatable :: e_p_l_ave(:), e_p_m_ave(:)
+   real(cp), allocatable :: e_p_l_SD(:), e_p_m_SD(:)
+   real(cp), allocatable :: e_t_l_ave(:), e_t_m_ave(:)
+   real(cp), allocatable :: e_t_l_SD(:), e_t_m_SD(:)
+   real(cp), allocatable :: e_cmb_l_ave(:), e_cmb_m_ave(:)
+   real(cp), allocatable :: e_cmb_l_SD(:), e_cmb_m_SD(:)
  
-   real(cp), allocatable :: ek_p_l_ave(:),ek_p_m_ave(:)
-   real(cp), allocatable :: ek_p2_l_ave(:),ek_p2_m_ave(:)
-   real(cp), allocatable :: ek_t_l_ave(:),ek_t_m_ave(:)
-   real(cp), allocatable :: ek_t2_l_ave(:),ek_t2_m_ave(:)
+   real(cp), allocatable :: ek_p_l_ave(:), ek_p_m_ave(:)
+   real(cp), allocatable :: ek_p_l_SD(:), ek_p_m_SD(:)
+   real(cp), allocatable :: ek_t_l_ave(:), ek_t_m_ave(:)
+   real(cp), allocatable :: ek_t_l_SD(:), ek_t_m_SD(:)
 
-   real(cp), allocatable :: T_ave(:)
-   real(cp), allocatable :: T_ICB_ave(:)
-   real(cp), allocatable :: dT_ICB_ave(:)
-   real(cp), allocatable :: T2_ave(:)
-   real(cp), allocatable :: T_ICB2_ave(:)
-   real(cp), allocatable :: dT_ICB2_ave(:)
+   real(cp), allocatable :: T_l_ave(:), T_ICB_l_ave(:), dT_ICB_l_ave(:)
+   real(cp), allocatable :: T_l_SD(:), T_ICB_l_SD(:), dT_ICB_l_SD(:)
+   real(cp), allocatable :: T_m_ave(:), T_ICB_m_ave(:), dT_ICB_m_ave(:)
+   real(cp), allocatable :: T_m_SD(:), T_ICB_m_SD(:), dT_ICB_m_SD(:)
 
    integer :: n_kin_spec_file, n_u2_spec_file, n_mag_spec_file
    integer :: n_temp_spec_file
@@ -52,34 +50,31 @@ module spectra
 
  
    public :: initialize_spectra, spectrum, spectrum_average,     &
-   &         spectrum_temp, spectrum_temp_average, get_amplitude,&
-   &         finalize_spectra
+   &         spectrum_temp, get_amplitude, finalize_spectra
 
 contains
 
    subroutine initialize_spectra
 
       allocate( e_p_l_ave(0:l_max),e_p_m_ave(0:l_max) )
-      allocate( e_p2_l_ave(0:l_max),e_p2_m_ave(0:l_max) )
+      allocate( e_p_l_SD(0:l_max),e_p_m_SD(0:l_max) )
       allocate( e_t_l_ave(0:l_max),e_t_m_ave(0:l_max) )
-      allocate( e_t2_l_ave(0:l_max),e_t2_m_ave(0:l_max) )
+      allocate( e_t_l_SD(0:l_max),e_t_m_SD(0:l_max) )
       allocate( e_cmb_l_ave(0:l_max),e_cmb_m_ave(0:l_max) )
-      allocate( e_cmb2_l_ave(0:l_max),e_cmb2_m_ave(0:l_max) )
+      allocate( e_cmb_l_SD(0:l_max),e_cmb_m_SD(0:l_max) )
 
       allocate( ek_p_l_ave(0:l_max),ek_p_m_ave(0:l_max) )
-      allocate( ek_p2_l_ave(0:l_max),ek_p2_m_ave(0:l_max) )
+      allocate( ek_p_l_SD(0:l_max),ek_p_m_SD(0:l_max) )
       allocate( ek_t_l_ave(0:l_max),ek_t_m_ave(0:l_max) )
-      allocate( ek_t2_l_ave(0:l_max),ek_t2_m_ave(0:l_max) )
+      allocate( ek_t_l_SD(0:l_max),ek_t_m_SD(0:l_max) )
       bytes_allocated = bytes_allocated+20*(l_max+1)*SIZEOF_DEF_REAL
 
       if ( l_heat ) then
-         allocate( T_ave(l_max+1) )
-         allocate( T_ICB_ave(l_max+1) )
-         allocate( dT_ICB_ave(l_max+1) )
-         allocate( T2_ave(l_max+1) )
-         allocate( T_ICB2_ave(l_max+1) )
-         allocate( dT_ICB2_ave(l_max+1) )
-         bytes_allocated = bytes_allocated+6*(l_max+1)*SIZEOF_DEF_REAL
+         allocate( T_l_ave(l_max+1), T_ICB_l_ave(l_max+1), dT_ICB_l_ave(l_max+1) )
+         allocate( T_l_SD(l_max+1), T_ICB_l_SD(l_max+1), dT_ICB_l_SD(l_max+1) )
+         allocate( T_m_ave(l_max+1), T_ICB_m_ave(l_max+1), dT_ICB_m_ave(l_max+1) )
+         allocate( T_m_SD(l_max+1), T_ICB_m_SD(l_max+1), dT_ICB_m_SD(l_max+1) )
+         bytes_allocated = bytes_allocated+12*(l_max+1)*SIZEOF_DEF_REAL
       end if
 
       am_kpol_file='am_kin_pol.'//tag
@@ -104,15 +99,17 @@ contains
 !----------------------------------------------------------------------------
    subroutine finalize_spectra
 
-      deallocate( e_p_l_ave, e_p_m_ave, e_p2_l_ave, e_p2_m_ave )
-      deallocate( e_t_l_ave, e_t_m_ave, e_t2_l_ave, e_t2_m_ave )
-      deallocate( e_cmb_l_ave, e_cmb_m_ave, e_cmb2_l_ave, e_cmb2_m_ave )
-      deallocate( ek_p_l_ave, ek_p_m_ave, ek_p2_l_ave, ek_p2_m_ave )
-      deallocate( ek_t_l_ave, ek_t_m_ave, ek_t2_l_ave, ek_t2_m_ave )
+      deallocate( e_p_l_ave, e_p_m_ave, e_p_l_SD, e_p_m_SD )
+      deallocate( e_t_l_ave, e_t_m_ave, e_t_l_SD, e_t_m_SD )
+      deallocate( e_cmb_l_ave, e_cmb_m_ave, e_cmb_l_SD, e_cmb_m_SD )
+      deallocate( ek_p_l_ave, ek_p_m_ave, ek_p_l_SD, ek_p_m_SD )
+      deallocate( ek_t_l_ave, ek_t_m_ave, ek_t_l_SD, ek_t_m_SD )
 
       if ( l_heat ) then
-         deallocate( T_ave, T_ICB_ave, dT_ICB_ave, T2_ave, T_ICB2_ave, &
-         &           dT_ICB2_ave )
+         deallocate( T_l_ave, T_ICB_l_ave, dT_ICB_l_ave )
+         deallocate( T_l_SD, T_ICB_l_SD, dT_ICB_l_SD )
+         deallocate( T_m_ave, T_ICB_m_ave, dT_ICB_m_ave )
+         deallocate( T_m_SD, T_ICB_m_SD, dT_ICB_m_SD )
       end if
 
       if ( rank == 0 .and. (.not. l_save_out) ) then
@@ -126,8 +123,8 @@ contains
 
    end subroutine finalize_spectra
 !----------------------------------------------------------------------------
-   subroutine spectrum_average(n_time_ave,l_stop_time,             &
-              &                time_passed,time_norm,b,aj,db,BV)
+   subroutine spectrum_average(n_time_ave,l_stop_time,time_passed,time_norm, &
+              &                b,aj,db,BV)
 
       !-- Input variables:
       integer,          intent(in) :: n_time_ave
@@ -152,8 +149,6 @@ contains
 
       real(cp) :: e_p_temp,e_t_temp
       real(cp) :: fac
-      real(cp) :: dt_norm
-      real(cp) :: SDp_l,SDp_m,SDt_l,SDt_m,SDcmb_l,SDcmb_m
 
       real(cp) :: e_p_r_l(n_r_max,0:l_max),e_p_r_l_global(n_r_max,0:l_max)
       real(cp) :: e_t_r_l(n_r_max,0:l_max),e_t_r_l_global(n_r_max,0:l_max)
@@ -173,9 +168,9 @@ contains
             do lm=max(llm,2),ulm
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
-               e_p_temp= orho1(nR) * dLh(map_glbl_st%lm2(l,m)) * (               &
-                    &      dLh(map_glbl_st%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
-                    &      + cc2real(db(lm,nR),m) )
+               e_p_temp= orho1(nR) * dLh(map_glbl_st%lm2(l,m)) * (             &
+               &         dLh(map_glbl_st%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
+               &         + cc2real(db(lm,nR),m) )
                e_t_temp=orho1(nR)*dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,nR),m)
                e_p_r_l(nR,l)=e_p_r_l(nR,l)+e_p_temp
                e_t_r_l(nR,l)=e_t_r_l(nR,l)+e_t_temp
@@ -197,8 +192,8 @@ contains
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
                e_p_temp=  dLh(map_glbl_st%lm2(l,m)) * (                           &
-                    &       dLh(map_glbl_st%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
-                    &       + cc2real(db(lm,nR),m) )
+               &            dLh(map_glbl_st%lm2(l,m))*or2(nR)*cc2real(b(lm,nR),m) &
+               &            + cc2real(db(lm,nR),m) )
                e_t_temp=dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,nR),m)
                e_p_r_l(nR,l)=e_p_r_l(nR,l)+e_p_temp
                e_t_r_l(nR,l)=e_t_r_l(nR,l)+e_t_temp
@@ -210,19 +205,19 @@ contains
       end if
 
 #ifdef WITH_MPI
-      call MPI_Reduce(e_p_r_l,e_p_r_l_global,n_r_max*(l_max+1),&
-           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(e_t_r_l,e_t_r_l_global,n_r_max*(l_max+1),&
-           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(e_p_r_m,e_p_r_m_global,n_r_max*(l_max+1),&
-           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(e_t_r_m,e_t_r_m_global,n_r_max*(l_max+1),&
-           & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      call MPI_Reduce(e_p_r_l,e_p_r_l_global,n_r_max*(l_max+1),    &
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      call MPI_Reduce(e_t_r_l,e_t_r_l_global,n_r_max*(l_max+1),    &
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      call MPI_Reduce(e_p_r_m,e_p_r_m_global,n_r_max*(l_max+1),    &
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      call MPI_Reduce(e_t_r_m,e_t_r_m_global,n_r_max*(l_max+1),    &
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
-      e_p_r_l_global=e_p_r_l
-      e_t_r_l_global=e_t_r_l
-      e_p_r_m_global=e_p_r_m
-      e_t_r_m_global=e_t_r_m
+      e_p_r_l_global(:,:)=e_p_r_l(:,:)
+      e_t_r_l_global(:,:)=e_t_r_l(:,:)
+      e_p_r_m_global(:,:)=e_p_r_m(:,:)
+      e_t_r_m_global(:,:)=e_t_r_m(:,:)
 #endif
 
       if ( coord_r == 0 ) then
@@ -240,68 +235,36 @@ contains
             end if
          end do
 
-
          !-- Averaging:
-         if ( n_time_ave == 1 ) then
-            do l=0,l_max
-               if ( BV == 'B' ) then
-                  e_p_l_ave(l)   =time_passed*e_p_l(l)
-                  e_t_l_ave(l)   =time_passed*e_t_l(l)
-                  e_p2_l_ave(l)  =time_passed*e_p_l(l)*e_p_l(l)
-                  e_t2_l_ave(l)  =time_passed*e_t_l(l)*e_t_l(l)
-                  e_p_m_ave(l)   =time_passed*e_p_m(l)
-                  e_t_m_ave(l)   =time_passed*e_t_m(l)
-                  e_p2_m_ave(l)  =time_passed*e_p_m(l)*e_p_m(l)
-                  e_t2_m_ave(l)  =time_passed*e_t_m(l)*e_t_m(l)
-                  e_cmb_l_ave(l) =time_passed*e_cmb_l(l)
-                  e_cmb2_l_ave(l)=time_passed*e_cmb_l(l)*e_cmb_l(l)
-                  e_cmb_m_ave(l) =time_passed*e_cmb_m(l)
-                  e_cmb2_m_ave(l)=time_passed*e_cmb_m(l)*e_cmb_m(l)
-               else
-                  ek_p_l_ave(l)   =time_passed*e_p_l(l)
-                  ek_t_l_ave(l)   =time_passed*e_t_l(l)
-                  ek_p2_l_ave(l)  =time_passed*e_p_l(l)*e_p_l(l)
-                  ek_t2_l_ave(l)  =time_passed*e_t_l(l)*e_t_l(l)
-                  ek_p_m_ave(l)   =time_passed*e_p_m(l)
-                  ek_t_m_ave(l)   =time_passed*e_t_m(l)
-                  ek_p2_m_ave(l)  =time_passed*e_p_m(l)*e_p_m(l)
-                  ek_t2_m_ave(l)  =time_passed*e_t_m(l)*e_t_m(l)
-               end if
-            end do
+         if ( BV == 'B' ) then
+            call get_mean_sd(e_p_l_ave, e_p_l_SD, e_p_l, n_time_ave, time_passed, &
+                 &           time_norm)
+            call get_mean_sd(e_t_l_ave, e_t_l_SD, e_t_l, n_time_ave, time_passed, &
+                 &           time_norm)
+            call get_mean_sd(e_p_m_ave, e_p_m_SD, e_p_m, n_time_ave, time_passed, &
+                 &           time_norm)
+            call get_mean_sd(e_t_m_ave, e_t_m_SD, e_t_m, n_time_ave, time_passed, &
+                 &           time_norm)
+            call get_mean_sd(e_cmb_l_ave, e_cmb_l_SD, e_cmb_l, n_time_ave, &
+                 &           time_passed, time_norm)
+            call get_mean_sd(e_cmb_m_ave, e_cmb_m_SD, e_cmb_m, n_time_ave, &
+                 &           time_passed, time_norm)
          else
-            do l=0,l_max
-               if ( BV == 'B' ) then
-                  e_p_l_ave(l)   =e_p_l_ave(l)   +time_passed*e_p_l(l)
-                  e_t_l_ave(l)   =e_t_l_ave(l)   +time_passed*e_t_l(l)
-                  e_p2_l_ave(l)  =e_p2_l_ave(l)  +time_passed*e_p_l(l)*e_p_l(l)
-                  e_t2_l_ave(l)  =e_t2_l_ave(l)  +time_passed*e_t_l(l)*e_t_l(l)
-                  e_p_m_ave(l)   =e_p_m_ave(l)   +time_passed*e_p_m(l)
-                  e_t_m_ave(l)   =e_t_m_ave(l)   +time_passed*e_t_m(l)
-                  e_p2_m_ave(l)  =e_p2_m_ave(l)  +time_passed*e_p_m(l)*e_p_m(l)
-                  e_t2_m_ave(l)  =e_t2_m_ave(l)  +time_passed*e_t_m(l)*e_t_m(l)
-                  e_cmb_l_ave(l) =e_cmb_l_ave(l) +time_passed*e_cmb_l(l)
-                  e_cmb2_l_ave(l)=e_cmb2_l_ave(l)+time_passed*e_cmb_l(l)*e_cmb_l(l)
-                  e_cmb_m_ave(l) =e_cmb_m_ave(l) +time_passed*e_cmb_m(l)
-                  e_cmb2_m_ave(l)=e_cmb2_m_ave(l)+time_passed*e_cmb_m(l)*e_cmb_m(l)
-               else
-                  ek_p_l_ave(l)   =ek_p_l_ave(l) +time_passed*e_p_l(l)
-                  ek_t_l_ave(l)   =ek_t_l_ave(l) +time_passed*e_t_l(l)
-                  ek_p2_l_ave(l)  =ek_p2_l_ave(l)+time_passed*e_p_l(l)*e_p_l(l)
-                  ek_t2_l_ave(l)  =ek_t2_l_ave(l)+time_passed*e_t_l(l)*e_t_l(l)
-                  ek_p_m_ave(l)   =ek_p_m_ave(l) +time_passed*e_p_m(l)
-                  ek_t_m_ave(l)   =ek_t_m_ave(l) +time_passed*e_t_m(l)
-                  ek_p2_m_ave(l)  =ek_p2_m_ave(l)+time_passed*e_p_m(l)*e_p_m(l)
-                  ek_t2_m_ave(l)  =ek_t2_m_ave(l)+time_passed*e_t_m(l)*e_t_m(l)
-               end if
-            end do
-         end if
+            call get_mean_sd(ek_p_l_ave, ek_p_l_SD, e_p_l, n_time_ave, time_passed,&
+                 &           time_norm)
+            call get_mean_sd(ek_t_l_ave, ek_t_l_SD, e_t_l, n_time_ave, time_passed,&
+                 &           time_norm)
+            call get_mean_sd(ek_p_m_ave, ek_p_m_SD, e_p_m, n_time_ave, time_passed,&
+                 &           time_norm)
+            call get_mean_sd(ek_t_m_ave, ek_t_m_SD, e_t_m, n_time_ave, time_passed,&
+                 &           time_norm)
 
+         end if
 
          !-- Output: every 10th averaging step and at end of run
          if ( l_stop_time .or. mod(n_time_ave,10) == 0 ) then
 
             !------ Output:
-            dt_norm=one/time_norm
             if ( BV == 'B' ) then
                outFile='mag_spec_ave.'//tag
             else if ( BV == 'V' ) then
@@ -309,41 +272,29 @@ contains
             else
                call abortRun('Wrong BV input to spectrum_average!')
             end if
+
             open(newunit=nOut, file=outFile, status='unknown')
             if ( BV == 'B' ) then
+               e_p_l_SD(:)  =sqrt(e_p_l_SD(:)/time_norm)
+               e_t_l_SD(:)  =sqrt(e_t_l_SD(:)/time_norm)
+               e_p_m_SD(:)  =sqrt(e_p_m_SD(:)/time_norm)
+               e_t_m_SD(:)  =sqrt(e_t_m_SD(:)/time_norm)
+               e_cmb_l_SD(:)=sqrt(e_cmb_l_SD(:)/time_norm)
+               e_cmb_m_SD(:)=sqrt(e_cmb_m_SD(:)/time_norm)
                do l=0,l_max
-                  SDp_l = get_standard_deviation(dt_norm,e_p_l_ave(l),e_p2_l_ave(l))
-                  SDp_m = get_standard_deviation(dt_norm,e_p_m_ave(l),e_p2_m_ave(l))
-                  SDt_l = get_standard_deviation(dt_norm,e_t_l_ave(l),e_t2_l_ave(l))
-                  SDt_m = get_standard_deviation(dt_norm,e_t_m_ave(l),e_t2_m_ave(l))
-                  SDcmb_l=get_standard_deviation(dt_norm,e_cmb_l_ave(l),e_cmb2_l_ave(l))
-                  SDcmb_m=get_standard_deviation(dt_norm,e_cmb_m_ave(l),e_cmb2_m_ave(l))
-                  !write(*,"(A,I4,5ES22.14)") "SDcmb_m = ",l,dt_norm,SDcmb_m, &
-                  !     &  dt_norm*e_cmb2_m_ave(l),    &
-                  !     & (dt_norm*e_cmb_m_ave(l))**2, &
-                  !     & dt_norm*e_cmb2_m_ave(l) - (dt_norm*e_cmb_m_ave(l))**2
-                  if (rank == 0) write(nOut,'(2X,1P,I4,16ES16.8)') l,                        &
-                       &  dt_norm*e_p_l_ave(l),   dt_norm*e_p_m_ave(l),       &
-                       &  dt_norm*e_t_l_ave(l),   dt_norm*e_t_m_ave(l),       &
-                       &  dt_norm*e_cmb_l_ave(l), dt_norm*e_cmb_m_ave(l),     &
-                       &  dt_norm*e_p_l_ave(l)+SDp_l,                         &
-                       &  dt_norm*e_p_l_ave(l)-SDp_l,                         &
-                       &  dt_norm*e_p_m_ave(l)+SDp_m,                         &
-                       &  dt_norm*e_p_m_ave(l)-SDp_m,                         &
-                       &  dt_norm*e_t_l_ave(l)+SDt_l,                         &
-                       &  dt_norm*e_t_l_ave(l)-SDt_l,                         &
-                       &  dt_norm*e_t_m_ave(l)+SDt_m,                         &
-                       &  dt_norm*e_t_m_ave(l)-SDt_m,                         &
-                       &  dt_norm*e_cmb_m_ave(l)+SDcmb_m,                     &
-                       &  dt_norm*e_cmb_m_ave(l)-SDcmb_m 
+                  write(nOut,'(2X,1P,I4,12ES16.8)') l, e_p_l_ave(l), e_p_m_ave(l), &
+                  &                                    e_t_l_ave(l), e_t_m_ave(l), &
+                  &                                e_cmb_l_ave(l), e_cmb_m_ave(l), &
+                  &                                      e_p_l_SD(l), e_p_m_SD(l), &
+                  &                                      e_t_l_SD(l), e_t_m_SD(l), &
+                  &                                  e_cmb_l_SD(l), e_cmb_m_SD(l)
                end do
             else
                do l=0,l_max
-                  if (rank == 0) write(nOut,'(2X,1P,I4,8ES16.8)') l,                         &
-                       &  dt_norm*ek_p_l_ave(l), dt_norm*ek_p_m_ave(l),       &
-                       &  dt_norm*ek_t_l_ave(l), dt_norm*ek_t_m_ave(l),       &
-                       &  dt_norm*ek_p2_l_ave(l),dt_norm*ek_p2_m_ave(l),      &
-                       &  dt_norm*ek_t2_l_ave(l),dt_norm*ek_t2_m_ave(l)
+                  write(nOut,'(2X,1P,I4,8ES16.8)') l,ek_p_l_ave(l), ek_p_m_ave(l), &
+                  &                                  ek_t_l_ave(l), ek_t_m_ave(l), &
+                  &                                    ek_p_l_SD(l), ek_p_m_SD(l), &
+                  &                                    ek_t_l_SD(l), ek_t_m_SD(l)
                end do
             end if
             close(nOut)
@@ -353,10 +304,10 @@ contains
                   open(newunit=n_log_file, file=log_file, status='unknown', &
                   &    position='append')
                end if
-               if (rank == 0) write(n_log_file,"(/,A,A)")  &
+               write(n_log_file,"(/,A,A)")                        &
                &     ' ! TIME AVERAGED SPECTRA STORED IN FILE: ', &
                &      outFile
-               if (rank == 0) write(n_log_file,"(A,I5)")   &
+               write(n_log_file,"(A,I5)")                         &
                &     ' !              No. of averaged spectra: ', &
                &     n_time_ave
                if ( l_save_out ) close(n_log_file)
@@ -366,27 +317,6 @@ contains
       end if
 
    end subroutine spectrum_average
-!----------------------------------------------------------------------------
-   real(cp) function get_standard_deviation(dt_norm,mean,sum_of_squares) result(stdev)
-
-      real(cp), intent(in) :: dt_norm,mean,sum_of_squares
-
-      real(cp) :: mean2,variance
-      real(cp), parameter :: tolerance = 5.0_cp*epsilon(one)
-
-      mean2    = (dt_norm*mean)**2
-      variance = abs(dt_norm*sum_of_squares - mean2 )
-      if ( mean2 /= 0.0_cp ) then
-         if ( variance/mean2 < tolerance ) then
-            stdev = 0.0_cp
-         else
-            stdev = sqrt(variance)
-         end if
-      else
-         stdev = 0.0_cp
-      end if
-
-   end function get_standard_deviation
 !----------------------------------------------------------------------------
    subroutine spectrum(time,n_spec,w,dw,z,b,db,aj,b_ic,db_ic,aj_ic)
       !
@@ -434,7 +364,7 @@ contains
       !-- local:
       character(len=14) :: string
       character(len=72) :: mag_spec_file,kin_spec_file,u2_spec_file
-      integer :: n_r_loc,lm,ml,l,mc,m,n_const
+      integer :: n_r,lm,ml,l,mc,m,n_const
     
       real(cp) :: r_ratio,O_r_icb_E_2
       real(cp) :: e_mag_p_temp,e_mag_t_temp
@@ -469,33 +399,33 @@ contains
       complex(cp) :: r_dr_b
     
     
-      eCMB=0.0_cp
+      eCMB(:)=0.0_cp
     
-      do n_r_loc=1,n_r_max
+      do n_r=1,n_r_max
     
          do l=1,l_max
             if ( l_mag ) then
-               e_mag_p_r_l(n_r_loc,l)=0.0_cp
-               e_mag_t_r_l(n_r_loc,l)=0.0_cp
+               e_mag_p_r_l(n_r,l)=0.0_cp
+               e_mag_t_r_l(n_r,l)=0.0_cp
             end if
             if ( l_anel ) then
-               u2_p_r_l(n_r_loc,l)=0.0_cp
-               u2_t_r_l(n_r_loc,l)=0.0_cp
+               u2_p_r_l(n_r,l)=0.0_cp
+               u2_t_r_l(n_r,l)=0.0_cp
             end if
-            e_kin_p_r_l(n_r_loc,l)=0.0_cp
-            e_kin_t_r_l(n_r_loc,l)=0.0_cp
+            e_kin_p_r_l(n_r,l)=0.0_cp
+            e_kin_t_r_l(n_r,l)=0.0_cp
          end do
          do mc=1,l_max+1
             if ( l_mag ) then
-               e_mag_p_r_m(n_r_loc,mc)=0.0_cp
-               e_mag_t_r_m(n_r_loc,mc)=0.0_cp
+               e_mag_p_r_m(n_r,mc)=0.0_cp
+               e_mag_t_r_m(n_r,mc)=0.0_cp
             end if
             if ( l_anel ) then
-               u2_p_r_m(n_r_loc,mc)=0.0_cp
-               u2_t_r_m(n_r_loc,mc)=0.0_cp
+               u2_p_r_m(n_r,mc)=0.0_cp
+               u2_t_r_m(n_r,mc)=0.0_cp
             end if
-            e_kin_p_r_m(n_r_loc,mc)=0.0_cp
-            e_kin_t_r_m(n_r_loc,mc)=0.0_cp
+            e_kin_p_r_m(n_r,mc)=0.0_cp
+            e_kin_t_r_m(n_r,mc)=0.0_cp
          end do
     
          !do lm=2,lm_max
@@ -506,46 +436,45 @@ contains
             mc=m+1
     
             if ( l_mag ) then
-               e_mag_p_temp= dLh(map_glbl_st%lm2(l,m)) * ( &
-                    &          dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(b(lm,n_r_loc),m) + &
-                    &          cc2real(db(lm,n_r_loc),m) )
-               e_mag_t_temp=dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,n_r_loc),m)
+               e_mag_p_temp= dLh(map_glbl_st%lm2(l,m)) * ( dLh(map_glbl_st%lm2(l,m))*     &
+               &             or2(n_r)*cc2real(b(lm,n_r),m) + cc2real(db(lm,n_r),m) )
+               e_mag_t_temp=dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,n_r),m)
             end if
             if ( l_anel ) then
-               u2_p_temp=  orho2(n_r_loc)*dLh(map_glbl_st%lm2(l,m)) *  ( &
-                    &        dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
-                    &        cc2real(dw(lm,n_r_loc),m) )
-               u2_t_temp=orho2(n_r_loc)*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
+               u2_p_temp=  orho2(n_r)*dLh(map_glbl_st%lm2(l,m)) *  (                   &
+               &             dLh(map_glbl_st%lm2(l,m))*or2(n_r)*cc2real(w(lm,n_r),m) + &
+               &             cc2real(dw(lm,n_r),m) )
+               u2_t_temp=orho2(n_r)*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,n_r),m)
             end if
-            e_kin_p_temp= orho1(n_r_loc)*dLh(map_glbl_st%lm2(l,m)) *  ( &
-                 &          dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
-                 &          cc2real(dw(lm,n_r_loc),m) )
-            e_kin_t_temp=orho1(n_r_loc)*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
+            e_kin_p_temp= orho1(n_r)*dLh(map_glbl_st%lm2(l,m)) *  (                   &
+            &               dLh(map_glbl_st%lm2(l,m))*or2(n_r)*cc2real(w(lm,n_r),m) + &
+            &               cc2real(dw(lm,n_r),m) )
+            e_kin_t_temp=orho1(n_r)*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,n_r),m)
     
             !----- l-spectra:
             if ( l_mag ) then
-               e_mag_p_r_l(n_r_loc,l) = e_mag_p_r_l(n_r_loc,l) + e_mag_p_temp
-               e_mag_t_r_l(n_r_loc,l) = e_mag_t_r_l(n_r_loc,l) + e_mag_t_temp
-               if ( m == 0 .and. n_r_loc == n_r_cmb ) eCMB(l)=e_mag_p_temp
+               e_mag_p_r_l(n_r,l) = e_mag_p_r_l(n_r,l) + e_mag_p_temp
+               e_mag_t_r_l(n_r,l) = e_mag_t_r_l(n_r,l) + e_mag_t_temp
+               if ( m == 0 .and. n_r == n_r_cmb ) eCMB(l)=e_mag_p_temp
             end if
             if ( l_anel ) then
-               u2_p_r_l(n_r_loc,l) = u2_p_r_l(n_r_loc,l) + u2_p_temp
-               u2_t_r_l(n_r_loc,l) = u2_t_r_l(n_r_loc,l) + u2_t_temp
+               u2_p_r_l(n_r,l) = u2_p_r_l(n_r,l) + u2_p_temp
+               u2_t_r_l(n_r,l) = u2_t_r_l(n_r,l) + u2_t_temp
             end if
-            e_kin_p_r_l(n_r_loc,l) = e_kin_p_r_l(n_r_loc,l) + e_kin_p_temp
-            e_kin_t_r_l(n_r_loc,l) = e_kin_t_r_l(n_r_loc,l) + e_kin_t_temp
+            e_kin_p_r_l(n_r,l) = e_kin_p_r_l(n_r,l) + e_kin_p_temp
+            e_kin_t_r_l(n_r,l) = e_kin_t_r_l(n_r,l) + e_kin_t_temp
     
             !----- m-spectra:
             if ( l_mag ) then
-               e_mag_p_r_m(n_r_loc,mc) = e_mag_p_r_m(n_r_loc,mc) + e_mag_p_temp
-               e_mag_t_r_m(n_r_loc,mc) = e_mag_t_r_m(n_r_loc,mc) + e_mag_t_temp
+               e_mag_p_r_m(n_r,mc) = e_mag_p_r_m(n_r,mc) + e_mag_p_temp
+               e_mag_t_r_m(n_r,mc) = e_mag_t_r_m(n_r,mc) + e_mag_t_temp
             end if
             if ( l_anel ) then
-               u2_p_r_m(n_r_loc,mc) = u2_p_r_m(n_r_loc,mc) + u2_p_temp
-               u2_t_r_m(n_r_loc,mc) = u2_t_r_m(n_r_loc,mc) + u2_t_temp
+               u2_p_r_m(n_r,mc) = u2_p_r_m(n_r,mc) + u2_p_temp
+               u2_t_r_m(n_r,mc) = u2_t_r_m(n_r,mc) + u2_t_temp
             end if
-            e_kin_p_r_m(n_r_loc,mc)=e_kin_p_r_m(n_r_loc,mc) + e_kin_p_temp
-            e_kin_t_r_m(n_r_loc,mc)=e_kin_t_r_m(n_r_loc,mc) + e_kin_t_temp
+            e_kin_p_r_m(n_r,mc)=e_kin_p_r_m(n_r,mc) + e_kin_p_temp
+            e_kin_t_r_m(n_r,mc)=e_kin_t_r_m(n_r,mc) + e_kin_t_temp
     
          end do    ! do loop over lms in block
     
@@ -556,58 +485,58 @@ contains
 #ifdef WITH_MPI
       if ( l_mag ) then
          call MPI_Reduce(e_mag_p_r_l, e_mag_p_r_l_global, n_r_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_mag_t_r_l, e_mag_t_r_l_global, n_r_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       end if
       if ( l_anel ) then
-         call MPI_Reduce(u2_p_r_l, u2_p_r_l_global, n_r_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-         call MPI_Reduce(u2_t_r_l, u2_t_r_l_global, n_r_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+         call MPI_Reduce(u2_p_r_l, u2_p_r_l_global, n_r_max*l_max,   &
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+         call MPI_Reduce(u2_t_r_l, u2_t_r_l_global, n_r_max*l_max,   &
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       end if
       call MPI_Reduce(e_kin_p_r_l, e_kin_p_r_l_global, n_r_max*l_max,&
-           &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       call MPI_Reduce(e_kin_t_r_l, e_kin_t_r_l_global, n_r_max*l_max,&
-           &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
     
       ! then the m-spectra
       if ( l_mag ) then
          call MPI_Reduce(e_mag_p_r_m, e_mag_p_r_m_global, n_r_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_mag_t_r_m, e_mag_t_r_m_global, n_r_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-         call MPI_Reduce(eCMB, eCMB_global, l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+         call MPI_Reduce(eCMB, eCMB_global,l_max,MPI_DEF_REAL,MPI_SUM,0, &
+              &          comm_r,ierr)
       end if
       if ( l_anel ) then
          call MPI_Reduce(u2_p_r_m, u2_p_r_m_global, n_r_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(u2_t_r_m, u2_t_r_m_global, n_r_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       end if
-      call MPI_Reduce(e_kin_p_r_m, e_kin_p_r_m_global, n_r_max*(l_max+1),&
-           &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(e_kin_t_r_m, e_kin_t_r_m_global, n_r_max*(l_max+1),&
-           &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      call MPI_Reduce(e_kin_p_r_m, e_kin_p_r_m_global, n_r_max*(l_max+1),  &
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      call MPI_Reduce(e_kin_t_r_m, e_kin_t_r_m_global, n_r_max*(l_max+1),  &
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
       if ( l_mag ) then
-         e_mag_p_r_l_global=e_mag_p_r_l
-         e_mag_t_r_l_global=e_mag_t_r_l
-         e_mag_p_r_m_global=e_mag_p_r_m
-         e_mag_t_r_m_global=e_mag_t_r_m
-         eCMB_global       =eCMB
+         e_mag_p_r_l_global(:,:)=e_mag_p_r_l(:,:)
+         e_mag_t_r_l_global(:,:)=e_mag_t_r_l(:,:)
+         e_mag_p_r_m_global(:,:)=e_mag_p_r_m(:,:)
+         e_mag_t_r_m_global(:,:)=e_mag_t_r_m(:,:)
+         eCMB_global(:)         =eCMB(:)
       end if
       if ( l_anel ) then
-         u2_p_r_l_global=u2_p_r_l
-         u2_t_r_l_global=u2_t_r_l
-         u2_p_r_m_global=u2_p_r_m
-         u2_t_r_m_global=u2_t_r_m
+         u2_p_r_l_global(:,:)=u2_p_r_l(:,:)
+         u2_t_r_l_global(:,:)=u2_t_r_l(:,:)
+         u2_p_r_m_global(:,:)=u2_p_r_m(:,:)
+         u2_t_r_m_global(:,:)=u2_t_r_m(:,:)
       end if
-      e_kin_p_r_l_global=e_kin_p_r_l
-      e_kin_t_r_l_global=e_kin_t_r_l
-      e_kin_p_r_m_global=e_kin_p_r_m
-      e_kin_t_r_m_global=e_kin_t_r_m
+      e_kin_p_r_l_global(:,:)=e_kin_p_r_l(:,:)
+      e_kin_t_r_l_global(:,:)=e_kin_t_r_l(:,:)
+      e_kin_p_r_m_global(:,:)=e_kin_p_r_m(:,:)
+      e_kin_t_r_m_global(:,:)=e_kin_t_r_m(:,:)
 #endif
     
       ! now switch to coord_r 0 for the postprocess
@@ -615,12 +544,12 @@ contains
     
       ! Getting appropriate radius index for e_kin_nearSurf spectra
       nearSurfR = r_icb+0.99_cp
-      do n_r_loc=2,n_r_max
-         if ( r(n_r_loc-1) > nearSurfR .and. r(n_r_loc)  <= nearSurfR ) then
-            if ( r(n_r_loc-1)-nearSurfR < nearSurfR-r(n_r_loc) ) then
-               n_const=n_r_loc-1
+      do n_r=2,n_r_max
+         if ( r(n_r-1) > nearSurfR .and. r(n_r)  <= nearSurfR ) then
+            if ( r(n_r-1)-nearSurfR < nearSurfR-r(n_r) ) then
+               n_const=n_r-1
             else
-               n_const=n_r_loc
+               n_const=n_r
             end if
          end if
       end do
@@ -687,56 +616,51 @@ contains
       if ( l_cond_ic ) then
     
          O_r_icb_E_2=one/(r_ic(1)*r_ic(1))
-         do n_r_loc=1,n_r_ic_max
-            r_ratio=r_ic(n_r_loc)/r_ic(1)
+         do n_r=1,n_r_ic_max
+            r_ratio=r_ic(n_r)/r_ic(1)
             do mc=1,l_max+1
-               e_mag_p_ic_r_m(n_r_loc,mc)=0.0_cp
-               e_mag_t_ic_r_m(n_r_loc,mc)=0.0_cp
+               e_mag_p_ic_r_m(n_r,mc)=0.0_cp
+               e_mag_t_ic_r_m(n_r,mc)=0.0_cp
             end do
             do l=1,l_max
-               e_mag_p_ic_r_l(n_r_loc,l)=0.0_cp
-               e_mag_t_ic_r_l(n_r_loc,l)=0.0_cp
+               e_mag_p_ic_r_l(n_r,l)=0.0_cp
+               e_mag_t_ic_r_l(n_r,l)=0.0_cp
             end do
             !do lm=2,lm_max
             do lm=max(llm,2),ulm
                l =lo_map%lm2l(lm)
                m =lo_map%lm2m(lm)
                mc=m+1
-               r_dr_b=r_ic(n_r_loc)*db_ic(lm,n_r_loc)
+               r_dr_b=r_ic(n_r)*db_ic(lm,n_r)
     
-               e_mag_p_temp=                                        &
-                    dLh(map_glbl_st%lm2(l,m))*O_r_icb_E_2*r_ratio**(2*l) * ( &
-                    real((2*l+1)*(l+1),cp)*cc2real(b_ic(lm,n_r_loc),m)   + &
-                    real(2*(l+1),cp)*cc22real(b_ic(lm,n_r_loc),r_dr_b,m) + &
-                    cc2real(r_dr_b,m) )
-               e_mag_t_temp= dLh(map_glbl_st%lm2(l,m))*r_ratio**(2*l+2) * &
-                    cc2real(aj_ic(lm,n_r_loc),m)
+               e_mag_p_temp=dLh(map_glbl_st%lm2(l,m))*O_r_icb_E_2*r_ratio**(2*l) * ( &
+               &            real((2*l+1)*(l+1),cp)*cc2real(b_ic(lm,n_r),m)   +  &
+               &            real(2*(l+1),cp)*cc22real(b_ic(lm,n_r),r_dr_b,m) +  &
+               &            cc2real(r_dr_b,m) )
+               e_mag_t_temp=dLh(map_glbl_st%lm2(l,m))*r_ratio**(2*l+2) * &
+               &            cc2real(aj_ic(lm,n_r),m)
     
-               e_mag_p_ic_r_l(n_r_loc,l)=e_mag_p_ic_r_l(n_r_loc,l) + &
-                    e_mag_p_temp
-               e_mag_t_ic_r_l(n_r_loc,l)=e_mag_t_ic_r_l(n_r_loc,l) + &
-                    e_mag_t_temp
-               e_mag_p_ic_r_m(n_r_loc,mc)=e_mag_p_ic_r_m(n_r_loc,mc) + &
-                    e_mag_p_temp
-               e_mag_t_ic_r_m(n_r_loc,mc)=e_mag_t_ic_r_m(n_r_loc,mc) + &
-                    e_mag_t_temp
+               e_mag_p_ic_r_l(n_r,l)=e_mag_p_ic_r_l(n_r,l) + e_mag_p_temp
+               e_mag_t_ic_r_l(n_r,l)=e_mag_t_ic_r_l(n_r,l) + e_mag_t_temp
+               e_mag_p_ic_r_m(n_r,mc)=e_mag_p_ic_r_m(n_r,mc) + e_mag_p_temp
+               e_mag_t_ic_r_m(n_r,mc)=e_mag_t_ic_r_m(n_r,mc) + e_mag_t_temp
             end do  ! loop over lm's
          end do ! loop over radial levels
     
 #ifdef WITH_MPI
          call MPI_Reduce(e_mag_p_ic_r_l, e_mag_p_ic_r_l_global, n_r_ic_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
          call MPI_Reduce(e_mag_t_ic_r_l, e_mag_t_ic_r_l_global, n_r_ic_max*l_max,&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-         call MPI_Reduce(e_mag_p_ic_r_m, e_mag_p_ic_r_m_global, n_r_ic_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-         call MPI_Reduce(e_mag_t_ic_r_m, e_mag_t_ic_r_m_global, n_r_ic_max*(l_max+1),&
-              &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+         call MPI_Reduce(e_mag_p_ic_r_m,e_mag_p_ic_r_m_global,n_r_ic_max*(l_max+1),&
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+         call MPI_Reduce(e_mag_t_ic_r_m,e_mag_t_ic_r_m_global,n_r_ic_max*(l_max+1),&
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
-         e_mag_p_ic_r_l_global=e_mag_p_ic_r_l
-         e_mag_t_ic_r_l_global=e_mag_t_ic_r_l
-         e_mag_p_ic_r_m_global=e_mag_p_ic_r_m
-         e_mag_t_ic_r_m_global=e_mag_t_ic_r_m
+         e_mag_p_ic_r_l_global(:,:)=e_mag_p_ic_r_l(:,:)
+         e_mag_t_ic_r_l_global(:,:)=e_mag_t_ic_r_l(:,:)
+         e_mag_p_ic_r_m_global(:,:)=e_mag_p_ic_r_m(:,:)
+         e_mag_t_ic_r_m_global(:,:)=e_mag_t_ic_r_m(:,:)
 #endif
     
     
@@ -744,16 +668,16 @@ contains
             !----- Radial Integrals:
             fac_mag=LFfac*half*eScale
             do l=1,l_max
-               e_mag_p_ic_l(l)=fac_mag*rIntIC(e_mag_p_ic_r_l_global(1,l), &
-                    n_r_ic_max,dr_fac_ic,chebt_ic)
-               e_mag_t_ic_l(l)=fac_mag*rIntIC(e_mag_t_ic_r_l_global(1,l), &
-                    n_r_ic_max,dr_fac_ic,chebt_ic)
+               e_mag_p_ic_l(l)=fac_mag*rIntIC(e_mag_p_ic_r_l_global(1,l),    &
+               &                              n_r_ic_max,dr_fac_ic,chebt_ic)
+               e_mag_t_ic_l(l)=fac_mag*rIntIC(e_mag_t_ic_r_l_global(1,l),    &
+               &                              n_r_ic_max,dr_fac_ic,chebt_ic)
             end do
             do m=1,l_max+1
-               e_mag_p_ic_m(m)=fac_mag*rIntIC(e_mag_p_ic_r_m_global(1,m), &
-                    n_r_ic_max,dr_fac_ic,chebt_ic)
-               e_mag_t_ic_m(m)=fac_mag*rIntIC(e_mag_t_ic_r_m_global(1,m), &
-                    n_r_ic_max,dr_fac_ic,chebt_ic)
+               e_mag_p_ic_m(m)=fac_mag*rIntIC(e_mag_p_ic_r_m_global(1,m),    &
+               &                              n_r_ic_max,dr_fac_ic,chebt_ic)
+               e_mag_t_ic_m(m)=fac_mag*rIntIC(e_mag_t_ic_r_m_global(1,m),    &
+               &                              n_r_ic_max,dr_fac_ic,chebt_ic)
             end do
          end if
       else
@@ -775,30 +699,30 @@ contains
             open(newunit=n_mag_spec_file, file=mag_spec_file, status='unknown')
             if ( n_spec == 0 ) then
                write(n_mag_spec_file,'(1x, &
-                    &      ''Magnetic energy spectra of time averaged field:'')')
+               &           ''Magnetic energy spectra of time averaged field:'')')
             else
                write(n_mag_spec_file,'(1x, &
-                    &      ''Magnetic energy spectra at time:'', &
-                    &      ES20.12)') time*tScale
+               &           ''Magnetic energy spectra at time:'', &
+               &           ES20.12)') time*tScale
             end if
-            write(n_mag_spec_file,'(1p,i4,11ES16.8)')          &
-                 0,0.0_cp,e_mag_p_m(1)   ,0.0_cp,e_mag_t_m(1), &
-                 0.0_cp,e_mag_p_ic_m(1),0.0_cp,e_mag_t_ic_m(1),&
-                 0.0_cp,e_mag_cmb_m(1),0.0_cp
+            write(n_mag_spec_file,'(1p,i4,11ES16.8)')            &
+            &     0,0.0_cp,e_mag_p_m(1)   ,0.0_cp,e_mag_t_m(1),  &
+            &     0.0_cp,e_mag_p_ic_m(1),0.0_cp,e_mag_t_ic_m(1), &
+            &     0.0_cp,e_mag_cmb_m(1),0.0_cp
             do ml=1,l_max
-               write(n_mag_spec_file,'(1p,i4,11ES16.8)') &
-                    ml,e_mag_p_l(ml),   e_mag_p_m(ml+1), &
-                    e_mag_t_l(ml),   e_mag_t_m(ml+1),    &
-                    e_mag_p_ic_l(ml),e_mag_p_ic_m(ml+1), &
-                    e_mag_t_ic_l(ml),e_mag_t_ic_m(ml+1), &
-                    e_mag_cmb_l(ml), e_mag_cmb_m(ml+1),  &
-                    eCMB_global(ml)
+               write(n_mag_spec_file,'(1p,i4,11ES16.8)')  &
+               &     ml,e_mag_p_l(ml),   e_mag_p_m(ml+1), &
+               &     e_mag_t_l(ml),   e_mag_t_m(ml+1),    &
+               &     e_mag_p_ic_l(ml),e_mag_p_ic_m(ml+1), &
+               &     e_mag_t_ic_l(ml),e_mag_t_ic_m(ml+1), &
+               &     e_mag_cmb_l(ml), e_mag_cmb_m(ml+1),  &
+               &     eCMB_global(ml)
             end do
             close(n_mag_spec_file)
     
             mag_spec_file='2D_mag_spec_'//trim(adjustl(string))//'.'//tag
             open(newunit=n_mag_spec_file, file=mag_spec_file, status='unknown', &
-                 form='unformatted')
+            &    form='unformatted')
     
             write(n_mag_spec_file) time*tScale,n_r_max,l_max,minc
             write(n_mag_spec_file) r
@@ -816,23 +740,23 @@ contains
             open(newunit=n_u2_spec_file, file=u2_spec_file, status='unknown')
             if ( n_spec == 0 ) then
                write(n_u2_spec_file,'(1x, &
-                    &     ''Velocity square spectra of time averaged field:'')')
+               &          ''Velocity square spectra of time averaged field:'')')
             else
-               write(n_u2_spec_file,'(1x,                &
-                    &     ''Velocity square spectra at time:'', &
-                    &     ES20.12)') time*tScale
+               write(n_u2_spec_file,'(1x,                       &
+               &          ''Velocity square spectra at time:'', &
+               &          ES20.12)') time*tScale
             end if
             write(n_u2_spec_file,'(1p,i4,4ES16.8)') &
-                 &   0,0.0_cp,u2_p_m(1),0.0_cp,u2_t_m(1)
+            &        0,0.0_cp,u2_p_m(1),0.0_cp,u2_t_m(1)
             do ml=1,l_max
                write(n_u2_spec_file,'(1p,i4,4ES16.8)') &
-                    &       ml,u2_p_l(ml),u2_p_m(ml+1),u2_t_l(ml),u2_t_m(ml+1)
+               &     ml,u2_p_l(ml),u2_p_m(ml+1),u2_t_l(ml),u2_t_m(ml+1)
             end do
             close(n_u2_spec_file)
     
             u2_spec_file='2D_u2_spec_'//trim(adjustl(string))//'.'//tag
             open(newunit=n_u2_spec_file, file=u2_spec_file, status='unknown', &
-                 form='unformatted')
+            &    form='unformatted')
     
             write(n_u2_spec_file) time*tScale,n_r_max,l_max,minc
             write(n_u2_spec_file) r
@@ -850,26 +774,26 @@ contains
          open(newunit=n_kin_spec_file, file=kin_spec_file, status='unknown')
          if ( n_spec == 0 ) then
             write(n_kin_spec_file,'(1x, &
-                 &      ''Kinetic energy spectra of time averaged field:'')')
+            &           ''Kinetic energy spectra of time averaged field:'')')
          else
             write(n_kin_spec_file,'(1x,                      &
-                 &      ''Kinetic energy spectra at time:'', &
-                 &      ES20.12)') time*tScale
+            &           ''Kinetic energy spectra at time:'', &
+            &           ES20.12)') time*tScale
          end if
-         write(n_kin_spec_file,'(1p,i4,6ES16.8)')        &
-              0,0.0_cp,e_kin_p_m(1),0.0_cp,e_kin_t_m(1),    &
-              0.0_cp, e_kin_nearSurf_m(1)
+         write(n_kin_spec_file,'(1p,i4,6ES16.8)')            &
+         &     0,0.0_cp,e_kin_p_m(1),0.0_cp,e_kin_t_m(1),    &
+         &     0.0_cp, e_kin_nearSurf_m(1)
          do ml=1,l_max
             write(n_kin_spec_file,'(1p,i4,6ES16.8)')    &
-                 ml,e_kin_p_l(ml),e_kin_p_m(ml+1),     &
-                 e_kin_t_l(ml),e_kin_t_m(ml+1),        &
-                 e_kin_nearSurf_l(ml), e_kin_nearSurf_m(ml+1)
+            &     ml,e_kin_p_l(ml),e_kin_p_m(ml+1),     &
+            &     e_kin_t_l(ml),e_kin_t_m(ml+1),        &
+            &     e_kin_nearSurf_l(ml), e_kin_nearSurf_m(ml+1)
          end do
          close(n_kin_spec_file)
     
          kin_spec_file='2D_kin_spec_'//trim(adjustl(string))//'.'//tag
          open(newunit=n_kin_spec_file, file=kin_spec_file, status='unknown', &
-              form='unformatted')
+         &    form='unformatted')
     
          write(n_kin_spec_file) time*tScale,n_r_max,l_max,minc
          write(n_kin_spec_file) r
@@ -884,185 +808,24 @@ contains
     
    end subroutine spectrum
 !----------------------------------------------------------------------------
-   subroutine spectrum_temp_average(n_time_ave,l_stop_time,         &
-       &                       time_passed,time_norm,s,ds)
+   subroutine spectrum_temp(n_spec,time,l_avg,n_time_ave,l_stop_time,       &
+              &             time_passed,time_norm,s,ds)
 
       !-- Direct input:
+      real(cp),     intent(in) :: time
       integer,     intent(in) :: n_time_ave
+      integer,     intent(in) :: n_spec
       logical,     intent(in) :: l_stop_time
       real(cp),    intent(in) :: time_passed
       real(cp),    intent(in) :: time_norm
       complex(cp), intent(in) :: s(llm:ulm,n_r_max)
       complex(cp), intent(in) :: ds(llm:ulm,n_r_max)
+      logical,     intent(in) :: l_avg
 
       !-- Local:
-      character(len=72) :: outFile
-      integer :: n_r_loc,lm,l,m,lc
-      real(cp) :: T_temp
-      real(cp) :: dT_temp
-      real(cp) :: surf_ICB
-      real(cp) :: fac,facICB
-      real(cp) :: dt_norm
-
-      real(cp) :: T_r_l(n_r_max,l_max+1),T_r_l_global(n_r_max,l_max+1)
-      real(cp) :: T_l(l_max+1)
-      real(cp) :: T_ICB_l(l_max+1), T_ICB_l_global(l_max+1)
-      real(cp) :: dT_ICB_l(l_max+1), dT_ICB_l_global(l_max+1)
-
-      real(cp) :: comp(l_max+1)
-      !real(cp) :: y,t
-      integer :: nOut,ierr
-
-      T_ICB_l =0.0_cp
-      dT_ICB_l=0.0_cp
-
-      do n_r_loc=1,n_r_max
-         do l=1,l_max+1
-            T_r_l(n_r_loc,l)=0.0_cp
-            comp(l) = 0.0_cp
-         end do
-         do lm=llm,ulm
-            l =lo_map%lm2l(lm)
-            m =lo_map%lm2m(lm)
-            lc=l+1
-
-            T_temp=sqrt(cc2real(s(lm,n_r_loc),m))/or2(n_r_loc)
-
-            !local_sum = 0.0_cp
-            !c = 0.0_cp          !A running compensation for lost low-order bits.
-            !do i=lb,ub
-            !   y = arr_local(i) - c    !So far, so good: c is zero.
-            !   t = local_sum + y       !Alas, sum is big, y small, so low-order digits of y are lost.
-            !   c = (t - local_sum) - y !(t - sum) recovers the high-order part of y; subtracting y recovers -(low part of y)
-            !   local_sum = t           !Algebraically, c should always be zero. Beware eagerly optimising compilers!
-            !   !Next time around, the lost low part will be added to y in a fresh attempt.
-            !end do
-#if 0
-            y = T_temp - comp(lc)
-            t = T_r_l(n_r_loc,lc) + y
-            comp(lc) = (t-T_r_l(n_r_loc,lc)) - y
-            T_r_l(n_r_loc,lc) = t
-#else
-            T_r_l(n_r_loc,lc) =T_r_l(n_r_loc,lc) +  T_temp
-#endif
-
-            if ( n_r_loc == n_r_icb ) then
-               dT_temp=sqrt(cc2real(ds(lm,n_r_loc),m))/or2(n_r_loc)
-               T_ICB_l(lc) =  T_ICB_l(lc) +  T_temp
-               dT_ICB_l(lc)= dT_ICB_l(lc) + dT_temp
-            end if
-         end do    ! do loop over lms in block 
-      end do    ! radial grid points 
-
-      ! Reduction over all ranks
-#ifdef WITH_MPI
-      call MPI_Reduce(T_r_l,T_r_l_global,n_r_max*(l_max+1),&
-           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(T_ICB_l,T_ICB_l_global,l_max+1,&
-           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(dT_ICB_l,dT_ICB_l_global,l_max+1,&
-           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-#else
-      T_r_l_global   =T_r_l
-      T_ICB_l_global =T_ICB_l
-      dT_ICB_l_global=dT_ICB_l
-#endif
-
-      if ( coord_r == 0 .and. l_heat ) then
-         !-- Radial Integrals:
-         surf_ICB=four*pi*r_icb*r_icb
-         fac      =one/vol_oc
-         facICB   =one/surf_ICB
-         do l=1,l_max+1
-            T_l(l)=fac*rInt_R(T_r_l_global(:,l),r,rscheme_oc)
-            T_ICB_l(l)=facICB*T_ICB_l_global(l)
-            dT_ICB_l(l)=facICB*dT_ICB_l_global(l)
-         end do
-
-         !-- Averaging:
-         if ( n_time_ave == 1 ) then
-            do l=1,l_max+1
-               T_ave(l)     =time_passed*T_l(l)
-               T_ICB_ave(l) =time_passed*T_ICB_l(l)
-               dT_ICB_ave(l)=time_passed*dT_ICB_l(l)
-               T2_ave(l)    =time_passed*T_l(l)*T_l(l)
-               T_ICB2_ave(l)=time_passed*T_ICB_l(l)*T_ICB_l(l)
-               dT_ICB2_ave(l)=time_passed*dT_ICB_l(l)*dT_ICB_l(l)
-            end do
-         else
-            do l=1,l_max+1
-               T_ave(l)     =T_ave(l)       +time_passed*T_l(l)
-               T_ICB_ave(l) =T_ICB_ave(l)   +time_passed*T_ICB_l(l)
-               dT_ICB_ave(l)=dT_ICB_ave(l)  +time_passed*dT_ICB_l(l)
-               T2_ave(l)    =T2_ave(l)      +time_passed*T_l(l)*T_l(l)
-               T_ICB2_ave(l)=T_ICB2_ave(l)  +time_passed*T_ICB_l(l)*T_ICB_l(l)
-               dT_ICB2_ave(l)=dT_ICB2_ave(l)+time_passed*dT_ICB_l(l)*dT_ICB_l(l)
-            end do
-         end if
-
-         !-- Output:
-         if ( l_stop_time ) then
-
-            !------ Normalize:
-            dt_norm=one/time_norm
-            do l=1,l_max+1
-               T2_ave(l)     =get_standard_deviation(dt_norm,T_ave(l),T2_ave(l))
-               T_ICB2_ave(l) =get_standard_deviation(dt_norm,T_ICB_ave(l),T_ICB2_ave(l))
-               dT_ICB2_ave(l)=get_standard_deviation(dt_norm,dT_ICB_ave(l),dT_ICB2_ave(l))
-               T_ave(l)      =dt_norm*T_ave(l)
-               T_ICB_ave(l)  =dt_norm*T_ICB_ave(l)
-               dT_ICB_ave(l) =dt_norm*dT_ICB_ave(l)
-            end do
-
-            !------ Output:
-            outFile='T_spec_ave.'//tag
-            open(newunit=nOut,file=outFile,status='unknown')
-            do l=1,l_max+1
-               write(nOut,'(2X,1P,I4,6ES16.8)') l,                 &
-                    &              T_ave(l),T2_ave(l),             &
-                    &              T_ICB_ave(l),T_ICB2_ave(l),     &
-                    &              dT_ICB_ave(l),dT_ICB2_ave(l) 
-            end do
-            close(nOut)
-
-            if ( l_save_out ) then
-               open(newunit=n_log_file, file=log_file, status='unknown', &
-               &    position='append')
-            end if
-            if (rank == 0) write(n_log_file,"(/,A,A)")  &
-            &    ' ! TIME AVERAGED T/C SPECTRA STORED IN FILE: ', outFile
-            if (rank == 0) write(n_log_file,"(A,I5)")  &
-            &    ' !              No. of averaged spectra: ', n_time_ave
-            if ( l_save_out ) close(n_log_file)
-
-         end if
-      end if
-
-   end subroutine spectrum_temp_average
-!----------------------------------------------------------------------------
-   subroutine spectrum_temp(time,n_spec,s,ds)
-      !
-      !  calculates spectra of temperature and composition
-      !
-
-      !-- Input variables:
-      integer,         intent(in) :: n_spec     ! number of spectrum/call, file
-      real(cp),    intent(in) :: time
-      complex(cp), intent(in) :: s(llm:ulm,n_r_max)
-      complex(cp), intent(in) :: ds(llm:ulm,n_r_max)
-
-      !-- Output variables
-      real(cp) :: T_l(l_max+1)
-      real(cp) :: T_m(l_max+1)
-      real(cp) :: T_ICB_l(l_max+1),T_ICB_l_global(l_max+1)
-      real(cp) :: T_ICB_m(l_max+1),T_ICB_m_global(l_max+1)
-      real(cp) :: dT_ICB_l(l_max+1),dT_ICB_l_global(l_max+1)
-      real(cp) :: dT_ICB_m(l_max+1),dT_ICB_m_global(l_max+1)
-
-      !-- Local variables
       character(len=14) :: string
       character(len=72) :: spec_file
-      integer :: n_r_loc,lm,ml,l,mc,m,lc
+      integer :: n_r,lm,l,m,lc,mc
       real(cp) :: T_temp
       real(cp) :: dT_temp
       real(cp) :: surf_ICB
@@ -1070,78 +833,81 @@ contains
 
       real(cp) :: T_r_l(n_r_max,l_max+1),T_r_l_global(n_r_max,l_max+1)
       real(cp) :: T_r_m(n_r_max,l_max+1),T_r_m_global(n_r_max,l_max+1)
+      real(cp) :: T_l(l_max+1), T_m(l_max+1)
+      real(cp) :: T_ICB_l(l_max+1), T_ICB_l_global(l_max+1)
+      real(cp) :: dT_ICB_l(l_max+1), dT_ICB_l_global(l_max+1)
+      real(cp) :: T_ICB_m(l_max+1), T_ICB_m_global(l_max+1)
+      real(cp) :: dT_ICB_m(l_max+1), dT_ICB_m_global(l_max+1)
 
+      integer :: nOut,ierr
 
-      do l=1,l_max+1
-         T_l(l)=0.0_cp
-         T_ICB_l(l)=0.0_cp
-         dT_ICB_l(l)=0.0_cp
-         T_m(l)=0.0_cp
-         T_ICB_m(l)=0.0_cp
-         dT_ICB_m(l)=0.0_cp
-      end do
+      T_l(:)     =0.0_cp
+      T_ICB_l(:) =0.0_cp
+      dT_ICB_l(:)=0.0_cp
+      T_m(:)     =0.0_cp
+      T_ICB_m(:) =0.0_cp
+      dT_ICB_m(:)=0.0_cp
 
-      do n_r_loc=1,n_r_max
-
+      do n_r=1,n_r_max
          do l=1,l_max+1
-            T_r_l(n_r_loc,l)=0.0_cp
+            T_r_l(n_r,l)=0.0_cp
             T_ICB_l(l)  =0.0_cp
             dT_ICB_l(l) =0.0_cp
-            T_r_m(n_r_loc,l)=0.0_cp
+            T_r_m(n_r,l)=0.0_cp
             T_ICB_m(l)  =0.0_cp
             dT_ICB_m(l) =0.0_cp
          end do
-
          do lm=llm,ulm
             l =lo_map%lm2l(lm)
             m =lo_map%lm2m(lm)
             lc=l+1
             mc=m+1
 
-            T_temp=sqrt(cc2real(s(lm,n_r_loc),m))/or2(n_r_loc)
-            dT_temp=sqrt(cc2real(ds(lm,n_r_loc),m))/or2(n_r_loc)
+            T_temp =sqrt(cc2real(s(lm,n_r),m))/or2(n_r)
+            dT_temp=sqrt(cc2real(ds(lm,n_r),m))/or2(n_r)
+
             !----- l-spectra:
-            T_r_l(n_r_loc,lc) =T_r_l(n_r_loc,lc) +  T_temp
+            T_r_l(n_r,lc)=T_r_l(n_r,lc) + T_temp
             !----- m-spectra:
-            T_r_m(n_r_loc,mc)=T_r_m(n_r_loc,mc) + T_temp
+            T_r_m(n_r,mc)=T_r_m(n_r,mc) + T_temp
 
             !----- ICB spectra:
-            if ( n_r_loc == n_r_icb ) then
+            if ( n_r == n_r_icb ) then
                T_ICB_l(lc) =T_ICB_l(lc) +T_temp
-               T_ICB_m(mc)=T_ICB_m(mc)+T_temp
-               dT_ICB_l(lc) =dT_ICB_l(lc) +dT_temp
+               T_ICB_m(mc) =T_ICB_m(mc) +T_temp
+               dT_ICB_l(lc)=dT_ICB_l(lc)+dT_temp
                dT_ICB_m(mc)=dT_ICB_m(mc)+dT_temp
             end if
-         end do
 
-      end do
+         end do    ! do loop over lms in block 
+      end do    ! radial grid points 
 
-      ! reduction over all ranks
+      ! Reduction over all ranks
 #ifdef WITH_MPI
-      call MPI_Reduce(T_r_l,T_r_l_global,n_r_max*(l_max+1),&
+      call MPI_Reduce(T_r_l,T_r_l_global,n_r_max*(l_max+1),      &
            &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(T_r_m,T_r_m_global,n_r_max*(l_max+1),&
+      call MPI_Reduce(T_r_m,T_r_m_global,n_r_max*(l_max+1),      &
            &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(T_ICB_l,T_ICB_l_global,l_max+1,&
+      call MPI_Reduce(T_ICB_l,T_ICB_l_global,l_max+1,            &
            &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(T_ICB_m,T_ICB_m_global,l_max+1,&
+      call MPI_Reduce(T_ICB_m,T_ICB_m_global,l_max+1,            &
            &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(dT_ICB_l,dT_ICB_l_global,l_max+1,&
+      call MPI_Reduce(dT_ICB_l,dT_ICB_l_global,l_max+1,          &
            &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(dT_ICB_m,dT_ICB_m_global,l_max+1,&
+      call MPI_Reduce(dT_ICB_m,dT_ICB_m_global,l_max+1,          &
            &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
-      T_r_l_global   =T_r_l
-      T_r_m_global   =T_r_m
-      T_ICB_l_global =T_ICB_l
-      T_ICB_m_global =T_ICB_m
-      dT_ICB_l_global=dT_ICB_l
-      dT_ICB_m_global=dT_ICB_m
+      T_r_l_global(:,:) =T_r_l(:,:)
+      T_r_m_global(:,:) =T_r_m(:,:)
+      T_ICB_l_global(:) =T_ICB_l(:)
+      T_ICB_m_global(:) =T_ICB_m(:)
+      dT_ICB_l_global(:)=dT_ICB_l(:)
+      dT_ICB_m_global(:)=dT_ICB_m(:)
 #endif
 
-      if ( coord_r == 0 ) then
+      if ( coord_r == 0 .and. l_heat ) then
          !-- Radial Integrals:
-         surf_ICB =four*pi*r_icb*r_icb
+         surf_ICB=four*pi*r_icb*r_icb
          fac      =one/vol_oc
          facICB   =one/surf_ICB
          do l=1,l_max+1
@@ -1155,17 +921,70 @@ contains
             dT_ICB_m(m)=facICB*dT_ICB_m_global(m)
          end do
 
-         !-- Output into files:
-         write(string, *) n_spec
-         spec_file='T_spec_'//trim(adjustl(string))//'.'//tag
-         open(newunit=n_temp_spec_file, file=spec_file, status='unknown')
-         write(n_temp_spec_file,'(1x,''TC spectra at time:'', ES20.12)') time*tScale
-         do ml=1,l_max+1
-            write(n_temp_spec_file,'(1P,I4,6ES12.4)')   &
-            &     ml-1, T_l(ml), T_m(ml),  T_ICB_l(ml), &
-            &     T_ICB_m(ml), dT_ICB_l(ml), dT_ICB_m(ml)
-         end do
-         close(n_temp_spec_file)
+         if ( l_avg ) then
+            !-- Averaging:
+            call get_mean_sd(T_l_ave, T_l_SD, T_l, n_time_ave, time_passed, time_norm)
+            call get_mean_sd(T_ICB_l_ave, T_ICB_l_SD, T_ICB_l, n_time_ave, &
+                 &           time_passed, time_norm)
+            call get_mean_sd(dT_ICB_l_ave, dT_ICB_l_SD, dT_ICB_l, n_time_ave, &
+                 &           time_passed, time_norm)
+            call get_mean_sd(T_m_ave, T_m_SD, T_l, n_time_ave, time_passed, time_norm)
+            call get_mean_sd(T_ICB_m_ave, T_ICB_m_SD, T_ICB_l, n_time_ave, &
+                 &           time_passed, time_norm)
+            call get_mean_sd(dT_ICB_m_ave, dT_ICB_m_SD, dT_ICB_l, n_time_ave, &
+                 &           time_passed, time_norm)
+
+            !-- Output:
+            if ( l_stop_time ) then
+
+               T_l_SD(:)     =sqrt(T_l_SD(:)/time_norm)
+               T_ICB_l_SD(:) =sqrt(T_ICB_l_SD(:)/time_norm)
+               dT_ICB_l_SD(:)=sqrt(dT_ICB_l_SD(:)/time_norm)
+               T_m_SD(:)     =sqrt(T_m_SD(:)/time_norm)
+               T_ICB_m_SD(:) =sqrt(T_ICB_m_SD(:)/time_norm)
+               dT_ICB_m_SD(:)=sqrt(dT_ICB_m_SD(:)/time_norm)
+
+               !------ Output:
+               spec_file='T_spec_ave.'//tag
+               open(newunit=nOut,file=spec_file,status='unknown')
+               do l=1,l_max+1
+                  write(nOut,'(2X,1P,I4,12ES16.8)') l-1, T_l_ave(l), T_m_ave(l),  &
+                  &                              T_ICB_l_ave(l), T_ICB_m_ave(l),  &
+                  &                            dT_ICB_l_ave(l), dT_ICB_m_ave(l),  &
+                  &                                        T_l_SD(l), T_m_SD(l),  &
+                  &                                T_ICB_l_SD(l), T_ICB_m_SD(l),  &
+                  &                              dT_ICB_l_SD(l), dT_ICB_m_SD(l)
+               end do
+               close(nOut)
+
+               if ( l_save_out ) then
+                  open(newunit=n_log_file, file=log_file, status='unknown', &
+                  &    position='append')
+               end if
+               write(n_log_file,"(/,A,A)")  &
+               &    ' ! TIME AVERAGED T/C SPECTRA STORED IN FILE: ', spec_file
+               write(n_log_file,"(A,I5)")  &
+               &    ' !              No. of averaged spectra: ', n_time_ave
+               if ( l_save_out ) close(n_log_file)
+
+            end if
+
+         else ! Just one spectrum
+
+            !-- Output into files:
+            write(string, *) n_spec
+            spec_file='T_spec_'//trim(adjustl(string))//'.'//tag
+            open(newunit=n_temp_spec_file, file=spec_file, status='unknown')
+            write(n_temp_spec_file,'(1x,''TC spectra at time:'', ES20.12)')  &
+            &     time*tScale
+            do l=0,l_max
+               write(n_temp_spec_file,'(1P,I4,6ES12.4)') l, T_l(l+1), T_m(l+1),   &
+               &                                    T_ICB_l(l+1), T_ICB_m(l+1),   &
+               &                                  dT_ICB_l(l+1), dT_ICB_m(l+1)
+            end do
+            close(n_temp_spec_file)
+
+         end if
 
       end if
 
@@ -1187,7 +1006,7 @@ contains
       real(cp) :: e_kin_p_m(0:l_max),e_kin_t_m(0:l_max)
 
       !-- Local variables:
-      integer :: n_r_loc,lm,l,m
+      integer :: n_r,lm,l,m
 
       real(cp) :: e_mag_p_temp,e_mag_t_temp
       real(cp) :: e_kin_p_temp,e_kin_t_temp
@@ -1198,15 +1017,15 @@ contains
       real(cp) :: e_kin_p_r_m(n_r_max,0:l_max),e_kin_p_r_m_global(n_r_max,0:l_max)
       real(cp) :: e_kin_t_r_m(n_r_max,0:l_max),e_kin_t_r_m_global(n_r_max,0:l_max)
 
-      do n_r_loc=1,n_r_max
+      do n_r=1,n_r_max
 
          do m=0,l_max
             if ( l_mag ) then
-               e_mag_p_r_m(n_r_loc,m)=0.0_cp
-               e_mag_t_r_m(n_r_loc,m)=0.0_cp
+               e_mag_p_r_m(n_r,m)=0.0_cp
+               e_mag_t_r_m(n_r,m)=0.0_cp
             end if
-            e_kin_p_r_m(n_r_loc,m)=0.0_cp
-            e_kin_t_r_m(n_r_loc,m)=0.0_cp
+            e_kin_p_r_m(n_r,m)=0.0_cp
+            e_kin_t_r_m(n_r,m)=0.0_cp
          end do
 
          do lm=max(llm,2),ulm
@@ -1215,24 +1034,23 @@ contains
             m  =lo_map%lm2m(lm)
 
             if ( l_mag ) then
-               e_mag_p_temp= dLh(map_glbl_st%lm2(l,m)) * ( &
-                       & dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(b(lm,n_r_loc),m) + &
-                       & cc2real(db(lm,n_r_loc),m) )
-               e_mag_t_temp=dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,n_r_loc),m)     
+               e_mag_p_temp=dLh(map_glbl_st%lm2(l,m)) * ( dLh(map_glbl_st%lm2(l,m))*    &
+               &            or2(n_r)*cc2real(b(lm,n_r),m) + cc2real(db(lm,n_r),m) )
+               e_mag_t_temp=dLh(map_glbl_st%lm2(l,m))*cc2real(aj(lm,n_r),m)     
             end if
 
-            e_kin_p_temp= orho1(n_r_loc)*dLh(map_glbl_st%lm2(l,m)) *  ( &
-                   &      dLh(map_glbl_st%lm2(l,m))*or2(n_r_loc)*cc2real(w(lm,n_r_loc),m) + &
-                   &      cc2real(dw(lm,n_r_loc),m) )
-            e_kin_t_temp=orho1(n_r_loc)*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,n_r_loc),m)
+            e_kin_p_temp=orho1(n_r)*dLh(map_glbl_st%lm2(l,m)) *  (                 &
+            &            dLh(map_glbl_st%lm2(l,m))*or2(n_r)*cc2real(w(lm,n_r),m) + &
+            &            cc2real(dw(lm,n_r),m) )
+            e_kin_t_temp=orho1(n_r)*dLh(map_glbl_st%lm2(l,m))*cc2real(z(lm,n_r),m)
 
             !----- m-spectra:
             if ( l_mag ) then
-               e_mag_p_r_m(n_r_loc,m)=e_mag_p_r_m(n_r_loc,m)+e_mag_p_temp
-               e_mag_t_r_m(n_r_loc,m)=e_mag_t_r_m(n_r_loc,m)+e_mag_t_temp
+               e_mag_p_r_m(n_r,m)=e_mag_p_r_m(n_r,m)+e_mag_p_temp
+               e_mag_t_r_m(n_r,m)=e_mag_t_r_m(n_r,m)+e_mag_t_temp
             end if
-            e_kin_p_r_m(n_r_loc,m)=e_kin_p_r_m(n_r_loc,m)+e_kin_p_temp                 
-            e_kin_t_r_m(n_r_loc,m)=e_kin_t_r_m(n_r_loc,m)+e_kin_t_temp      
+            e_kin_p_r_m(n_r,m)=e_kin_p_r_m(n_r,m)+e_kin_p_temp                 
+            e_kin_t_r_m(n_r,m)=e_kin_t_r_m(n_r,m)+e_kin_t_temp      
 
          end do    ! do loop over lms in block 
 
@@ -1240,21 +1058,21 @@ contains
 
 #ifdef WITH_MPI
       if ( l_mag ) then
-         call MPI_Reduce(e_mag_p_r_m, e_mag_p_r_m_global, n_r_max*(l_max+1),&
-                 &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-         call MPI_Reduce(e_mag_t_r_m, e_mag_t_r_m_global, n_r_max*(l_max+1),&
-                 &MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+         call MPI_Reduce(e_mag_p_r_m, e_mag_p_r_m_global, n_r_max*(l_max+1), &
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+         call MPI_Reduce(e_mag_t_r_m, e_mag_t_r_m_global, n_r_max*(l_max+1), &
+              &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
       end if
 
-      call MPI_Reduce(e_kin_p_r_m, e_kin_p_r_m_global, n_r_max*(l_max+1),&
-              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
-      call MPI_Reduce(e_kin_t_r_m, e_kin_t_r_m_global, n_r_max*(l_max+1),&
-              & MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      call MPI_Reduce(e_kin_p_r_m, e_kin_p_r_m_global, n_r_max*(l_max+1), &
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
+      call MPI_Reduce(e_kin_t_r_m, e_kin_t_r_m_global, n_r_max*(l_max+1), &
+           &          MPI_DEF_REAL,MPI_SUM,0,comm_r,ierr)
 #else
-      e_mag_p_r_m_global=e_mag_p_r_m
-      e_mag_t_r_m_global=e_mag_t_r_m
-      e_kin_p_r_m_global=e_kin_p_r_m
-      e_kin_t_r_m_global=e_kin_t_r_m
+      e_mag_p_r_m_global(:,:)=e_mag_p_r_m(:,:)
+      e_mag_t_r_m_global(:,:)=e_mag_t_r_m(:,:)
+      e_kin_p_r_m_global(:,:)=e_kin_p_r_m(:,:)
+      e_kin_t_r_m_global(:,:)=e_kin_t_r_m(:,:)
 #endif
 
       if ( coord_r == 0 ) then
@@ -1274,7 +1092,7 @@ contains
          !-- Output
          if ( l_save_out ) then
             open(newunit=n_am_kpol_file,file=am_kpol_file,status='unknown', &
-                 & form='unformatted',position='append')
+            &    form='unformatted',position='append')
          end if
 
          if (rank == 0) write(n_am_kpol_file) time,(e_kin_p_m(m),m=0,m_max_modes)
@@ -1285,7 +1103,7 @@ contains
 
          if ( l_save_out ) then
             open(newunit=n_am_ktor_file,file=am_ktor_file,status='unknown', &
-                 & form='unformatted',position='append')
+            &    form='unformatted',position='append')
          end if
 
          if (rank == 0) write(n_am_ktor_file) time,(e_kin_t_m(m),m=0,m_max_modes)
@@ -1297,7 +1115,7 @@ contains
          if ( l_mag ) then
             if ( l_save_out ) then
                open(newunit=n_am_mpol_file,file=am_mpol_file,status='unknown', &
-                    & form='unformatted',position='append')
+               &    form='unformatted',position='append')
             end if
 
             if (rank == 0) write(n_am_mpol_file) time,(e_mag_p_m(m),m=0,m_max_modes)
@@ -1308,7 +1126,7 @@ contains
 
             if ( l_save_out ) then
                open(newunit=n_am_mtor_file,file=am_mtor_file,status='unknown', &
-                    & form='unformatted',position='append')
+               &    form='unformatted',position='append')
             end if
 
             if (rank == 0) write(n_am_mtor_file) time,(e_mag_t_m(m),m=0,m_max_modes)

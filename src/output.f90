@@ -9,8 +9,8 @@ module output_mod
        &                 n_r_cmb, n_r_icb
    use radial_functions, only: or1, or2, r, rscheme_oc, r_cmb, r_icb,  &
        &                       orho1, sigma
-   use physical_parameters, only: opm,ek,ktopv,prmag,nVarCond,LFfac
-   use num_param, only: tScale
+   use physical_parameters, only: opm,ek,ktopv,prmag,nVarCond,LFfac,ekScaled
+   use num_param, only: tScale,eScale
    use blocking, only: lo_map
    use horizontal_data, only: dLh,hdif_B,dPl0Eq
    use logic, only: l_average, l_mag, l_power, l_anel, l_mag_LF, lVerbose, &
@@ -31,8 +31,7 @@ module output_mod
    use kinetic_energy, only: get_e_kin, get_u_square
    use magnetic_energy, only: get_e_mag
    use fields_average_mod, only: fields_average
-   use spectra, only: spectrum_average, spectrum, spectrum_temp, &
-       &              spectrum_temp_average, get_amplitude
+   use spectra, only: spectrum_average, spectrum, spectrum_temp, get_amplitude
    use outTO_mod, only: outTO
    use output_data, only: tag, l_max_cmb, n_coeff_r, l_max_r, n_coeff_r_max,&
        &                  n_r_array, n_r_step,  n_log_file, log_file,       &
@@ -511,8 +510,8 @@ contains
                  &                dw_LMloc,'V')
 
             if ( l_heat ) then
-               call spectrum_temp_average(nLogs,l_stop_time,timePassedLog, &
-                    &                     timeNormLog,s_LMloc,ds_LMloc)
+               call spectrum_temp(n_spec,time,.true.,nLogs,l_stop_time,     &
+                    &             timePassedLog,timeNormLog,s_LMloc,ds_LMloc)
             end if
   
             if ( l_mag ) then
@@ -541,8 +540,8 @@ contains
                   eTot   =e_kin+e_mag+e_mag_ic+e_mag_os+eKinIC+eKinMA
                   dtE    =(eTot-eTotOld)/timePassedLog
                   dtEint =dtEint+timePassedLog*(eTot-eTotOld)
-                  if (rank == 0) write(n_dtE_file,'(ES20.12,3ES16.6)') time,dtE,         &
-                       &                    dtEint/timeNormLog,dtE/eTot
+                  write(n_dtE_file,'(ES20.12,3ES16.6)') timeScaled,dtE,   &
+                  &     dtEint/timeNormLog,dtE/eTot
                   if ( l_save_out ) close(n_dtE_file)
                else
                   eTot  =e_kin+e_mag+e_mag_ic+e_mag_os+eKinIC+eKinMA
@@ -572,6 +571,7 @@ contains
             dlVRu2c = 0.0_cp
          end if
   
+         
          if ( l_perpPar ) then
             call outPerpPar(time,timePassedLog,timeNormLog,l_stop_time, &
                  &          EperpLMr,EparLMr,EperpaxiLMr,EparaxiLMr)
@@ -617,8 +617,27 @@ contains
          n_spec=n_spec+1
          call spectrum(time,n_spec,w_LMloc,dw_LMloc,z_LMloc,b_LMloc,  &
               &        db_LMloc,aj_LMloc,b_ic_LMloc,db_ic_LMloc,aj_ic_LMloc)
-         if ( l_heat ) call spectrum_temp(time,n_spec,s_LMloc,ds_LMloc)
-         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  spectrum  on coord_r ",coord_r
+         if ( l_heat ) then
+            call spectrum_temp(n_spec,time,.false.,nLogs,l_stop_time,     &
+                 &             timePassedLog,timeNormLog,s_LMloc,ds_LMloc)
+         end if
+         if ( rank == 0 ) then
+            write(*,'(1p,/,A,/,A,ES20.10,/,A,i15,/,A,A)')&
+            &    " ! Storing spectra:",                  &
+            &    "             at time=",timeScaled,     &
+            &    "            step no.=",n_time_step
+
+            if ( l_save_out ) then
+               open(newunit=n_log_file, file=log_file, status='unknown', &
+               &    position='append')
+            end if
+            write(n_log_file,'(1p,/,A,/,A,ES20.10,/,A,i15,/,A,A)') &
+            &    " ! Storing spectra:",                            &
+            &    "             at time=",timeScaled,               &
+            &    "            step no.=",n_time_step
+            if ( l_save_out ) close(n_log_file)
+         end if
+         if (DEBUG_OUTPUT) write(*,"(A,I6)") "Written  spectrum  on rank ",rank
       end if
   
       if ( lTOCalc ) then
@@ -828,16 +847,17 @@ contains
             !    performed for l_log=.true.
             
             !----- Getting the property parameters:
-            Re     = sqrt(two*e_kin/vol_oc)/sqrt(mass)
-            if ( abs(e_kin_nas) <= 10.0_cp * epsilon(mass) ) e_kin_nas=0.0_cp
-            ReConv = sqrt(two*e_kin_nas/vol_oc)/sqrt(mass)
+            Re     = sqrt(two*e_kin/vol_oc/eScale)/sqrt(mass)
+            if ( ( abs(e_kin_nas) <= 10.0_cp * epsilon(mass) ) .or. &
+            &     e_kin_nas < 0.0_cp ) e_kin_nas=0.0_cp
+            ReConv = sqrt(two*e_kin_nas/vol_oc/eScale)/sqrt(mass)
   
             if ( l_non_rot ) then
                Ro=0.0_cp
                RoConv=0.0_cp
             else
-               Ro=Re*ek
-               RoConv=ReConv*ek
+               Ro=Re*ekScaled
+               RoConv=ReConv*ekScaled
             end if
   
             if ( dlV /= 0.0_cp ) then
@@ -866,19 +886,21 @@ contains
             if ( l_mag .or. l_mag_LF ) then
                El   =elsAnel/vol_oc
                ElCmb=two*e_mag_cmb/surf_cmb/LFfac*sigma(n_r_cmb)*orho1(n_r_cmb)
+               ! Elsasser must not depend of timescale
+               ElCmb=ElCmb/eScale
             else
                El   =0.0_cp
                ElCmb=0.0_cp
             end if
             if ( l_power ) then
                if ( visDiss /= 0.0_cp ) then
-                  lvDiss=sqrt(e_kin/abs(visDiss))            ! Viscous diffusion
+                  lvDiss=sqrt(two*e_kin/abs(visDiss)) ! Viscous dissipation lengthscale
                else
                   lvDiss=0.0_cp
                end if
                if ( l_mag .or. l_mag_LF ) then
                   if ( ohmDiss /= 0.0_cp ) then
-                     lbDiss=sqrt((e_mag+e_mag_ic)/abs(ohmDiss)) ! Ohmic diffusion 
+                     lbDiss=sqrt(two*opm*(e_mag+e_mag_ic)/abs(ohmDiss)) ! Ohmic dissipation lengthscale
                   else
                      lbDiss=0.0_cp
                   end if
@@ -894,23 +916,23 @@ contains
             if ( l_save_out ) then
                open(newunit=n_par_file, file=par_file, status='unknown', &
                &    position='append')
+               write(n_par_file,'(ES20.12,18ES8.2)')  &
+                  &             timeScaled,          &! 1) time
+                  &                     Rm,          &! 2) (magnetic) Reynolds number 
+                  &                     El,          &! 3) Elsasser number
+                  &                    Rol,          &! 4) local Rossby number
+                  &                   Geos,          &! 5) Geostrophy measure
+                  &                    Dip,          &! 6) Dipolarity
+                  &                 DipCMB,          &! 7) CMB dipolarity
+                  &        dlV,dmV,dpV,dzV,          &! 8,9,10,11) flow length scales
+                  &          lvDiss,lbDiss,          &! 12,13) dissipation length scales
+                  &                dlB,dmB,          &! 14,15) magnetic length scales
+                  &                  ElCmb,          &! 16) Elsasser number at CMB
+                  &                   RolC,          &! 17) Local Rol based on non-as flow
+                  &                   dlVc,          &! 18) convective flow length scale
+                  &                 ReEquat           ! 19) CMB flow at the equator
+               close(n_par_file)
             end if
-            if (rank == 0) write(n_par_file,'(ES20.12,18ES16.8)')  &
-                 &                   time,          &! 1) time
-                 &                     Rm,          &! 2) (magnetic) Reynolds number 
-                 &                     El,          &! 3) Elsasser number
-                 &                    Rol,          &! 4) local Rossby number
-                 &                   Geos,          &! 5) Geostrophy measure
-                 &                    Dip,          &! 6) Dipolarity
-                 &                 DipCMB,          &! 7) CMB dipolarity
-                 &        dlV,dmV,dpV,dzV,          &! 8,9,10,11) flow length scales
-                 &          lvDiss,lbDiss,          &! 12,13) dissipation length scales
-                 &                dlB,dmB,          &! 14,15) magnetic length scales
-                 &                  ElCmb,          &! 16) Elsasser number at CMB
-                 &                   RolC,          &! 17) Local Rol based on non-as flow
-                 &                   dlVc,          &! 18) convective flow length scale
-                 &                 ReEquat           ! 19) CMB flow at the equator
-            if ( l_save_out ) close(n_par_file)
   
             !---- Building time mean:
             RmMean     =RmMean     +timePassedLog*Rm

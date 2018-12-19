@@ -8,10 +8,10 @@ from .libmagic import fast_read,scanDir
 
 class MagicRadial(MagicSetup):
     """
-    This class can be used to read and display the time and 
+    This class can be used to read and display the time and
     horizontally averaged files:
 
-        * Kinetic energy: :ref:`eKinR.TAG <secEkinRFile>` 
+        * Kinetic energy: :ref:`eKinR.TAG <secEkinRFile>`
         * Magnetic energy: :ref:`eMagR.TAG <secEmagRfile>`
         * Anelastic reference state: :ref:`anel.TAG <secAnelFile>`
         * Variable electrical conductivity: :ref:`varCond.TAG <secVarCondFile>`
@@ -28,7 +28,7 @@ class MagicRadial(MagicSetup):
     >>> print(rad.radius, rad.ekin_pol_axi) # print radius and poloidal energy
     """
 
-    def __init__(self, datadir='.', field='eKin', iplot=True, tag=None, tags=None):
+    def __init__(self, datadir='.', field='eKin', iplot=True, tag=None, tags=None, normalize_radius=False):
         """
         :param datadir: working directory
         :type datadir: str
@@ -72,12 +72,14 @@ class MagicRadial(MagicSetup):
         else:
             print('No corresponding radial profiles... Try again')
 
+        self.normalize_radius = normalize_radius
+
         if tags is None:
             if tag is not None:
                 file = '%s.%s' % (self.name, tag)
                 filename = os.path.join(datadir, file)
                 if os.path.exists('log.%s' % tag):
-                    MagicSetup.__init__(self, datadir=datadir, quiet=True, 
+                    MagicSetup.__init__(self, datadir=datadir, quiet=True,
                                         nml='log.%s' % tag)
             else:
                 pattern = os.path.join(datadir, '%s.*'% self.name)
@@ -88,7 +90,7 @@ class MagicRadial(MagicSetup):
                 ending = mask.search(files[-1]).groups(0)[0]
                 if os.path.exists('log.%s' % ending):
                     try:
-                        MagicSetup.__init__(self, datadir=datadir, quiet=True, 
+                        MagicSetup.__init__(self, datadir=datadir, quiet=True,
                                         nml='log.%s' % ending)
                     except AttributeError:
                         pass
@@ -120,6 +122,13 @@ class MagicRadial(MagicSetup):
                             self.gradT2 = data[:, 5]*(nml.stop_time-nml.start_time)
                             gradT2init = nml.start_time
                             gradT2finish = nml.stop_time
+
+                    elif self.name == 'powerR':
+                        data = fast_read(filename, skiplines=0)*(nml.stop_time-nml.start_time)
+                        if data.shape[1] == 4: # in that case insert an extra column
+                            zero = np.zeros(data.shape[0], 'Float64')
+                            data = np.insert(data, 1, zero, axis=1)
+
                     else:
                         data = fast_read(filename, skiplines=0)*(nml.stop_time-nml.start_time)
                 else:
@@ -137,6 +146,13 @@ class MagicRadial(MagicSetup):
                                     self.gradT2 = dat[:, 5]*(nml.stop_time-nml.start_time)
                                     gradT2init = nml.start_time
                                     gradT2finish = nml.stop_time
+                    elif self.name == 'powerR':
+                        if os.path.exists(filename):
+                            dat = fast_read(filename, skiplines=0)
+                            if dat.shape[1] == 4: # in that case insert an extra column
+                                zero = np.zeros(dat.shape[0], 'Float64')
+                                dat = np.insert(dat, 1, zero, axis=1)
+                            data += dat*(nml.stop_time-nml.start_time)
                     elif self.name == 'eKinR':
                         if os.path.exists(filename):
                             dat = fast_read(filename, skiplines=0)
@@ -195,6 +211,23 @@ class MagicRadial(MagicSetup):
                 self.dsdr = data[:, 6]
             except IndexError:
                 self.dsdr = np.zeros_like(self.radius)
+            try:
+                self.divkgradT = data[:, 7]
+            except IndexError:
+                self.divkgradT = np.zeros_like(self.radius)
+            try:
+                self.alpha0 = data[:, 8]
+            except IndexError:
+                self.alpha0 = np.zeros_like(self.radius)
+            try:
+                self.ogrun = data[:, 9]
+            except IndexError:
+                self.ogrun = np.zeros_like(self.radius)
+            try:
+                self.dLtemp0 = data[:, 10]
+            except IndexError:
+                self.dLtemp0 = np.zeros_like(self.radius)
+
         elif self.name == 'varDiff':
             self.radius = data[:, 0]
             self.conduc = data[:, 1]
@@ -284,6 +317,11 @@ class MagicRadial(MagicSetup):
         """
         Display the result when ``iplot=True``
         """
+        if self.normalize_radius:
+            x_axis = self.radius/self.radius[0]
+        else:
+            x_axis = self.radius
+
         if self.name == 'eKinR':
             fig = plt.figure()
             ax = fig.add_subplot(111)
@@ -333,28 +371,28 @@ class MagicRadial(MagicSetup):
         elif self.name == 'anel':
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            ax.semilogy(self.radius, self.temp0, label='Temperature')
-            ax.semilogy(self.radius, self.rho0, label='Density')
+            ax.semilogy(x_axis, self.temp0, label='Temperature')
+            ax.semilogy(x_axis, self.rho0, label='Density')
             ax.set_ylabel('Reference state')
             ax.set_xlabel('Radius')
-            ax.set_xlim(self.radius.min(), self.radius.max())
+            ax.set_xlim(x_axis.min(), x_axis.max())
             ax.legend(loc='best', frameon=False)
 
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            ax.plot(self.radius, self.beta, label='beta')
-            ax.plot(self.radius, self.dbeta, label='dbeta/dr')
+            ax.plot(x_axis, self.beta, label='beta')
+            ax.plot(x_axis, self.dbeta, label='dbeta/dr')
             ax.set_xlabel('Radius')
             ax.set_ylabel('Derivatives of rho')
-            ax.set_xlim(self.radius.min(), self.radius.max())
+            ax.set_xlim(x_axis.min(), x_axis.max())
             ax.legend(loc='best', frameon=False)
 
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            ax.plot(self.radius, self.grav)
+            ax.plot(x_axis, self.grav)
             ax.set_xlabel('Radius')
-            ax.set_xlabel('Gravity')
-            ax.set_xlim(self.radius.min(), self.radius.max())
+            ax.set_ylabel('Gravity')
+            ax.set_xlim(x_axis.min(), x_axis.max())
         elif self.name == 'varDiff':
             fig = plt.figure()
             ax = fig.add_subplot(111)
@@ -365,7 +403,7 @@ class MagicRadial(MagicSetup):
             ax.set_xlabel('Radius')
             ax.set_xlim(self.radius.min(), self.radius.max())
             ax.legend(loc='best', frameon=False)
-            
+
             fig = plt.figure()
             ax = fig.add_subplot(111)
             ax.plot(self.radius, self.dLkappa, label='dLkappa')
@@ -384,10 +422,10 @@ class MagicRadial(MagicSetup):
             ax.set_xlabel('Radius')
             ax.set_xlim(self.radius.min(), self.radius.max())
             ax.legend(loc='best', frameon=False)
-            
+
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            axplot(self.radius, self.dLvisc, label='dLvisc')
+            ax.plot(self.radius, self.dLvisc, label='dLvisc')
             ax.set_xlabel('Radius')
             ax.set_ylabel(r'$d\ln\nu / dr$')
             ax.set_xlim(self.radius.min(), self.radius.max())
@@ -415,7 +453,7 @@ class MagicRadial(MagicSetup):
             ax = fig.add_subplot(111)
             ax.plot(self.radius, self.entropy, label='entropy')
             ax.twinx()
-            ax.plot(self.radius, self.varS/self.varS.max(), 
+            ax.plot(self.radius, self.varS/self.varS.max(),
                     label='entropy variance')
             ax.set_xlabel('Radius')
             ax.set_xlim(self.radius.min(), self.radius.max())
@@ -431,18 +469,18 @@ class MagicRadial(MagicSetup):
         elif self.name == 'parR':
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            ax.plot(self.radius, self.rm)
-            ax.set_xlim(self.radius.min(), self.radius.max())
+            ax.plot(x_axis, self.rm)
+            ax.set_xlim(x_axis.min(), x_axis.max())
             ax.set_xlabel('Radius')
             ax.set_ylabel('Rm')
 
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            ax.plot(self.radius, self.rol, label='Rol')
-            ax.plot(self.radius, self.urol, label='u Rol')
+            ax.plot(x_axis, self.rol, label='Rol')
+            ax.plot(x_axis, self.urol, label='u Rol')
             ax.set_xlabel('Radius')
             ax.set_ylabel('Rol')
-            ax.set_xlim(self.radius.min(), self.radius.max())
+            ax.set_xlim(x_axis.min(), x_axis.max())
             ax.legend(loc='best', frameon=False)
         elif self.name == 'fluxesR':
             fig = plt.figure()

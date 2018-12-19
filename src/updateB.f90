@@ -25,7 +25,7 @@ module updateB_mod
    use RMS, only: dtBPolLMr, dtBPol2hInt, dtBTor2hInt
    use constants, only: pi, zero, one, two, three, half
    use special
-   use algebra, only: cgeslML, prepare_mat
+   use algebra, only: prepare_mat, solve_mat
    use LMLoop_data, only: llmMag,ulmMag
    use parallel_mod, only:  coord_r,chunksize
    use RMS_helpers, only: hInt2PolLM, hInt2TorLM
@@ -328,12 +328,12 @@ contains
             if ( .not. lBmat(l1) ) then
 #ifdef WITH_PRECOND_BJ
                call get_bMat(dt,l1,hdif_B(map_glbl_st%lm2(l1,0)),           &
-                    &        bMat(1,1,l1),bPivot(1,l1), bMat_fac(1,l1),&
-                    &        jMat(1,1,l1),jPivot(1,l1), jMat_fac(1,l1))
+                    &        bMat(:,:,l1),bPivot(:,l1), bMat_fac(:,l1),&
+                    &        jMat(:,:,l1),jPivot(:,l1), jMat_fac(:,l1))
 #else
                call get_bMat(dt,l1,hdif_B(map_glbl_st%lm2(l1,0)), &
-                    &        bMat(1,1,l1),bPivot(1,l1),      &
-                    &        jMat(1,1,l1),jPivot(1,l1) )
+                    &        bMat(:,:,l1),bPivot(:,l1),      &
+                    &        jMat(:,:,l1),jPivot(:,l1) )
 #endif
                lBmat(l1)=.true.
             end if
@@ -555,10 +555,10 @@ contains
 #endif
 
                !LIKWID_ON('upB_sol')
-               call cgeslML(bMat(:,:,l1),n_r_tot,n_r_real, &
-                    bPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
-               call cgeslML(jMat(:,:,l1),n_r_tot,n_r_real, &
-                    jPivot(:,l1),rhs2(:,lmB0+1:lmB,threadid),lmB-lmB0)
+               call solve_mat(bMat(:,:,l1),n_r_tot,n_r_real, &
+                    &         bPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
+               call solve_mat(jMat(:,:,l1),n_r_tot,n_r_real, &
+                    &         jPivot(:,l1),rhs2(:,lmB0+1:lmB,threadid),lmB-lmB0)
                !LIKWID_OFF('upB_sol')
             end if
 
@@ -672,18 +672,18 @@ contains
          if (iThread == nThreads-1) stop_lm=lmStop
 
          !-- Radial derivatives: dbdtLast and djdtLast used as work arrays
-         !PERFON('upB_cb')
-         call rscheme_oc%costf1(b,ulmMag-llmMag+1,start_lm-llmMag+1, &
-              &                 stop_lm-llmMag+1)
-         !PERFOFF
          !PERFON('upB_db')
          call get_ddr(b,db,ddb,ulmMag-llmMag+1,start_lm-llmMag+1, &
-              &       stop_lm-llmMag+1,n_r_max,rscheme_oc)
+              &       stop_lm-llmMag+1,n_r_max,rscheme_oc,l_dct_in=.false.)
+         call rscheme_oc%costf1(b,ulmMag-llmMag+1,start_lm-llmMag+1, &
+              &                 stop_lm-llmMag+1)
+
          !PERFOFF
+         call get_ddr(aj,dj,ddj,ulmMag-llmMag+1,start_lm-llmMag+1, &
+              &       stop_lm-llmMag+1,n_r_max,rscheme_oc,l_dct_in=.false.)
          call rscheme_oc%costf1(aj, ulmMag-llmMag+1, start_lm-llmMag+1, &
               &                 stop_lm-llmMag+1)
-         call get_ddr(aj,dj,ddj,ulmMag-llmMag+1,start_lm-llmMag+1, &
-              &       stop_lm-llmMag+1,n_r_max,rscheme_oc)
+
          
          !-- Same for inner core:
          if ( l_cond_ic ) then

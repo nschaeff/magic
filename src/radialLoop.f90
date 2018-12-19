@@ -269,7 +269,7 @@ contains
               & gradsLMr(:,nR),fconvLMr(:,nR),fkinLMr(:,nR),fviscLMr(:,nR),    &
               & fpoynLMr(:,nR_Mag),fresLMr(:,nR_Mag),EperpLMr(:,nR),           &
               & EparLMr(:,nR),EperpaxiLMr(:,nR),EparaxiLMr(:,nR))
-
+         
          dtrkc(nR)=this_rIteration%dtrkc      
          dthkc(nR)=this_rIteration%dthkc
       end do

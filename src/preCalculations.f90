@@ -9,7 +9,7 @@ module preCalculations
        &                 lm_max, n_phi_max, n_theta_max
    use init_fields, only: bots, tops, s_bot, s_top, n_s_bounds,    &
        &                  l_reset_t, topxi, botxi, xi_bot, xi_top, &
-       &                  n_xi_bounds
+       &                  n_xi_bounds, omega_diff
    use parallel_mod, only: rank, coord_r
    use logic, only: l_mag, l_cond_ic, l_non_rot, l_mag_LF, l_newmap,   &
        &            l_anel, l_heat, l_time_hits,  l_anelastic_liquid,  &
@@ -17,22 +17,22 @@ module preCalculations
        &            l_save_out, l_TO, l_TOmovie, l_r_field, l_movie,   &
        &            l_LCR, l_dt_cmb_field, l_storePot, l_non_adia,     &
        &            l_temperature_diff, l_chemical_conv, l_probe,      &
-       &            l_precession
-   use radial_functions, only: rscheme_oc, temp0, r_CMB,                   &
-       &                       r_surface, visc, r, r_ICB,                  &
+       &            l_precession, l_diff_prec
+   use radial_functions, only: rscheme_oc, temp0, r_CMB, ogrun,            &
+       &                       r_surface, visc, r, r_ICB, dLtemp0,         &
        &                       beta, rho0, rgrav, dbeta, alpha0,           &
        &                       dentropy0, sigma, lambda, dLkappa, kappa,   &
        &                       dLvisc, dLlambda, divKtemp0, radial,        &
-       &                       transportProperties, ogrun
+       &                       transportProperties
    use physical_parameters, only: nVarEps, pr, prmag, ra, rascaled, ek,    &
        &                          ekscaled, opr, opm, o_sr, radratio,      &
        &                          sigma_ratio, CorFac, LFfac, BuoFac,      &
        &                          PolInd, nVarCond, nVarDiff, nVarVisc,    &
        &                          rho_ratio_ic, rho_ratio_ma, epsc, epsc0, &
        &                          ktops, kbots, interior_model, r_LCR,     &
-       &                          n_r_LCR, mode, tmagcon, GrunNb, oek,     &
+       &                          n_r_LCR, mode, tmagcon, oek,             &
        &                          ktopxi, kbotxi, epscxi, epscxi0, sc, osc,&
-       &                          ChemFac, raxi, Po, prec_angle
+       &                          ChemFac, raxi, Po, prec_angle, diff_prec_angle
    use horizontal_data, only: horizontal
    use integration, only: rInt_R
    use useful, only: logWrite, abortRun
@@ -59,7 +59,7 @@ contains
       real(cp) :: delmin,sr_top,si_top,sr_bot,si_bot
       real(cp) :: xir_top,xii_top,xir_bot,xii_bot
       real(cp) :: topconduc, botconduc
-      integer :: n,n_r_loc,l,m,l_bot,m_bot,l_top,m_top
+      integer :: n,n_r,l,m,l_bot,m_bot,l_top,m_top
       integer :: fileHandle
       character(len=76) :: fileName
       character(len=80) :: message
@@ -75,6 +75,12 @@ contains
       else if ( n_tScale == 2 ) then
          !----- Thermal time scale:
          tScale=one/pr
+      else if ( n_tScale == 3 ) then
+         !----- Rotational time scale:
+         tScale=one/ek  ! or ekScaled ? (not defined yet...)
+         if ( rank==0 ) then
+            print*, 'Warning: rotational timescale, be sure to set dtmax large enough !'
+         end if
       end if
       if ( n_lScale == 0 ) then
          !----- Outer Core:
@@ -171,22 +177,16 @@ contains
     
       !-- Calculate radial functions for all threads (chebs,r,.....):
 
-      call radial
-
-      if ( GrunNb /= 0.0_cp ) then
-         ogrun(:)=ogrun(:)/GrunNb
-      else
-         ogrun(:)=0.0_cp
-      end if
+      call radial()
 
       if ( ( l_newmap ) .and. (rank == 0) ) then
          fileName='rNM.'//tag
          open(newunit=fileHandle, file=fileName, status='unknown')
-         do n_r_loc=1,n_r_max
-            write(fileHandle,'(I4,4ES16.8)') n_r_loc, r(n_r_loc)-r_icb,   &
-            &                                rscheme_oc%drx(n_r_loc), &
-            &                                rscheme_oc%ddrx(n_r_loc),&
-            &                                rscheme_oc%dddrx(n_r_loc)
+         do n_r=1,n_r_max
+            write(fileHandle,'(I4,4ES16.8)') n_r, r(n_r)-r_icb,   &
+            &                                rscheme_oc%drx(n_r), &
+            &                                rscheme_oc%ddrx(n_r),&
+            &                                rscheme_oc%dddrx(n_r)
          end do
          close(fileHandle)
       end if
@@ -197,14 +197,14 @@ contains
          ! Write the equilibrium setup in anel.tag
          fileName='anel.'//tag
          open(newunit=fileHandle, file=fileName, status='unknown')
-         write(fileHandle,'(9a15)') 'radius', 'temp0', 'rho0', 'beta',         &
-         &                          'dbeta', 'grav', 'ds0/dr', 'div(k grad T)',&
-         &                          'alpha'
-         do n_r_loc=1,n_r_max
-            write(fileHandle,'(9ES16.8)') r(n_r_loc), temp0(n_r_loc), rho0(n_r_loc),    &
-            &                             beta(n_r_loc), dbeta(n_r_loc), rgrav(n_r_loc),&
-            &                             dentropy0(n_r_loc), divKtemp0(n_r_loc),   &
-            &                             alpha0(n_r_loc)
+         write(fileHandle,'(11a15)') 'radius', 'temp0', 'rho0', 'beta',         &
+         &                          'dbeta', 'grav', 'ds0/dr', 'div(k grad T)', &
+         &                          'alpha', 'ogrun', 'dLtemp0'
+         do n_r=1,n_r_max
+            write(fileHandle,'(11ES16.8)') r(n_r), temp0(n_r), rho0(n_r),    &
+            &                             beta(n_r), dbeta(n_r), rgrav(n_r), &
+            &                             dentropy0(n_r), divKtemp0(n_r),    &
+            &                             alpha0(n_r), ogrun(n_r), dLtemp0(n_r)
          end do
          close(fileHandle)
       end if
@@ -214,9 +214,9 @@ contains
          fileName='varCond.'//tag
          open(newunit=fileHandle, file=fileName, status='unknown')
          write(fileHandle,'(4a15)') 'radius', 'sigma', 'lambda', 'dLlambda'
-         do n_r_loc=n_r_max,1,-1
-            write(fileHandle,'(4ES16.8)') r(n_r_loc),sigma(n_r_loc),lambda(n_r_loc), &
-            &                             dLlambda(n_r_loc)
+         do n_r=n_r_max,1,-1
+            write(fileHandle,'(4ES16.8)') r(n_r),sigma(n_r),lambda(n_r), &
+            &                             dLlambda(n_r)
          end do
          close(fileHandle)
       end if
@@ -226,10 +226,10 @@ contains
          open(newunit=fileHandle, file=fileName, status='unknown')
          write(fileHandle,'(5a15)') 'radius', 'conductivity', 'kappa', &
          &                          'dLkappa', 'Prandtl'
-         do n_r_loc=n_r_max,1,-1
-            write(fileHandle,'(5ES16.8)') r(n_r_loc),kappa(n_r_loc)*rho0(n_r_loc), &
-            &                             kappa(n_r_loc),dLkappa(n_r_loc),     &
-            &                             pr*visc(n_r_loc)/kappa(n_r_loc)
+         do n_r=n_r_max,1,-1
+            write(fileHandle,'(5ES16.8)') r(n_r),kappa(n_r)*rho0(n_r), &
+            &                             kappa(n_r),dLkappa(n_r),     &
+            &                             pr*visc(n_r)/kappa(n_r)
          end do
          close(fileHandle)
       end if
@@ -240,19 +240,19 @@ contains
          write(fileHandle,'(7a15)') 'radius', 'dynVisc', 'kinVisc', &
          &                          'dLvisc', 'Ekman', 'Prandtl', 'Pm'
          if ( l_mag ) then
-            do n_r_loc=n_r_max,1,-1
-               write(fileHandle,'(7ES16.8)') r(n_r_loc),visc(n_r_loc)*rho0(n_r_loc), &
-               &                             visc(n_r_loc),dLvisc(n_r_loc),      &
-               &                             ek*visc(n_r_loc),               &
-               &                             pr*visc(n_r_loc)/kappa(n_r_loc),    &
-               &                             prmag*visc(n_r_loc)/lambda(n_r_loc)
+            do n_r=n_r_max,1,-1
+               write(fileHandle,'(7ES16.8)') r(n_r),visc(n_r)*rho0(n_r), &
+               &                             visc(n_r),dLvisc(n_r),      &
+               &                             ek*visc(n_r),               &
+               &                             pr*visc(n_r)/kappa(n_r),    &
+               &                             prmag*visc(n_r)/lambda(n_r)
             end do
          else
-            do n_r_loc=n_r_max,1,-1
-               write(fileHandle,'(7ES16.8)') r(n_r_loc),visc(n_r_loc)*rho0(n_r_loc), &
-               &                             visc(n_r_loc), dLvisc(n_r_loc),     &
-               &                             ek*visc(n_r_loc),               &
-               &                             pr*visc(n_r_loc)/kappa(n_r_loc),    &
+            do n_r=n_r_max,1,-1
+               write(fileHandle,'(7ES16.8)') r(n_r),visc(n_r)*rho0(n_r), &
+               &                             visc(n_r), dLvisc(n_r),     &
+               &                             ek*visc(n_r),               &
+               &                             pr*visc(n_r)/kappa(n_r),    &
                &                             prmag
             end do
          end if
@@ -261,10 +261,10 @@ contains
     
       l_LCR=.false.
       n_r_LCR=0
-      do n_r_loc=1,n_r_max
-         if ( r_LCR <= r(n_r_loc)/r_CMB ) then
+      do n_r=1,n_r_max
+         if ( r_LCR <= r(n_r)/r_CMB ) then
              l_LCR=.true.
-             n_r_LCR=n_r_loc
+             n_r_LCR=n_r
          end if
       end do
       if ( n_r_LCR == 1 ) then
@@ -295,12 +295,20 @@ contains
       delxh2(n_r_max)=c1*r_icb**2
       delxr2(1)      =(r(1)-r(2))**2
       delxr2(n_r_max)=(r(n_r_max-1)-r(n_r_max))**2
-      do n_r_loc=2,n_r_max-1
-         delxh2(n_r_loc)=c1*r(n_r_loc)**2
-         delmin=min((r(n_r_loc-1)-r(n_r_loc)),(r(n_r_loc)-r(n_r_loc+1)))
-         delxr2(n_r_loc)=delmin*delmin
+      do n_r=2,n_r_max-1
+         delxh2(n_r)=c1*r(n_r)**2
+         delmin=min((r(n_r-1)-r(n_r)),(r(n_r)-r(n_r+1)))
+         delxr2(n_r)=delmin*delmin
       end do
-    
+
+      !Differential precession of mantle and outer core
+
+      if ( l_diff_prec ) then
+         omega_diff = oek * (cos(diff_prec_angle) - 1)
+      else
+         omega_diff = 0.0_cp
+      end if
+
       !-- Constants used for rotating core or mantle:
       y10_norm=half*sqrt(three/pi)  ! y10=y10_norm * cos(theta)
       y11_norm=half*sqrt(1.5_cp/pi) ! y11=y11_norm * sin(theta)
@@ -318,8 +326,8 @@ contains
     
       !----- Outer-core normalized moment of inertia:
       ! _moi_oc=8.0_cp*pi/15.0_cp*(r_cmb**5-r_icb**5) ! rho=cst
-      do n_r_loc=1,n_r_max
-         mom(n_r_loc)=r(n_r_loc)**4 * rho0(n_r_loc)
+      do n_r=1,n_r_max
+         mom(n_r)=r(n_r)**4 * rho0(n_r)
       end do
       c_moi_oc=8.0_cp*third*pi*rInt_R(mom,r,rscheme_oc)
     
@@ -899,7 +907,7 @@ contains
                              n_tot,n_step,string,time,tScale)
       !
       ! This subroutine checks whether any specific times t(*) are given
-      ! on input. If so, it returns their number n_r_loc and sets l_t        
+      ! on input. If so, it returns their number n_r and sets l_t        
       ! to true. If not, t(*) may also be defined by giving a time step  
       ! dt or a number n_tot of desired output times and t_stop>t_start. 
       !

@@ -13,7 +13,7 @@ module updateXi_mod
    use logic, only: l_update_xi
    use LMLoop_data, only: llm,ulm
    use parallel_mod, only: coord_r,chunksize
-   use algebra, only: cgeslML,solve_mat, prepare_mat
+   use algebra, only: prepare_mat, solve_mat
    use radial_der, only: get_ddr, get_dr
    use constants, only: zero, one, two
    use fields, only: work_LMloc
@@ -215,10 +215,10 @@ contains
             if ( .not. lXimat(l1) ) then
 #ifdef WITH_PRECOND_S
                 call get_xiMat(dt,l1,hdif_Xi(map_glbl_st%lm2(l1,0)), &
-                     xiMat(1,1,l1),xiPivot(1,l1),xiMat_fac(1,l1))
+                     &         xiMat(:,:,l1),xiPivot(:,l1),xiMat_fac(:,l1))
 #else
                 call get_xiMat(dt,l1,hdif_Xi(map_glbl_st%lm2(l1,0)), &
-                     xiMat(1,1,l1),xiPivot(1,l1))
+                     &         xiMat(:,:,l1),xiPivot(:,l1))
 #endif
                 lXimat(l1)=.true.
              end if
@@ -279,8 +279,8 @@ contains
 
             !PERFON('upXi_sol')
             if ( lmB  >  lmB0 ) then
-               call cgeslML(xiMat(:,:,l1),n_r_max,n_r_max, &
-                    &       xiPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
+               call solve_mat(xiMat(:,:,l1),n_r_max,n_r_max, &
+                    &         xiPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
             end if
             !PERFOFF
 
@@ -347,9 +347,9 @@ contains
          start_lm=lmStart+iThread*per_thread
          stop_lm = start_lm+per_thread-1
          if (iThread == nThreads-1) stop_lm=lmStop
+         call get_ddr(xi, dxi, work_LMloc, ulm-llm+1, start_lm-llm+1, &
+              &       stop_lm-llm+1, n_r_max, rscheme_oc, l_dct_in=.false.)
          call rscheme_oc%costf1(xi,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
-         call get_ddr(xi, dxi, work_LMloc, ulm-llm+1, start_lm-llm+1, stop_lm-llm+1,&
-              &       n_r_max, rscheme_oc)
       end do
       !$OMP end do
 

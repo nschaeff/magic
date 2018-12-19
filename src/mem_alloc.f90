@@ -24,7 +24,7 @@ contains
 
    subroutine initialize_memory_counter
 
-      integer :: iproc
+      integer :: irank
 
       bytes_allocated = 0 ! 
       n_ranks_print = min(n_ranks-1, 6)
@@ -32,7 +32,7 @@ contains
       if ( n_ranks_print > 0 ) then
          allocate ( ranks_selected(n_ranks_print) )
          if ( n_ranks < 8 ) then
-            ranks_selected = [(iproc,iproc=1,n_ranks-1)]
+            ranks_selected = [(irank,irank=1,n_ranks-1)]
          else
             ranks_selected =[1,2,3,4,n_ranks-2,n_ranks-1]
          end if
@@ -56,7 +56,7 @@ contains
       character(len=48) :: header
       character(len=12) :: st
 #ifdef WITH_MPI
-      integer :: i, iproc, sr_tag, status(MPI_STATUS_SIZE)
+      integer :: i, irank, sr_tag, status(MPI_STATUS_SIZE)
       integer(lip) :: bytes_other_proc
 #endif
 
@@ -77,22 +77,22 @@ contains
       if  ( n_ranks_print /= 0 ) then
 
          do i=1,n_ranks_print
-            iproc=ranks_selected(i)
-            if ( rank == iproc ) then
-               call MPI_Send(bytes_alloc,1,MPI_LONG,0,sr_tag+iproc, &
-                             mpi_comm_world,ierr)
+            irank=ranks_selected(i)
+            if ( rank == irank ) then
+               call MPI_Send(bytes_alloc,1,MPI_INTEGER8,0,sr_tag+irank, &
+                             MPI_COMM_WORLD,ierr)
             end if
          end do
          do i=1,n_ranks_print
-            iproc=ranks_selected(i)
+            irank=ranks_selected(i)
             if ( rank == 0 ) then
-               call MPI_Recv(bytes_other_proc,1,MPI_LONG,iproc,sr_tag+iproc, &
-                             mpi_comm_world,status,ierr)
-               if ( n_ranks > 8 .and. iproc == n_ranks -2 ) then
+               call MPI_Recv(bytes_other_proc,1,MPI_INTEGER8,irank,sr_tag+irank, &
+                             MPI_COMM_WORLD,status,ierr)
+               if ( n_ranks > 8 .and. irank == n_ranks -2 ) then
                   write(n_memory_file, *) "               ..."
                end if
                st = human_readable_size(bytes_other_proc)
-               write(n_memory_file, "(A17,A,I4)") st, " allocated on rank ", iproc
+               write(n_memory_file, "(A17,A,I4)") st, " allocated on rank ", irank
             end if
          end do
 
@@ -109,7 +109,7 @@ contains
       character(len=12) :: st
 #ifdef WITH_MPI
       integer(lip) :: bytes_other_proc
-      integer :: i, iproc, sr_tag, status(MPI_STATUS_SIZE)
+      integer :: i, irank, sr_tag, status(MPI_STATUS_SIZE)
 #endif
 
 
@@ -129,22 +129,22 @@ contains
       if  ( n_ranks_print /= 0 ) then
 
          do i=1,n_ranks_print
-            iproc=ranks_selected(i)
-            if ( rank == iproc ) then
-               call MPI_Send(bytes_allocated,1,MPI_LONG,0,sr_tag+iproc, &
-                             mpi_comm_world,ierr)
+            irank=ranks_selected(i)
+            if ( rank == irank ) then
+               call MPI_Send(bytes_allocated,1,MPI_INTEGER8,0,sr_tag+irank, &
+                             MPI_COMM_WORLD,ierr)
             end if
          end do
          do i=1,n_ranks_print
-            iproc=ranks_selected(i)
+            irank=ranks_selected(i)
             if ( rank == 0 ) then
-               call MPI_Recv(bytes_other_proc,1,MPI_LONG,iproc,sr_tag+iproc, &
-                             mpi_comm_world,status,ierr)
-               if ( n_ranks > 8 .and. iproc == n_ranks-2 ) then
+               call MPI_Recv(bytes_other_proc,1,MPI_INTEGER8,irank,sr_tag+irank, &
+                             MPI_COMM_WORLD,status,ierr)
+               if ( n_ranks > 8 .and. irank == n_ranks-2 ) then
                   write(n_memory_file, *) "               ..."
                end if
                st = human_readable_size(bytes_other_proc)
-               write(n_memory_file, "(A17,A,I4)") st, " allocated on rank ", iproc
+               write(n_memory_file, "(A17,A,I4)") st, " allocated on rank ", irank
             end if
          end do
 

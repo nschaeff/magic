@@ -8,12 +8,10 @@ module torsional_oscillations
    use geometry, only: nrp, n_phi_maxStr, n_r_maxStr, l_max, &
        &                 n_theta_maxStr, n_r_cmb, l_r, u_r
    use LMLoop_data, only: llmMag, ulmMag
-   use radial_functions, only: r, or1, or2, or3, or4, beta, orho1, &
-       &                       dbeta
+   use radial_functions, only: r, or1, or2, or3, or4, beta, orho1, dbeta
    use physical_parameters, only: CorFac, kbotv, ktopv
    use blocking, only: nfs
-   use horizontal_data, only: sinTheta, cosTheta, hdif_V, dTheta1A, dTheta1S, & 
-       &                      dLh
+   use horizontal_data, only: sinTheta, cosTheta, hdif_V, dTheta1A, dTheta1S, dLh
    use constants, only: one, two
    use logic, only: lVerbose, l_mag
    use legendre_grid_to_spec, only: legTFAS2

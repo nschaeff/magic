@@ -21,7 +21,7 @@ module init_fields
        &                      phi, cosTheta, hdif_B, D_lP1
    use logic, only: l_rot_ic, l_rot_ma, l_SRIC, l_SRMA, l_cond_ic,  &
        &            l_temperature_diff, l_chemical_conv, l_TP_form, &
-       &            l_anelastic_liquid, l_non_adia
+       &            l_anelastic_liquid, l_non_adia, l_diff_prec
    use radial_functions, only: r_icb, r, r_cmb, r_ic, or1, jVarCon,    &
        &                       lambda, or2, dLlambda, or3, cheb_ic,    &
        &                       dcheb_ic, d2cheb_ic, cheb_norm_ic, or1, &
@@ -45,8 +45,9 @@ module init_fields
        &                          epsc, ViscHeatFac, ThExpNb,             &
        &                          impXi, n_impXi_max, n_impXi, phiXi,     &
        &                          thetaXi, peakXi, widthXi, osc, epscxi,  &
-       &                          kbotxi, ktopxi, BuoFac, ktopp
-   use algebra, only: solve_mat, prepare_mat, cgesl
+       &                          kbotxi, ktopxi, BuoFac, ktopp, oek,     &
+       &                          diff_prec_angle
+   use algebra, only: prepare_mat, solve_mat
    use legendre_grid_to_spec, only: legTF1
    use cosine_transform_odd
    use LMmapping, only: map_glbl_st
@@ -86,6 +87,7 @@ module init_fields
    real(cp), public :: omega_ma2,omegaOsz_ma2,tShift_ma2,tOmega_ma2
    real(cp), public :: omega_ic1,omegaOsz_ic1,tShift_ic1,tOmega_ic1
    real(cp), public :: omega_ic2,omegaOsz_ic2,tShift_ic2,tOmega_ic2
+   real(cp), public :: omega_diff
 
    !----- About start-file:
    logical, public :: l_start_file     ! taking fields from startfile ?
@@ -369,7 +371,7 @@ contains
          end do
     
       end if
-    
+
       !----- Caring for IC and mantle rotation rates if this
       !      has not been done already in read_start_file.f:
       if ( ( .not. l_start_file ) ) then
@@ -379,9 +381,11 @@ contains
          if ( (l1m0>=lmStartB(coord_r+1)) .and. (l1m0<=lmStopB(coord_r+1)) ) then
 
             write(*,*) '! NO STARTFILE READ, SETTING Z10!'
+
+
             if ( l_SRIC .or. l_rot_ic .and. omega_ic1 /= 0.0_cp ) then
                omega_ic=omega_ic1*cos(omegaOsz_ic1*tShift_ic1) + &
-               &        omega_ic2*cos(omegaOsz_ic2*tShift_ic2)
+               &        omega_ic2*cos(omegaOsz_ic2*tShift_ic2) + omega_diff
                write(*,*)
                write(*,*) '! I use prescribed inner core rotation rate:'
                write(*,*) '! omega_ic=',omega_ic
@@ -393,7 +397,8 @@ contains
             end if
             if ( l_SRMA .or. l_rot_ma .and. omega_ma1 /= 0.0_cp ) then
                omega_ma=omega_ma1*cos(omegaOsz_ma1*tShift_ma1) + &
-               &        omega_ma2*cos(omegaOsz_ma2*tShift_ma2)
+               &        omega_ma2*cos(omegaOsz_ma2*tShift_ma2) + omega_diff
+
                write(*,*)
                write(*,*) '! I use prescribed mantle rotation rate:'
                write(*,*) '! omega_ma=',omega_ma
@@ -411,8 +416,9 @@ contains
 #endif
 
       else
-         if ( nRotIc == 2 ) omega_ic=omega_ic1
-         if ( nRotMa == 2 ) omega_ma=omega_ma1
+         if ( nRotIc == 2 ) omega_ic=omega_ic1 + omega_diff
+         if ( nRotMa == 2 ) omega_ma=omega_ma1 + omega_diff
+
       end if
     
    end subroutine initV
@@ -763,8 +769,6 @@ contains
             if ( l <= l_max .and. l > 0 ) tops(l,m)=tops(l,m)+sLM(lm)
          end do
       end do
-
-      print*, coord_r, tops(10:11,3:4)
 
    end subroutine initS
 !---------------------------------------------------------------------------
@@ -1451,8 +1455,13 @@ contains
          do lm=llm,ulm
             l1=lo_map%lm2l(lm)
             m1=lo_map%lm2m(lm)
-            bR=(-one+two*random(0.0_cp))*amp_b1/(real(l1,cp))**(bExp-1)
-            bI=(-one+two*random(0.0_cp))*amp_b1/(real(l1,cp))**(bExp-1)
+            if ( l1 > 0 ) then
+               bR=(-one+two*random(0.0_cp))*amp_b1/(real(l1,cp))**(bExp-1)
+               bI=(-one+two*random(0.0_cp))*amp_b1/(real(l1,cp))**(bExp-1)
+            else
+               bR=0.0_cp
+               bI=0.0_cp
+            end if
             if ( m1 == 0 ) bI=0.0_cp
             do n_r_loc=1,n_r_max
                b(lm,n_r_loc)=b(lm,n_r_loc) + cmplx(bR*b1(n_r_loc),bI*b1(n_r_loc),kind=cp)
@@ -1658,7 +1667,7 @@ contains
       end if ! conducting inner core ?
 
       !----- invert matrix:
-      call prepare_mat(jMat(:,:),n_r_tot,n_r_real,jPivot(:),info)
+      call prepare_mat(jMat,n_r_tot,n_r_real,jPivot,info)
       if ( info /= 0 ) then
          call abortRun('Singular matrix jMat in j_cond.')
       end if
@@ -1671,7 +1680,7 @@ contains
       if ( .not. l_cond_ic ) rhs(n_r_max)=bpeakbot  ! Inner boundary
        
       !----- solve linear system:
-      call cgesl(jMat(1,1),n_r_tot,n_r_real,jPivot(1),rhs)
+      call solve_mat(jMat,n_r_tot,n_r_real,jPivot,rhs)
 
       !----- copy result for OC:
       do n_r_out=1,rscheme_oc%n_max
@@ -2248,9 +2257,7 @@ contains
          end if
 
          if ( rscheme_oc%version == 'cheb' ) then
-            ps0Mat(n_r_max+1,n_r_out) =0.0_cp
-            ps0Mat(2*n_r_max,n_r_out) =0.0_cp
-            ps0Mat(2*n_r_max,n_r_out_p)=0.0_cp
+            ps0Mat(n_r_max+1,n_r_out)=0.0_cp
          end if
 
       end do

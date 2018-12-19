@@ -62,7 +62,7 @@ contains
    subroutine get_dcheb_complex(f,df,n_f_max,n_f_start,n_f_stop, &
               &                 n_r_max,n_cheb_max,d_fac)
       !
-      !  Returns chebychev coeffitiens of first derivative df and second  
+      !  Returns Chebyshev coeffitients of first derivative df and second  
       !  derivative ddf for a function whose cheb-coeff. are given as     
       !  columns in array f(n_f_max,n_r_max).                             
       !
@@ -90,8 +90,14 @@ contains
             df(n_f,n_cheb)=zero
          end do
       end do
+
+      !-- First Coefficient
       n_cheb  =n_cheb_max-1
-      fac_cheb=d_fac*real(2*n_cheb,kind=cp)
+      if ( n_r_max == n_cheb_max ) then
+         fac_cheb=d_fac*real(n_cheb,kind=cp)
+      else
+         fac_cheb=d_fac*real(2*n_cheb,kind=cp)
+      end if
       do n_f=n_f_start,n_f_stop
          df(n_f,n_cheb)=fac_cheb*f(n_f,n_cheb+1)
       end do
@@ -126,7 +132,13 @@ contains
          df(n_cheb)=0.0_cp
       end do
       n_cheb  =n_cheb_max-1
-      fac_cheb=d_fac*real(2*n_cheb,kind=cp)
+
+      !-- First coefficient
+      if ( n_r_max == n_cheb_max ) then
+         fac_cheb=d_fac*real(n_cheb,kind=cp)
+      else
+         fac_cheb=d_fac*real(2*n_cheb,kind=cp)
+      end if
       df(n_cheb)=fac_cheb*f(n_cheb+1)
 
       !----- Recursion
@@ -140,7 +152,7 @@ contains
    subroutine get_ddcheb(f,df,ddf,n_f_max,n_f_start,n_f_stop, &
               &          n_r_max,n_cheb_max,d_fac)
       !
-      !  Returns chebychev coefficents of first derivative df and second  
+      !  Returns Chebyshev coefficients of first derivative df and second  
       !  derivative ddf for a function whose cheb-coeff. are given as     
       !  columns in array f(n_c_tot,n_r_max).                             
       !
@@ -169,10 +181,16 @@ contains
             ddf(n_f,n_cheb)=zero
          end do
       end do
+
+      !-- First coefficients:
       n_cheb=n_cheb_max-1
-      fac_cheb=d_fac*real(2*n_cheb,kind=cp)
+      if ( n_cheb_max == n_r_max ) then
+         fac_cheb=d_fac*real(n_cheb,kind=cp)
+      else
+         fac_cheb=d_fac*real(2*n_cheb,kind=cp)
+      end if
       do n_f=n_f_start,n_f_stop
-         df(n_f,n_cheb)=fac_cheb*f(n_f,n_cheb+1)
+         df(n_f,n_cheb) =fac_cheb*f(n_f,n_cheb+1)
          ddf(n_f,n_cheb)=zero
       end do
     
@@ -180,7 +198,7 @@ contains
       do n_cheb=n_cheb_max-2,1,-1
          fac_cheb=d_fac*real(2*n_cheb,kind=cp)
          do n_f=n_f_start,n_f_stop
-            df(n_f,n_cheb)=df(n_f,n_cheb+2) + fac_cheb*f(n_f,n_cheb+1)
+            df(n_f,n_cheb) = df(n_f,n_cheb+2) + fac_cheb* f(n_f,n_cheb+1)
             ddf(n_f,n_cheb)=ddf(n_f,n_cheb+2) + fac_cheb*df(n_f,n_cheb+1)
          end do
       end do
@@ -216,16 +234,22 @@ contains
       !----- initialize derivatives:
       do n_cheb=n_cheb_max,n_r_max
          do n_f=n_f_start,n_f_stop
-            df(n_f,n_cheb)=zero
-            ddf(n_f,n_cheb)=zero
+            df(n_f,n_cheb)  =zero
+            ddf(n_f,n_cheb) =zero
             dddf(n_f,n_cheb)=zero
          end do
       end do
+
+      !-- First coefficients
       n_cheb=n_cheb_max-1
-      fac_cheb=d_fac*real(2*n_cheb,kind=cp)
+      if ( n_cheb_max == n_r_max ) then
+         fac_cheb=d_fac*real(n_cheb,kind=cp)
+      else
+         fac_cheb=d_fac*real(2*n_cheb,kind=cp)
+      end if
       do n_f=n_f_start,n_f_stop
-         df(n_f,n_cheb)=fac_cheb*f(n_f,n_cheb+1)
-         ddf(n_f,n_cheb)=zero
+         df(n_f,n_cheb)  =fac_cheb*f(n_f,n_cheb+1)
+         ddf(n_f,n_cheb) =zero
          dddf(n_f,n_cheb)=zero
       end do
 
@@ -233,9 +257,9 @@ contains
       do n_cheb=n_cheb_max-2,1,-1
          fac_cheb=d_fac*real(2*n_cheb,kind=cp)
          do n_f=n_f_start,n_f_stop
-            df(n_f,n_cheb)=df(n_f,n_cheb+2)    + fac_cheb*f(n_f,n_cheb+1)
-            ddf(n_f,n_cheb)=ddf(n_f,n_cheb+2)  + fac_cheb*df(n_f,n_cheb+1)
-            dddf(n_f,n_cheb)=dddf(n_f,n_cheb+2)+ fac_cheb*ddf(n_f,n_cheb+1)
+            df(n_f,n_cheb)  =  df(n_f,n_cheb+2) + fac_cheb*  f(n_f,n_cheb+1)
+            ddf(n_f,n_cheb) = ddf(n_f,n_cheb+2) + fac_cheb* df(n_f,n_cheb+1)
+            dddf(n_f,n_cheb)=dddf(n_f,n_cheb+2) + fac_cheb*ddf(n_f,n_cheb+1)
          end do
       end do
 
@@ -302,7 +326,7 @@ contains
    end subroutine get_dr_real_1d
 !------------------------------------------------------------------------------
    subroutine get_dr_complex(f,df,n_f_max,n_f_start,n_f_stop, &
-              &              n_r_max,r_scheme,nocopy)
+              &              n_r_max,r_scheme,nocopy,l_dct_in)
       !
       !  Returns first radial derivative df of the input function f.      
       !  Array f(n_f_max,*) may contain several functions numbered by     
@@ -319,15 +343,22 @@ contains
       integer,             intent(in) :: n_f_stop         ! last function to be treated
       class(type_rscheme), intent(in) :: r_scheme
       logical, optional,   intent(in) :: nocopy
+      logical, optional,   intent(in) :: l_dct_in
     
       !-- Output variables:
       complex(cp), intent(out) :: df(n_f_max,n_r_max)   ! first derivative of f
     
       !-- Local:
       integer :: n_r_loc,n_f,od
-      logical :: copy_array
+      logical :: copy_array, l_dct_in_loc
     
       if ( r_scheme%version == 'cheb' ) then
+
+         if ( present(l_dct_in) ) then
+            l_dct_in_loc=l_dct_in
+         else
+            l_dct_in_loc=.true.
+         end if
 
          if ( present(nocopy) ) then
             copy_array=.false.
@@ -343,11 +374,13 @@ contains
             end do
        
             !-- Transform f to cheb space:
-            call r_scheme%costf1(work,n_f_max,n_f_start,n_f_stop)
+            if ( l_dct_in_loc ) then
+               call r_scheme%costf1(work,n_f_max,n_f_start,n_f_stop)
+            end if
           
             !-- Get derivatives:
-            call get_dcheb(work,df,n_f_max,n_f_start,n_f_stop,n_r_max,r_scheme%n_max, &
-                 &         one)
+            call get_dcheb(work,df,n_f_max,n_f_start,n_f_stop,n_r_max, &
+                 &         r_scheme%n_max,one)
           
             !-- Transform back:
             call r_scheme%costf1(df,n_f_max,n_f_start,n_f_stop)
@@ -355,14 +388,18 @@ contains
          else
 
             !-- Transform f to cheb space:
-            call r_scheme%costf1(f,n_f_max,n_f_start,n_f_stop)
+            if ( l_dct_in_loc ) then
+               call r_scheme%costf1(f,n_f_max,n_f_start,n_f_stop)
+            end if
           
             !-- Get derivatives:
-            call get_dcheb(f,df,n_f_max,n_f_start,n_f_stop,n_r_max,r_scheme%n_max, &
-                 &         one)
+            call get_dcheb(f,df,n_f_max,n_f_start,n_f_stop,n_r_max, &
+                 &         r_scheme%n_max,one)
           
             !-- Transform back:
-            call r_scheme%costf1(f,n_f_max,n_f_start,n_f_stop)
+            if ( l_dct_in_loc ) then
+               call r_scheme%costf1(f,n_f_max,n_f_start,n_f_stop)
+            end if
             call r_scheme%costf1(df,n_f_max,n_f_start,n_f_stop)
 
          end if
@@ -411,8 +448,8 @@ contains
 
    end subroutine get_dr_complex
 !------------------------------------------------------------------------------
-   subroutine get_ddr(f,df,ddf,n_f_max,n_f_start,n_f_stop, &
-              &       n_r_max,r_scheme)
+   subroutine get_ddr(f,df,ddf,n_f_max,n_f_start,n_f_stop,n_r_max,r_scheme, &
+              &       l_dct_in)
       !
       !  Returns first radial derivative df and second radial             
       !  derivative ddf of the input function f.                          
@@ -429,6 +466,7 @@ contains
       integer,             intent(in) :: n_f_start     ! first function to be treated
       integer,             intent(in) :: n_f_stop      ! last function to be treated
       class(type_rscheme), intent(in) :: r_scheme
+      logical, optional,   intent(in) :: l_dct_in
     
       !-- Output variables:
       complex(cp), intent(out) :: df(n_f_max,n_r_max)   ! first derivative of f
@@ -436,8 +474,15 @@ contains
     
       !-- Local variables:
       integer :: n_r_loc,n_f,od
+      logical :: l_dct_in_loc
 
       if ( r_scheme%version == 'cheb' ) then
+
+         if ( present(l_dct_in) ) then
+            l_dct_in_loc=l_dct_in
+         else
+            l_dct_in_loc=.true.
+         end if
     
          !-- Copy input functions:
          do n_r_loc=1,n_r_max
@@ -447,8 +492,9 @@ contains
          end do
     
          !-- Transform f to cheb space:
-         call r_scheme%costf1(work(1:n_f_max,1:n_r_max),n_f_max,n_f_start,n_f_stop)
-         
+         if ( l_dct_in_loc ) then
+            call r_scheme%costf1(work,n_f_max,n_f_start,n_f_stop)
+         end if
          !-- Get derivatives:
          call get_ddcheb(work(1:n_f_max,1:n_r_max),df,ddf,n_f_max,n_f_start,n_f_stop, &
               &          n_r_max,r_scheme%n_max,one)
@@ -521,7 +567,7 @@ contains
    end subroutine get_ddr
 !------------------------------------------------------------------------------
    subroutine get_dddr(f,df,ddf,dddf,n_f_max,n_f_start,n_f_stop, &
-              &        n_r_max,r_scheme)
+              &        n_r_max,r_scheme,l_dct_in)
       !
       !  Returns first radial derivative df, the second radial deriv. ddf,
       !  and the third radial derivative dddf of the input function f.    
@@ -538,6 +584,7 @@ contains
       integer,             intent(in) :: n_f_start       ! first function to be treated
       integer,             intent(in) :: n_f_stop        ! last function to be treated
       class(type_rscheme), intent(in) :: r_scheme
+      logical, optional,   intent(in) :: l_dct_in
     
       !-- Output variables:
       complex(cp), intent(out) :: df(n_f_max,n_r_max)    ! first derivative of f
@@ -546,8 +593,15 @@ contains
 
       !-- Local variables
       integer :: n_r_loc,n_f,od
+      logical :: l_dct_in_loc
 
       if ( r_scheme%version == 'cheb' ) then
+
+         if ( present(l_dct_in) ) then
+            l_dct_in_loc=l_dct_in
+         else
+            l_dct_in_loc=.true.
+         end if
 
          !-- Copy input functions:
          do n_r_loc=1,n_r_max
@@ -557,7 +611,9 @@ contains
          end do
 
          !-- Transform f to cheb space:
-         call r_scheme%costf1(work,n_f_max,n_f_start,n_f_stop)
+         if ( l_dct_in_loc ) then
+            call r_scheme%costf1(work,n_f_max,n_f_start,n_f_stop)
+         end if
 
          !-- Get derivatives:
          call get_dddcheb(work,df,ddf,dddf,n_f_max,n_f_start,n_f_stop,  &

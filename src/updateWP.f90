@@ -17,7 +17,7 @@ module updateWP_mod
    use logic, only: l_update_v, l_chemical_conv, l_RMS, l_double_curl, &
        &            l_fluxProfs
    use RMS, only: DifPol2hInt, dtVPolLMr, dtVPol2hInt, DifPolLMr
-   use algebra, only: cgeslML, prepare_mat, solve_mat
+   use algebra, only: prepare_mat, solve_mat
    use LMLoop_data, only: llm, ulm
    use communications, only: get_global_sum
    use parallel_mod, only: chunksize
@@ -254,10 +254,10 @@ contains
                !PERFON('upWP_mat')
                if ( l_double_curl ) then
                   call get_wMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
-                       &         wpMat(1,1,l1),wpPivot(1,l1),wpMat_fac(1,1,l1))
+                       &        wpMat(:,:,l1),wpPivot(:,l1),wpMat_fac(:,:,l1))
                else
                   call get_wpMat(dt,l1,hdif_V(map_glbl_st%lm2(l1,0)), &
-                       &        wpMat(1,1,l1),wpPivot(1,l1),wpMat_fac(1,1,l1))
+                       &         wpMat(:,:,l1),wpPivot(:,l1),wpMat_fac(:,:,l1))
                end if
                lWPmat(l1)=.true.
                !PERFOFF
@@ -389,8 +389,8 @@ contains
                      rhs1(nR,lm,threadid)=rhs1(nR,lm,threadid)*wpMat_fac(nR,1,l1)
                   end do
                end do
-               call cgeslML(wpMat(:,:,l1),2*n_r_max,2*n_r_max,    &
-                    &       wpPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
+               call solve_mat(wpMat(:,:,l1),2*n_r_max,2*n_r_max,    &
+                    &         wpPivot(:,l1),rhs1(:,lmB0+1:lmB,threadid),lmB-lmB0)
                ! rescale the solution with mat_fac(:,2)
                do lm=lmB0+1,lmB
                   do nR=1,2*n_r_max
@@ -515,22 +515,21 @@ contains
          !-- Transform to radial space and get radial derivatives
          !   using dwdtLast, dpdtLast as work arrays:
 
-         call rscheme_oc%costf1(w,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
-         call rscheme_oc%costf1(p,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
-
          if ( l_double_curl ) then
             call get_dr( w, dw, ulm-llm+1, start_lm-llm+1,  &
-                 &         stop_lm-llm+1, n_r_max, rscheme_oc)
+                 &       stop_lm-llm+1, n_r_max, rscheme_oc, l_dct_in=.false.)
+            call get_ddr( ddw, work_LMloc, ddddw, ulm-llm+1,                  &
+                 &        start_lm-llm+1, stop_lm-llm+1, n_r_max, rscheme_oc, &
+                 &        l_dct_in=.false. )
             call rscheme_oc%costf1(ddw,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
-            call get_ddr( ddw, work_LMloc, ddddw, ulm-llm+1,  &
-                 &        start_lm-llm+1, stop_lm-llm+1, n_r_max, rscheme_oc )
-
          else
             call get_dddr( w, dw, ddw, work_LMloc, ulm-llm+1, start_lm-llm+1,  &
-                 &         stop_lm-llm+1, n_r_max, rscheme_oc)
+                 &         stop_lm-llm+1, n_r_max, rscheme_oc, l_dct_in=.false.)
             call get_dr( p, dp, ulm-llm+1, start_lm-llm+1, stop_lm-llm+1, &
-                 &       n_r_max, rscheme_oc )
+                 &       n_r_max, rscheme_oc, l_dct_in=.false. )
          end if
+         call rscheme_oc%costf1(w,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
+         call rscheme_oc%costf1(p,ulm-llm+1,start_lm-llm+1,stop_lm-llm+1)
       end do
       !$OMP end do
       !$OMP END PARALLEL

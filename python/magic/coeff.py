@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from magic import npfile, scanDir, MagicSetup, hammer2cart, symmetrize, progressbar
-import os
+import os, re
 import numpy as np
 import matplotlib.pyplot as plt
 from .spectralTransforms import SpectralTransforms
@@ -14,7 +14,7 @@ def deriv(x, y, axis=0):
 
     :param x: input x-axis
     :type x: numpy.ndarray
-    :param y: input array 
+    :param y: input array
     :type y: numpy.ndarray
     :returns: an array that contains the derivatives
     :rtype: numpy.ndarray
@@ -55,11 +55,11 @@ def getGauss(alm, blm, ell, m, scale_b, ratio_cmb_surface, rcmb):
     return glm, hlm
 
 def rearangeLat(field):
-    """ 
+    """
     This function is used to unfold the colatitudes
-        
+
     :param field: input array with MagIC ordering of colatitudes (i.e.
-                  successively Northern Hemisphere and Southern 
+                  successively Northern Hemisphere and Southern
                   Hemisphere)
     :type field: numpy.ndarray
     :return: an array with the regular ordering of the colatitudes
@@ -88,9 +88,10 @@ class MagicCoeffCmb(MagicSetup):
     >>> # Save the time-evolution of the CMB field
     >>> cmb.movieCmb(levels=12, cm='seismic', png=True)
     """
-    
-    def __init__(self, tag, ratio_cmb_surface=1, scale_b=1, iplot=True, lCut=None,
-                 precision='Float64', ave=False, sv=False, quiet=False):
+
+    def __init__(self, tag=None, datadir='.', ratio_cmb_surface=1, scale_b=1,
+                 iplot=True, lCut=None, precision='Float64', ave=False, sv=False,
+                 quiet=False):
         """
         A class to read the B_coeff_cmb files
 
@@ -112,24 +113,54 @@ class MagicCoeffCmb(MagicSetup):
         :type quiet: bool
         :param lCut: reduce the spherical harmonic truncation to l <= lCut
         :type lCut: int
+        :param datadir: working directory
+        :type datadir: str
         """
+        pattern = os.path.join(datadir, 'log.*')
+        logFiles = scanDir(pattern)
 
-        logFiles = scanDir('log.*')
-        if len(logFiles) != 0:
-            MagicSetup.__init__(self, quiet=True, nml=logFiles[-1])
+        if ave:
+            self.name = 'B_coeff_cmb_ave'
+        elif sv:
+            self.name = 'B_coeff_dt_cmb'
         else:
-            str1 = 'Aspect ratio ?\n'
-            self.radratio = float(input(str1))
+            self.name = 'B_coeff_cmb'
+
+        if tag is not None:
+            pattern = os.path.join(datadir,  '%s.%s' % (self.name, tag))
+            files = scanDir(pattern)
+
+            # Either the log.tag directly exists and the setup is easy to obtain
+            if os.path.exists(os.path.join(datadir, 'log.%s' % tag)):
+                MagicSetup.__init__(self, datadir=datadir, quiet=True,
+                                    nml='log.%s' % tag)
+            # Or the tag is a bit more complicated and we need to find 
+            # the corresponding log file
+            else:
+                pattern = os.path.join(datadir, '%s' % self.name)
+                mask = re.compile(r'%s\.(.*)' % pattern)
+                if mask.match(files[-1]):
+                    ending = mask.search(files[-1]).groups(0)[0]
+                    pattern = os.path.join(datadir, 'log.%s' % ending)
+                    if logFiles.__contains__(pattern):
+                        MagicSetup.__init__(self, datadir=datadir, quiet=True,
+                                            nml='log.%s' % ending)
+        else:
+            pattern = os.path.join(datadir, '%s.*' % self.name)
+            files = scanDir(pattern)
+            filename = files[-1]
+            # Determine the setup
+            mask = re.compile(r'%s\.(.*)' % self.name)
+            ending = mask.search(files[-1]).groups(0)[0]
+            if os.path.exists('log.%s' % ending):
+                try:
+                    MagicSetup.__init__(self, datadir=datadir, quiet=True,
+                                    nml='log.%s' % ending)
+                except AttributeError:
+                    pass
 
         self.rcmb = 1./(1.-self.radratio)
         ricb = self.radratio/(1.-self.radratio)
-
-        if ave:
-            files = scanDir('B_coeff_cmb_ave.%s' % tag)
-        elif sv:
-            files = scanDir('B_coeff_dt_cmb.%s' % tag)
-        else:
-            files = scanDir('B_coeff_cmb.%s' % tag)
 
         # Read the B_coeff files (by stacking the different tags)
         data = []
@@ -183,8 +214,8 @@ class MagicCoeffCmb(MagicSetup):
         self.glm = np.zeros((self.nstep, self.lm_max_cmb), precision)
         self.hlm = np.zeros((self.nstep, self.lm_max_cmb), precision)
 
-        self.glm, self.hlm = getGauss(self.blm.real, self.blm.imag, 
-                                      self.ell, self.ms, scale_b, 
+        self.glm, self.hlm = getGauss(self.blm.real, self.blm.imag,
+                                      self.ell, self.ms, scale_b,
                                       ratio_cmb_surface, self.rcmb)
 
         # Time-averaged Gauss coefficient
@@ -237,8 +268,8 @@ class MagicCoeffCmb(MagicSetup):
         """
         Built-in function to sum two cmb files
 
-        .. note:: So far this function only works for two cmb files with the same 
-                  grid sizes. At some point, we might introduce grid extrapolation 
+        .. note:: So far this function only works for two cmb files with the same
+                  grid sizes. At some point, we might introduce grid extrapolation
                   to allow any summation/
         """
 
@@ -298,7 +329,7 @@ class MagicCoeffCmb(MagicSetup):
         ell = np.arange(self.l_max_cmb+1)
         fig = plt.figure()
         ax = fig.add_subplot(211)
-        ax.semilogy(ell[1:], self.ElM[1:], 'b-o')
+        ax.semilogy(ell[1:], self.ElM[1:], marker='o')
         if labTex:
             ax.set_xlabel(r'$\ell$')
         else:
@@ -307,8 +338,8 @@ class MagicCoeffCmb(MagicSetup):
         ax.set_xlim(1., self.l_max_cmb)
 
         ax1 = fig.add_subplot(212)
-        ax1.semilogy(ell[0:self.m_max_cmb+1:self.minc], self.EmM[::self.minc], 
-                     'b-o')   
+        ax1.semilogy(ell[0:self.m_max_cmb+1:self.minc], self.EmM[::self.minc],
+                     marker='o')
         if labTex:
             ax1.set_xlabel(r'$m$')
         else:
@@ -317,7 +348,7 @@ class MagicCoeffCmb(MagicSetup):
 
         fig1 = plt.figure()
         ax = fig1.add_subplot(111)
-        ax.loglog(ell[1:], self.taul, 'b-o')
+        ax.loglog(ell[1:], self.taul, marker='o')
         if labTex:
             ax.set_xlabel(r'$\ell$')
             ax.set_ylabel(r'$\tau_\ell$')
@@ -365,8 +396,8 @@ class MagicCoeffCmb(MagicSetup):
             blmCut = self.blm
 
         # Define shtns setup
-        sh = shtns.sht(int(self.l_max_cmb), int(self.m_max_cmb/self.minc), 
-                       mres=int(self.minc), 
+        sh = shtns.sht(int(self.l_max_cmb), int(self.m_max_cmb/self.minc),
+                       mres=int(self.minc),
                        norm=shtns.sht_orthonormal | shtns.SHT_NO_CS_PHASE)
 
         polar_opt_threshold = 1e-10
@@ -479,7 +510,7 @@ class MagicCoeffCmb(MagicSetup):
 
         # Define spectral transform setup
         sh = SpectralTransforms(l_max=self.l_max_cmb, minc=self.minc,
-                                lm_max=self.lm_max_cmb, 
+                                lm_max=self.lm_max_cmb,
                                 n_theta_max=nlat)
 
         # Transform data on grid space
@@ -612,9 +643,9 @@ class MagicCoeffR(MagicSetup):
     >>> cr = MagicCoeffR(tag='test*', field='V', r=2)
     >>> print(cr.ell, cr.wlm) # print \ell and w_{\ell m}
     >>> # Time-evolution of the poloidal energy in the (\ell=10, m=10) mode
-    >>> plot(cr.time, cr.epolLM[:, cr.idx[10, 10]]) 
+    >>> plot(cr.time, cr.epolLM[:, cr.idx[10, 10]])
     """
-    
+
     def __init__(self, tag, ratio_cmb_surface=1, scale_b=1, iplot=True,
                  field='B', r=1, precision='Float64', lCut=None, quiet=False):
         """
@@ -749,7 +780,7 @@ class MagicCoeffR(MagicSetup):
                 if m == 0:
                     epol = 0.5*self.ell[lm]*(self.ell[lm]+1)*( \
                            self.ell[lm]*(self.ell[lm]+1)/self.radius**2* \
-                           abs(self.wlm[:,lm])**2+ abs(self.dwlm[:,lm])**2 ) 
+                           abs(self.wlm[:,lm])**2+ abs(self.dwlm[:,lm])**2 )
                     etor = 0.5*self.ell[lm]*(self.ell[lm]+1)*abs(self.zlm[:, lm])**2
 
                     self.e_pol_axi_l[:, l] += epol
@@ -757,12 +788,12 @@ class MagicCoeffR(MagicSetup):
                 else:
                     epol = self.ell[lm]*(self.ell[lm]+1)*( \
                            self.ell[lm]*(self.ell[lm]+1)/self.radius**2* \
-                           abs(self.wlm[:,lm])**2+ abs(self.dwlm[:,lm])**2 ) 
+                           abs(self.wlm[:,lm])**2+ abs(self.dwlm[:,lm])**2 )
                     etor = self.ell[lm]*(self.ell[lm]+1)*abs(self.zlm[:, lm])**2
 
                 self.e_pol_l[:, l] += epol
                 self.e_tor_l[:, l] += etor
-        
+
 
         # Time-averaged energy
         facT = 1./(self.time[-1]-self.time[0])
@@ -882,7 +913,7 @@ class MagicCoeffR(MagicSetup):
 
         # Define spectral transform setup
         sh = SpectralTransforms(l_max=self.l_max_r, minc=self.minc,
-                                lm_max=self.lm_max_r, 
+                                lm_max=self.lm_max_r,
                                 n_theta_max=nlat)
 
         """
@@ -890,8 +921,8 @@ class MagicCoeffR(MagicSetup):
         import shtns
 
         # Define shtns setup
-        sh = shtns.sht(int(self.l_max_r), int(self.m_max_r/self.minc), 
-                       mres=int(self.minc), 
+        sh = shtns.sht(int(self.l_max_r), int(self.m_max_r/self.minc),
+                       mres=int(self.minc),
                        norm=shtns.sht_orthonormal | shtns.SHT_NO_CS_PHASE)
         """
 
@@ -1041,4 +1072,3 @@ class MagicCoeffR(MagicSetup):
 
         ax.set_xlabel(r'Spherical harmonic degree')
         ax.set_ylabel(r'Frequency')
-

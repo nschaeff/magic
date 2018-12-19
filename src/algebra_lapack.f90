@@ -7,6 +7,8 @@ module algebra
    private
 
    public :: prepare_mat, solve_mat
+   
+   logical, parameter :: multiple_rhs = .false.
 
    interface solve_mat
       module procedure solve_mat_real_rhs
@@ -74,28 +76,54 @@ contains
       !-- Local variables:
       real(cp) :: tmpr(n,nRHSs), tmpi(n,nRHSs)
       integer :: info, i, j
-
-      do j=1,nRHSs
-         do i=1,n
-            tmpr(i,j) = real(rhs(i,j))
-            tmpi(i,j) = aimag(rhs(i,j))
+      
+      if (multiple_rhs) then
+         do j=1,nRHSs
+            do i=1,n
+               tmpr(i,j) = real(rhs(i,j))
+               tmpi(i,j) = aimag(rhs(i,j))
+            end do
          end do
-      end do
 
 #if (DEFAULT_PRECISION==sngl)
-      call sgetrs('N',n,nRHSs,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,:),n,info)
-      call sgetrs('N',n,nRHSs,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,:),n,info)
+         call sgetrs('N',n,nRHSs,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,:),n,info)
+         call sgetrs('N',n,nRHSs,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,:),n,info)
 #elif (DEFAULT_PRECISION==dble)
-      call dgetrs('N',n,nRHSs,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,:),n,info)
-      call dgetrs('N',n,nRHSs,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,:),n,info)
+         call dgetrs('N',n,nRHSs,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,:),n,info)
+         call dgetrs('N',n,nRHSs,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,:),n,info)
 #endif
 
-      do j=1,nRHSs
-         do i=1,n
-            rhs(i,j)=cmplx(tmpr(i,j),tmpi(i,j),kind=cp)
+         do j=1,nRHSs
+            do i=1,n
+               rhs(i,j)=cmplx(tmpr(i,j),tmpi(i,j),kind=cp)
+            end do
          end do
-      end do
+      ! Hack to get exact match between sequential and distributed 
+      ! versions of the code!
+      ! This is not optimal and merely meant for debugging. 
+      ! Set the variable multiple_rhs=.true. to use the optimal 
+      ! variant
+      ! ------------------------------------------------------------------
+      else 
+         do j=1,nRHSs
+            do i=1,n
+               tmpr(i,1) = real(rhs(i,j))
+               tmpi(i,1) = aimag(rhs(i,j))
+            end do
 
+#if (DEFAULT_PRECISION==sngl)
+         call sgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,1),n,info)
+         call sgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,1),n,info)
+#elif (DEFAULT_PRECISION==dble)
+         call dgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,1),n,info)
+         call dgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,1),n,info)
+#endif
+
+            do i=1,n
+               rhs(i,j)=cmplx(tmpr(i,1),tmpi(i,1),kind=cp)
+            end do
+         end do
+      end if
 
    end subroutine solve_mat_complex_rhs_multi
 !-----------------------------------------------------------------------------

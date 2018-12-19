@@ -17,7 +17,8 @@ module outPar_mod
    use horizontal_data, only: gauss
    use fields, only: s_Rdist, ds_Rdist, p_Rdist, dp_Rdist
    use physical_parameters, only: ek, prmag, OhmLossFac, ViscHeatFac, &
-       &                          opr, kbots, ktops, ThExpNb
+       &                          opr, kbots, ktops, ThExpNb, ekScaled
+   use num_param, only: eScale
    use constants, only: pi, mass, osq4pi, sq4pi, half, two, four
    use radial_functions, only: r, or2, sigma, rho0, kappa, temp0, &
        &                       rscheme_oc, orho1, dLalpha0,       &
@@ -207,9 +208,9 @@ contains
             do n=1,nThetaBs ! Loop over theta blocks
                nTheta=(n-1)*sizeThetaB
                nThetaStart=nTheta+1
-               call lmAS2pt(duhLMr(1,nR),duh,nThetaStart,sizeThetaB)
-               call lmAS2pt(uhLMr(1,nR),uh,nThetaStart,sizeThetaB)
-               call lmAS2pt(gradsLMr(1,nR),gradT2,nThetaStart,sizeThetaB)
+               call lmAS2pt(duhLMr(:,nR),duh,nThetaStart,sizeThetaB)
+               call lmAS2pt(uhLMr(:,nR),uh,nThetaStart,sizeThetaB)
+               call lmAS2pt(gradsLMr(:,nR),gradT2,nThetaStart,sizeThetaB)
                do nThetaBlock=1,sizeThetaB
                   nTheta=nTheta+1
                   nThetaNHS=(nTheta+1)/2
@@ -293,9 +294,9 @@ contains
             do n=1,nThetaBs ! Loop over theta blocks
                nTheta=(n-1)*sizeThetaB
                nThetaStart=nTheta+1
-               call lmAS2pt(fkinLMr(1,nR),fkin,nThetaStart,sizeThetaB)
-               call lmAS2pt(fconvLMr(1,nR),fconv,nThetaStart,sizeThetaB)
-               call lmAS2pt(fviscLMr(1,nR),fvisc,nThetaStart,sizeThetaB)
+               call lmAS2pt(fkinLMr(:,nR),fkin,nThetaStart,sizeThetaB)
+               call lmAS2pt(fconvLMr(:,nR),fconv,nThetaStart,sizeThetaB)
+               call lmAS2pt(fviscLMr(:,nR),fvisc,nThetaStart,sizeThetaB)
                do nThetaBlock=1,sizeThetaB
                   nTheta=nTheta+1
                   nThetaNHS=(nTheta+1)/2
@@ -313,8 +314,8 @@ contains
                do n=1,nThetaBs ! Loop over theta blocks
                   nTheta=(n-1)*sizeThetaB
                   nThetaStart=nTheta+1
-                  call lmAS2pt(fpoynLMr(1,nR),fpoyn,nThetaStart,sizeThetaB)
-                  call lmAS2pt(fresLMr(1,nR),fres,nThetaStart,sizeThetaB)
+                  call lmAS2pt(fpoynLMr(:,nR),fpoyn,nThetaStart,sizeThetaB)
+                  call lmAS2pt(fresLMr(:,nR),fres,nThetaStart,sizeThetaB)
                   do nThetaBlock=1,sizeThetaB
                      nTheta=nTheta+1
                      nThetaNHS=(nTheta+1)/2
@@ -365,8 +366,9 @@ contains
 
       if ( coord_r == 0 ) then
          do nR=1,n_r_max
-            ReR(nR)=sqrt(two*ekinR(nR)*or2(nR)/(4*pi*mass))
-            RoR(nR)=ReR(nR)*ek
+            ! Re must be independant of the timescale
+            ReR(nR)=sqrt(two*ekinR(nR)*or2(nR)/(4*pi*mass)/eScale)
+            RoR(nR)=ReR(nR)*ekScaled
             if ( dlVR(nR) /= 0.0_cp ) then
                RolR(nR)=RoR(nR)/dlVR(nR)
             else
@@ -532,10 +534,10 @@ contains
          do n=1,nThetaBs ! Loop over theta blocks
             nTheta=(n-1)*sizeThetaB
             nThetaStart=nTheta+1
-            call lmAS2pt(EperpLMr(1,nR),Eperp,nThetaStart,sizeThetaB)
-            call lmAS2pt(EparLMr(1,nR),Epar,nThetaStart,sizeThetaB)
-            call lmAS2pt(EperpaxiLMr(1,nR),Eperpaxi,nThetaStart,sizeThetaB)
-            call lmAS2pt(EparaxiLMr(1,nR),Eparaxi,nThetaStart,sizeThetaB)
+            call lmAS2pt(EperpLMr(:,nR),Eperp,nThetaStart,sizeThetaB)
+            call lmAS2pt(EparLMr(:,nR),Epar,nThetaStart,sizeThetaB)
+            call lmAS2pt(EperpaxiLMr(:,nR),Eperpaxi,nThetaStart,sizeThetaB)
+            call lmAS2pt(EparaxiLMr(:,nR),Eparaxi,nThetaStart,sizeThetaB)
             do nThetaBlock=1,sizeThetaB
                nTheta=nTheta+1
                nThetaNHS=(nTheta+1)/2
