@@ -18,16 +18,16 @@ module fields
    !-- Velocity potentials:
    complex(cp), public, allocatable, target :: flow_LMloc_container(:,:,:)
    complex(cp), public, allocatable, target :: flow_Rdist_container(:,:,:)
-   complex(cp), public, pointer :: w_LMloc(:,:),dw_LMloc(:,:),ddw_LMloc(:,:), w_LMloc_new(:,:)
+   complex(cp), public, pointer :: w_LMloc(:,:),dw_LMloc(:,:),ddw_LMloc(:,:), w_LMdist(:,:)
    complex(cp), public, pointer :: w_Rdist(:,:), dw_Rdist(:,:), ddw_Rdist(:,:)
  
    complex(cp), public, pointer :: z_LMloc(:,:),dz_LMloc(:,:)
    complex(cp), public, pointer :: z_Rdist(:,:), dz_Rdist(:,:)
  
    !-- Entropy:
-   complex(cp), public, allocatable, target :: s_LMloc_container(:,:,:)
+   complex(cp), public, allocatable, target :: s_LMloc_container(:,:,:), s_LMdist_container(:,:,:)
    complex(cp), public, allocatable, target :: s_Rdist_container(:,:,:)
-   complex(cp), public, pointer :: s_LMloc(:,:), ds_LMloc(:,:), s_LMloc_new(:,:), ds_LMloc_new(:,:)
+   complex(cp), public, pointer :: s_LMloc(:,:), ds_LMloc(:,:), s_LMdist(:,:), ds_LMdist(:,:)
    complex(cp), public, pointer :: s_Rdist(:,:), ds_Rdist(:,:)
  
    !-- Chemical composition:
@@ -65,7 +65,7 @@ module fields
    complex(cp), public, allocatable :: dj_ic_LMloc(:,:)
    complex(cp), public, allocatable :: ddj_ic_LMloc(:,:)
 
-   complex(cp), public, allocatable :: work_LMloc(:,:), work_LMloc_new(:,:) ! Needed in update routines
+   complex(cp), public, allocatable :: work_LMloc(:,:), work_LMdist(:,:) ! Needed in update routines
    
    !-- Rotation rates:
    real(cp), public :: omega_ic,omega_ma
@@ -128,11 +128,15 @@ contains
       ds_Rdist(1:n_lm_loc,l_r:u_r)  => s_Rdist_container(:,:,2)
 
       !!! [NEW LAYOUT]
-      allocate(w_LMloc_new(n_mlo_loc,1:n_r_max))
-      allocate(s_LMloc_new(n_mlo_loc,1:n_r_max))
-      allocate(ds_LMloc_new(n_mlo_loc,1:n_r_max))
+      allocate(w_LMdist(n_mlo_loc,n_r_max))
+      allocate( work_LMdist(n_mlo_loc,n_r_max) )
       
-      allocate( work_LMloc_new(n_mlo_loc,1:n_r_max) )
+      allocate(s_LMdist_container(n_mlo_loc,n_r_max,2) )
+      s_LMdist(1:n_mlo_loc,1:n_r_max)  => s_LMdist_container(:,:,1)
+      ds_LMdist(1:n_mlo_loc,1:n_r_max) => s_LMdist_container(:,:,2)
+!       allocate(s_LMdist(n_mlo_loc,1:n_r_max))
+!       allocate(ds_LMdist(n_mlo_loc,1:n_r_max))
+      
       !!! [END NEW LAYOUT]
       
       bytes_allocated = bytes_allocated + &

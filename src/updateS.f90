@@ -18,7 +18,7 @@ module updateS_mod
    use parallel_mod, only: rank,chunksize
    use algebra, only: prepare_mat, solve_mat
    use radial_der, only: get_ddr, get_dr
-   use fields, only:  work_LMloc, work_LMloc_new
+   use fields, only:  work_LMloc, work_LMdist
    use constants, only: zero, one, two
    use useful, only: abortRun
    
@@ -422,11 +422,11 @@ contains
       O_dt=one/dt
 
 
-      call get_dr( dVSrLM, work_LMloc_new, n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc, nocopy=.true. )
+      call get_dr( dVSrLM, work_LMdist, n_mlo_loc,1,n_mlo_loc,n_r_max,rscheme_oc, nocopy=.true. )
       !-- Get radial derivatives of s: work_LMloc,dsdtLast used as work arrays
       do r=1,n_r_max
          do i=1,n_mlo_loc
-            dsdt(i,r)=orho1(r)*(dsdt(i,r)-or2(r)*work_LMloc_new(i,r)- &
+            dsdt(i,r)=orho1(r)*(dsdt(i,r)-or2(r)*work_LMdist(i,r)- &
             &           dLh(map_mlo%i2ml(i))*or2(r)*       &
             &           dentropy0(r)*w(i,r))
          end do
@@ -532,7 +532,7 @@ contains
       !-- set cheb modes > rscheme_oc%n_max to zero (dealiazing)
       s(:,rscheme_oc%n_max+1:n_r_max)=zero
 
-      call get_ddr(s, ds, work_LMloc_new, n_mlo_loc, 1,  &
+      call get_ddr(s, ds, work_LMdist, n_mlo_loc, 1,  &
             &       n_mlo_loc, n_r_max, rscheme_oc, l_dct_in=.false.)
       call rscheme_oc%costf1(s,n_mlo_loc,1,n_mlo_loc)
 
@@ -542,7 +542,7 @@ contains
             lm = map_mlo%i2ml(i)
             dsdtLast(i,r)=                         dsdt(i,r) &
             &                        - coex*opr*hdif_S(lm) * &
-            &               kappa(r) * ( work_LMloc_new(i,r) &
+            &               kappa(r) * ( work_LMdist(i,r) &
             & + ( beta(r)+dLtemp0(r)+two*or1(r)+dLkappa(r) ) &
             &                                      * ds(i,r) &
             &                               - dLh(lm)*or2(r) &

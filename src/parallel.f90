@@ -66,7 +66,7 @@ module parallel_mod
    integer ::    comm_m
    integer :: n_ranks_m
    integer ::   coord_m
-   integer, allocatable :: lm2rank(:,:), &
+   integer, allocatable :: lm2rank(:,:), &   ! Maybe rename "lm2rank" to "mr2rank"? Because it takes lm2rank(coord_m, coord_r) as arguments...
                            rank2m(:)
    
    !   ML-Space (ML Loop)
@@ -84,6 +84,28 @@ module parallel_mod
    integer :: rank_with_l1m0
    integer :: chunksize
    integer :: ierr
+   
+   !   Maps coordinates from one cartesian grid to another.
+   !   Acronyms convention:
+   !   gsp:  grid space as (φ,θ,r). 
+   !         Partition in (θ,r), all φ are local
+   !   lmr:  spherical-harmonic domain, with tuples ordered as (l,m,r); used in the radial loop
+   !         Partition in (m,r), all l are local
+   !   mlo:  spherical-harmonic domain, with tuples ordered as (m,l,r); used in the "lmloop"
+   !         Partition in (m,l), all r are local; however, the (m,l) tuples are treated as 1D 
+   !         instead of 2D.
+   !   rnk: rank according to MPI_COMM_WORLD
+   type, public :: cart_map
+      integer, allocatable :: gsp2rnk(:,:)
+      integer, allocatable :: rnk2gsp(:,:)  ! rnk2gsp(:,1) => θ, rnk2gsp(:,2) => r
+      integer, allocatable :: rnk2lmr(:,:)  ! rnk2lmr(:,1) => m, rnk2lmr(:,2) => r
+      integer, allocatable :: rnk2mlo(:)   
+      integer, allocatable :: lmr2mlo(:,:)
+      integer, allocatable :: lmr2rnk(:,:)
+      integer, allocatable :: mlo2lmr(:,:)  ! mlo2lmr(:,1) => m, mlo2lmr(:,2) => r
+   end type cart_map
+   
+   type(cart_map) :: cart
 
 contains
    
@@ -102,6 +124,18 @@ contains
       if (rank .ne. 0) lVerbose   = .false.
       
    end subroutine initialize_mpi_world
+   
+   !------------------------------------------------------------------------------
+   subroutine finalize_cart_map
+      
+      deallocate(cart%gsp2rnk)
+      deallocate(cart%rnk2gsp)
+      deallocate(cart%rnk2lmr)
+      deallocate(cart%rnk2mlo)
+      deallocate(cart%lmr2mlo)
+      deallocate(cart%mlo2lmr)
+   
+   end subroutine finalize_cart_map
    
    !------------------------------------------------------------------------------
    subroutine initialize_mpi_decomposition
@@ -149,12 +183,22 @@ contains
       call MPI_Comm_Rank(comm_theta, coord_theta, ierr) 
       call check_MPI_error(ierr)
       
+      
+      
+      ! old
       allocate(rank2theta(0:n_ranks-1))
       allocate(rank2r(0:n_ranks-1))
       allocate(gs2rank(0:n_ranks_theta-1,0:n_ranks_r-1))
+      ! new
+      allocate(cart%gsp2rnk(0:n_ranks_theta-1,0:n_ranks_r-1))
+      allocate(cart%rnk2gsp(0:n_ranks-1, 2))
       
       do i=0,n_ranks-1
          call mpi_cart_coords(comm_gs, i, 2, coords, ierr)
+         cart%gsp2rnk(coords(2),coords(1)) = i
+         cart%rnk2gsp(i,1) = coords(2)  ! θ/m
+         cart%rnk2gsp(i,2) = coords(1)  ! r
+         
          rank2theta(i) = coords(2)
          rank2r(i)     = coords(1)
          gs2rank(coords(2),coords(1)) = i
@@ -171,11 +215,17 @@ contains
       n_ranks_m = n_ranks_theta
       coord_m   = coord_theta
       
+      ! old
       allocate(rank2m(0:n_ranks-1))
       allocate(lm2rank(0:n_ranks_m-1,0:n_ranks_r-1))
-      
       lm2rank   = gs2rank
       rank2m    = rank2theta
+      
+      ! new
+      allocate(cart%rnk2lmr(0:n_ranks-1, 2))
+      allocate(cart%lmr2rnk(0:n_ranks_m-1,0:n_ranks_r-1))
+      cart%rnk2lmr = cart%rnk2gsp
+      cart%lmr2rnk = cart%gsp2rnk
       
       !-- ML Space (ML Loop)
       !   
@@ -189,14 +239,24 @@ contains
       
       comm_mlo = MPI_COMM_WORLD
       
+      ! old
       allocate(rank2mo(0:n_ranks-1))
       allocate(rank2lo(0:n_ranks-1))
       allocate(mlo2rank(0:n_ranks_mo-1,0:n_ranks_lo-1))
-      
       rank2lo  = rank2r
       rank2mo  = rank2m
       mlo2rank = gs2rank
       
+      ! new
+      allocate(cart%rnk2mlo(0:n_ranks-1))
+      allocate(cart%mlo2lmr(0:n_ranks_mlo-1, 2))
+      allocate(cart%lmr2mlo(0:n_ranks_m-1,0:n_ranks_r-1))
+      ! I know, it is unnecessary. But it helps with the reading of the code imho
+      do i=0,n_ranks-1
+         cart%rnk2mlo(i) = i
+      end do
+      cart%mlo2lmr = cart%rnk2gsp
+      cart%lmr2mlo = cart%lmr2rnk
       
    end subroutine initialize_mpi_decomposition
    
@@ -229,6 +289,9 @@ contains
       deallocate(rank2theta, rank2r, gs2rank)
       deallocate(rank2m, lm2rank)
       deallocate(rank2mo, rank2lo, mlo2rank)
+      
+      call finalize_cart_map
+      
    end subroutine finalize_mpi_decomposition
 
    !------------------------------------------------------------------------------

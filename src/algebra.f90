@@ -37,7 +37,7 @@ contains
       integer,  intent(in) :: n         ! dimension of problem
       integer,  intent(in) :: ia        ! first dim of a
       integer,  intent(in) :: ip(*)     ! pivot pointer of legth n
-      real(cp), intent(in) :: a(ia,*)    ! real n X n matrix
+      real(cp), intent(in) :: a(ia,*)   ! real n X n matrix
 
       !-- Output: solution stored in bc1(*)
       complex(cp), intent(inout) :: bc1(*) ! on input RHS of problem

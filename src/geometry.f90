@@ -113,23 +113,25 @@ module geometry
    !   
    !   For discontinuous variables:
    !   dist_V(i,0)  = how many V points are there for rank i
-   !   dist_V(i,1:) = an array containing all of the V points in rank i. Since
-   !      the number of points is not necessarily the same in all ranks, make
-   !      sure that all points of rank i are in dist_V(i,1:n_V_loc) and the
-   !      remaining dist_V(i,n_V_loc+1:) points are set to a negative number.
+   !   dist_V(i,1:) = an array containing all of the V points in rank i of 
+   !      communicator comm_V. Since the number of points is not necessarily 
+   !      the same in all ranks, make sure that all points of rank i are in 
+   !      dist_V(i,1:n_V_loc) and the remaining dist_V(i,n_V_loc+1:) points 
+   !      are set to a negative number.
    !      
-   !   Notice that n_lm_loc, n_lmP_loc and etc are not the same as lm_max and lmP_max.
-   !   The former stores the number of *local* points, the later stores the 
-   !   total number of points in all ranks.
+   !   Notice that n_lm_loc, n_lmP_loc, n_lm, n_lmP and etc are not the same
+   !   as lm_max and lmP_max. The former stores the number of *local* points,
+   !   the later stores the total number of points in all ranks.
    !   
-   !   Notice that n_lm, n_lmP and etc are not the same as lm_max and lmP_max.
-   !   The former stores the number of *local* points, the later stores the 
-   !   total number of points in all ranks.
+   !   V_tsid(x) = the inverse of dist_V (quite literally; the name is just 
+   !      written backwards; sorry!) V_tsid(x) returns which coord_V of 
+   !      comm_V stores/computes the point x. This is not necessary for all
+   !      dist_V, specially not for the contiguous ones (e.g. dist_r)
    !   
 
    !-- Distributed Grid Space 
    integer, allocatable, protected :: dist_theta(:,:)
-   integer, allocatable, protected :: dist_r(:,:)
+   integer, allocatable, protected :: dist_r(:,:), rB_tsid(:,:)
    integer, protected :: n_theta_loc, l_theta, u_theta
    integer, protected :: n_r_loc, l_r, u_r
    
@@ -154,14 +156,14 @@ module geometry
    !   n_lmP_loc: total number of l and m points (for l_max+1) in this rank
    !   
    !   n_m_array: if m_max is not divisible by n_ranks_m, some ranks will 
-   !          receive more m points than others. 
-   !          n_m_array is basically MPI_ALLREDUCE(n_m_array,n_m_loc,MPI_MAX)
-   !          It is also the size of the 2nd dimension of dist_m.
-   !          Set the extra dist_m(i,1:n_m_loc) to the points in rank i and the 
-   !          remaining dist_m(i,n_m_loc+1:n_m_array) to a negative number. 
+   !     receive more m points than others. 
+   !     n_m_array is basically MPI_ALLREDUCE(n_m_array,n_m_loc,MPI_MAX)
+   !     It is also the size of the 2nd dimension of dist_m.
+   !     Set the extra dist_m(i,1:n_m_loc) to the points in rank i and the 
+   !     remaining dist_m(i,n_m_loc+1:n_m_array) to a negative number. 
    !   
    !        allocatable, protected :: dist_r(:,:) => same as dist_r from Grid Space
-   integer, allocatable, protected :: dist_m(:,:)
+   integer, allocatable, protected :: dist_m(:,:), m_tsid(:)
    integer, allocatable, protected :: dist_n_lm(:)
    integer, allocatable, protected :: dist_n_lmP(:)
    integer, protected :: n_m_loc, n_lm_loc, n_lmP_loc
@@ -188,7 +190,7 @@ module geometry
    !   optimized. I'm afraid that a reasonable distribution would require a very
    !   complex routine which deals with graphs and trees.
    !
-   integer, allocatable, protected :: dist_mlo(:,:,:)
+   integer, allocatable, protected :: dist_mlo(:,:,:), mlo_tsid(:,:)
    integer, allocatable, protected :: dist_n_mlo(:)
    integer, protected :: n_mo_loc, n_lo_loc, n_mlo_loc
    integer, protected :: n_mlo_array, mlo_max
@@ -303,13 +305,13 @@ contains
       
       !-- Finalize distributed grid space
       deallocate(dist_theta)
-      deallocate(dist_r)
+      deallocate(dist_r, rB_tsid)
       
       !-- Finalize distributed lm
-      deallocate(dist_m)
+      deallocate(dist_m, m_tsid)
       
       !-- Finalize distributed mlo
-      deallocate(dist_mlo)
+      deallocate(dist_mlo, mlo_tsid)
       deallocate(dist_n_mlo)
       
    end subroutine finalize_geometry
@@ -321,6 +323,7 @@ contains
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !   
+      integer :: irank_r
       
       !-- Distribute Grid Space θ
       !
@@ -373,6 +376,7 @@ contains
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !   
+      integer :: m, icoord_m, mi
       
       n_m_array = ceiling(real(n_m_max) / real(n_ranks_m))
       allocate(dist_m(0:n_ranks_m-1, 0:n_m_array))
@@ -410,6 +414,18 @@ contains
       if (l_TP_form      ) n_lmTP_loc  = n_lm_loc
       if (l_double_curl  ) n_lmDC_loc  = n_lm_loc
       
+      !-- Fills the reverse mapping
+      !
+      allocate(m_tsid(0:l_max))
+      m_tsid = -1
+      do icoord_m=0,n_ranks_m-1
+         do mi=1,dist_m(icoord_m,0)
+            m = dist_m(icoord_m,mi)
+            if (m<0) cycle
+            m_tsid(m) = icoord_m
+         end do
+      end do
+      
    end subroutine distribute_lm
    !----------------------------------------------------------------------------
    subroutine distribute_mlo
@@ -422,14 +438,13 @@ contains
       !   
       !   coord_m [m in (l,m,r) coordinates] = coord_mo [m in (r,m,l) coordinates]
       !   
-      !   1) Splits n_lm(coord_m=coord_mo) amongst n_rank_r = n_rank_lo ranks.
+      !   1) Splits n_lm(coord_m=coord_mo) amongst n_ranks_r = n_ranks_lo ranks.
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !   
       integer :: tmp(0:n_ranks_r-1,0:2)
       integer :: icoord_mlo, icoord_mo, icoord_lo
-      integer :: m_idx, l_idx, mlo_idx, irank
-      integer :: l, m
+      integer :: l, m, i
       
       allocate(dist_n_mlo(0:n_ranks-1))
       dist_n_mlo = 0
@@ -441,7 +456,7 @@ contains
          call distribute_contiguous_last(tmp, dist_n_lm(icoord_mo), n_ranks_lo)
          
          !-- We have split all the n_lm poitns of coord_m=coord_mo into
-         !   n_rank_lo parts. Now we just need to copy this amount into each
+         !   n_ranks_lo parts. Now we just need to copy this amount into each
          !   coord_lo
          do icoord_lo=0,n_ranks_lo-1
             icoord_mlo = mlo2rank(icoord_mo, icoord_lo)
@@ -480,6 +495,19 @@ contains
       
       n_mlo_loc = dist_n_mlo(coord_mlo)
       mlo_max = lm_max
+      
+      !-- Fills the reverse mapping
+      !  
+      allocate(mlo_tsid(0:l_max,0:l_max))
+      mlo_tsid = -1
+      do icoord_mlo=0,n_ranks_mlo-1
+         do i=1,dist_n_mlo(icoord_mlo)
+            m = dist_mlo(icoord_mlo,i,1)
+            l = dist_mlo(icoord_mlo,i,2)
+            if(m>=0 .and. l>=0) mlo_tsid(m,l) = icoord_mlo
+         end do
+      end do
+      
       
    end subroutine distribute_mlo
    

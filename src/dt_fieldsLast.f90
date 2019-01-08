@@ -24,7 +24,7 @@ module fieldsLast
    complex(cp), public, allocatable :: dwdtLast_LMloc(:,:)
    complex(cp), public, allocatable :: dpdtLast_LMloc(:,:)
    complex(cp), public, allocatable :: dzdtLast_lo(:,:)
-   complex(cp), public, allocatable :: dsdtLast_LMloc(:,:), dsdtLast_LMloc_new(:,:)
+   complex(cp), public, allocatable :: dsdtLast_LMloc(:,:), dsdtLast_LMdist(:,:)
    complex(cp), public, allocatable :: dxidtLast_LMloc(:,:)
  
    complex(cp), public, allocatable :: dbdtLast_LMloc(:,:)
@@ -47,7 +47,7 @@ contains
       allocate( dsdtLast_LMloc(llm:ulm,n_r_max) )
       
       !! [BEGIN NEW LAYOUT]
-      allocate( dsdtLast_LMloc_new(n_mlo_loc,n_r_max) )
+      allocate( dsdtLast_LMdist(n_mlo_loc,n_r_max) )
       !! [END NEW LAYOUT]
       
       bytes_allocated = bytes_allocated + &
@@ -79,7 +79,7 @@ contains
       deallocate( dbdt_icLast_LMloc, djdt_icLast_LMloc )
       deallocate( dxidtLast_LMloc )
       
-      deallocate( dsdtLast_LMloc_new )
+      deallocate( dsdtLast_LMdist )
 
    end subroutine finalize_fieldsLast
 !-------------------------------------------------------------------------------
