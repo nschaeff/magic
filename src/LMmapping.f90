@@ -79,7 +79,7 @@ module LMmapping
    !--------------------------------------------------------------------------
    type, public :: ml_mappings
       integer, allocatable :: i2l(:), i2m(:), i2ml(:)
-      integer, allocatable :: ml2i(:,:), ml2coord(:,:)
+      integer, allocatable :: ml2i(:,:)
       integer, allocatable :: milj2i(:,:), milj2m(:,:)
       integer, allocatable :: n_mi(:), lj2l(:)
       integer :: n_li
@@ -196,8 +196,6 @@ contains
       !   Author: Rafael Lago, MPCDF, November 2018
       !   
       type(ml_mappings), intent(inout) :: self
-      
-      allocate( self%ml2coord(0:l_max, 0:l_max) )
       
       ! These two will point to their target in set_mlmapping
       allocate( self%i2m(n_mlo_loc) )

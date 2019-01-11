@@ -23,7 +23,7 @@ module LMLoop_mod
    use debugging,  only: debug_write
    use communications, only: GET_GLOBAL_SUM, lo2r_redist_start, lo2r_xi, &
        &                    lo2r_s, lo2r_flow, lo2r_field,               &
-       &                    lo2r_redist_start_dist, transform_new2old, transform_old2new, transpose_ml_r
+       &                    lo2r_redist_start_dist, transform_new2old, transform_old2new, transpose_ml_r, lo2r_redist_wait_dist
    use updateS_mod
    use updateZ_mod
    use updateWP_mod
@@ -164,24 +164,31 @@ contains
       complex(cp) :: test_old(llm:ulm,n_r_max)
       real(cp) :: test_norm, error_threshold
       
-      complex(cp) :: test_ml(n_mlo_loc, n_r_max, 3)
-      complex(cp) :: test_r (n_lm_loc, l_r:u_r,  3)
+      complex(cp) :: test_ml(n_mlo_loc, n_r_max, 2)
+      complex(cp) :: test_r (n_lm_loc, l_r:u_r,  2)
 
       integer :: i,j,k
       
-! ! ! ! ! ! ! ! ! !       call transform_old2new(s_LMloc, s_LMdist)
-! ! ! ! ! ! ! ! ! !       call transform_old2new(ds_LMloc, ds_LMdist)
-! ! ! ! ! ! ! ! ! !       call transform_old2new(w_LMloc, w_LMdist)
-! ! ! ! ! ! ! ! ! !       call transform_old2new(dsdt, dsdt_new)
-! ! ! ! ! ! ! ! ! !       call transform_old2new(dVSrLM, dVSrLM_new)
-! ! ! ! ! ! ! ! ! !       call transform_old2new(dsdtLast_LMloc, dsdtLast_LMdist)
+      s_LMloc = 1.0
+      ds_LMloc = 1.0
+      w_LMloc = 1.0
+      dsdt = 1.0
+      dVSrLM = 1.0
+      dsdtLast_LMloc = 1.0
+      
+      call transform_old2new(s_LMloc, s_LMdist)
+      call transform_old2new(ds_LMloc, ds_LMdist)
+      call transform_old2new(w_LMloc, w_LMdist)
+      call transform_old2new(dsdt, dsdt_new)
+      call transform_old2new(dVSrLM, dVSrLM_new)
+      call transform_old2new(dsdtLast_LMloc, dsdtLast_LMdist)
 
-      call transpose_ml_r( test_ml,  test_r, 3)
-      print *, "Transp done; Printing -------------------------"
-      print *, "-------------------------"
-      print *, test_r(:,l_r:l_r+3,2)
-      print *, "-------------------------"
-      stop
+!       call transpose_ml_r( test_ml,  test_r, 2)
+!       print *, "Transp done; Printing -------------------------"
+!       print *, "-------------------------"
+!       print *, test_r(:,l_r:u_r,:)
+!       print *, "-------------------------"
+!       stop
       
       
       
@@ -259,7 +266,6 @@ contains
                call updateS_new( s_LMdist, ds_LMdist, w_LMdist, dVSrLM_new, dsdt_new, &
                     &             dsdtLast_LMdist, w1, coex, dt, nLMB)
                
-               
                error_threshold = 0.0
                error_threshold = EPSILON(1.0_cp)
                
@@ -283,6 +289,8 @@ contains
                test_norm = ABS(SUM(dVSrLM - test_old))
                IF (test_norm>error_threshold) print *, "|| dVSrLM_new - dVSrLM || : ", test_norm
                
+               stop 
+               
                call transform_new2old(s_LMdist, s_LMloc)
                call transform_new2old(ds_LMdist, ds_LMloc)
                call transform_new2old(w_LMdist, w_LMloc)
@@ -295,7 +303,14 @@ contains
             ! Here one could start the redistribution of s_LMloc,ds_LMloc etc. with a 
             ! nonblocking send
             !PERFON('rdstSst')
-            call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_Rdist_container)
+!             call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_Rdist_container)
+!             call lo2r_redist_wait_dist(lo2r_s)
+            call transpose_ml_r( s_LMdist_container,  test_r, 2)
+            test_norm = ABS(SUM(test_r - s_Rdist_container))
+            IF (test_norm>error_threshold) print *, "|| diff  || : ", test_norm
+            print *, "|| diff  || : ", test_norm
+            
+            stop
             !PERFOFF
          end if
 

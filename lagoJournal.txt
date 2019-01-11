@@ -1,3 +1,6 @@
+TO READ: https://software.intel.com/en-us/articles/introduction-to-the-conditional-numerical-reproducibility-cnr
+
+
 2018-11-23
 -------------------------------------------------------------------------------
 - transform_old2new and transform_new2old working. Now I can start porting

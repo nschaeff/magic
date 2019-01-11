@@ -1870,7 +1870,7 @@ contains
          icoord_r = cart%mlo2lmr(icoord_mlo,2)
          in_r = dist_r(icoord_r,0)
          il_r = dist_r(icoord_r,1)
-         call mpi_isend(container_ml(1,1,1), 1, send_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,1), ierr)
+         call mpi_isend(container_ml(1,il_r,1), 1, send_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,1), ierr)
          call mpi_irecv(container_rm(1,l_r,1), 1, recv_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,2), ierr)
       end do
       
@@ -1879,7 +1879,8 @@ contains
       do i=1,inblocks
          k = send_displacements(i,coord_mlo) + 1
          j = recv_displacements(i,coord_mlo) + 1
-         container_rm(j,l_r:u_r,:) = container_ml(k,l_r:u_r,:)
+         container_rm(j,l_r:u_r,1) = container_ml(k,l_r:u_r,1)
+         container_rm(j,l_r:u_r,2) = container_ml(k,l_r:u_r,2)
       end do
       
       call mpi_waitall(2*n_ranks_mlo,Rq,MPI_STATUSES_IGNORE,ierr)
@@ -2013,11 +2014,11 @@ contains
       integer :: irank, ierr, lm, l, m
       
       do lm=1,lm_max
-!          m = map_glbl_st%lm2m(lm)
-!          l = map_glbl_st%lm2l(lm)
-         m = lo_map%lm2m(lm)
-         l = lo_map%lm2l(lm)
-         irank = map_mlo%ml2coord(m,l)
+         m = map_glbl_st%lm2m(lm)
+         l = map_glbl_st%lm2l(lm)
+!          m = lo_map%lm2m(lm)
+!          l = lo_map%lm2l(lm)
+         irank = mlo_tsid(m,l)
          if (irank==coord_mlo) recvbuff = Fmlo_new(map_mlo%ml2i(m,l),:)
          call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_mlo, ierr)
 
@@ -2051,7 +2052,7 @@ contains
             
             if (irank==coord_r) recvbuff = Fmlo_old(lm,:)
             call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_r, ierr)
-            if (map_mlo%ml2coord(m,l)==coord_mlo) Fmlo_new(map_mlo%ml2i(m,l),:) = recvbuff
+            if (mlo_tsid(m,l)==coord_mlo) Fmlo_new(map_mlo%ml2i(m,l),:) = recvbuff
          end do
       end do
       
