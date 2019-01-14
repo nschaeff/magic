@@ -13,7 +13,7 @@ module LMLoop_mod
    use mem_alloc, only: memWrite, bytes_allocated
    use geometry, only: l_max, lm_max, n_r_max, n_r_maxMag, n_r_icb,    &
        &            n_r_cmb, n_mlo_loc, n_lm_loc, l_r, u_r
-   use blocking, only: lmStartB, lmStopB, lo_map
+   use blocking, only: lmStartB, lmStopB, lo_map, st_map
    use logic, only: l_mag, l_conv, l_anelastic_liquid, lVerbose, l_heat, &
        &            l_single_matrix, l_chemical_conv, l_TP_form,         &
        &            l_save_out
@@ -34,7 +34,7 @@ module LMLoop_mod
    use radial_functions
    
    use radial_der          ! Added by LAGO, remove later
-   use lmmapping, only: map_mlo
+   use lmmapping, only: map_mlo, map_dist_st, map_glbl_st
 
    implicit none
 
@@ -161,13 +161,14 @@ contains
       complex(cp) :: dVSrLM_new(n_mlo_loc,n_r_max)
       complex(cp) :: dsdt_new(n_mlo_loc,n_r_max)
       
-      complex(cp) :: test_old(llm:ulm,n_r_max)
+      complex(cp) :: test_new(n_mlo_loc,n_r_max)
+      complex(cp) :: test_old(llm:ulm,  n_r_max)
       real(cp) :: test_norm, error_threshold
       
       complex(cp) :: test_ml(n_mlo_loc, n_r_max, 2)
       complex(cp) :: test_r (n_lm_loc, l_r:u_r,  2)
 
-      integer :: i,j,k
+      integer :: i,j,k, m
       
       s_LMloc = 1.0
       ds_LMloc = 1.0
@@ -176,7 +177,41 @@ contains
       dVSrLM = 1.0
       dsdtLast_LMloc = 1.0
       
-      call transform_old2new(s_LMloc, s_LMdist)
+      do j=1,n_r_max
+         do i=llm,ulm
+            m = lo_map%lm2m(i)
+            l = lo_map%lm2l(i)
+            s_LMloc(i,j) = cmplx(map_glbl_st%lm2(l,m), j)
+         end do
+      end do
+      
+      ds_LMloc = s_LMloc
+      w_LMloc = s_LMloc
+      dsdt = s_LMloc
+      dVSrLM = s_LMloc
+      dsdtLast_LMloc = s_LMloc
+!       
+!       do j=1, n_r_max
+!          do i=1,n_mlo_loc
+!             s_LMdist(i,j) = cmplx(map_mlo%i2ml(i), j)
+!          end do
+!       end do
+! !       print *, "----------------------Original----------"
+! !       print *, s_LMloc
+! !       print *, "----------------------Expected----------"
+! !       print *, s_LMdist
+!       
+!       
+!       call transform_new2old(s_LMdist, test_old)
+!       call transform_old2new(test_old, test_new)
+! !       print *, "----------------------Obtained----------"
+! !       print *, test_new
+!       
+!       test_norm = ABS(SUM(s_LMdist - test_new))
+!       print *, "|| s_new - s || : ", test_norm
+!       stop
+               
+               
       call transform_old2new(ds_LMloc, ds_LMdist)
       call transform_old2new(w_LMloc, w_LMdist)
       call transform_old2new(dsdt, dsdt_new)
@@ -270,6 +305,13 @@ contains
                error_threshold = EPSILON(1.0_cp)
                
                call transform_new2old(s_LMdist, test_old)
+               print *, "----------------- Original: "
+               print *, s_LMloc(llm:llm+5,1:5)
+               print *, "----------------- New: "
+               print *, test_old(llm:llm+5,1:5)
+               
+               stop
+               
                test_norm = ABS(SUM(s_LMloc - test_old))
                IF (test_norm>error_threshold) print *, "|| s_new - s || : ", test_norm
                

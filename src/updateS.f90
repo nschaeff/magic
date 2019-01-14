@@ -248,7 +248,7 @@ contains
                lm1=lm22lm(lm,nLMB2,nLMB)
                !l1 =lm22l(lm,nLMB2,nLMB)
                m1 =lm22m(lm,nLMB2,nLMB)
-
+               
                if ( l1 == 0 ) then
                   rhs(1)=      real(tops(0,0))
                   rhs(n_r_max)=real(bots(0,0))
@@ -304,6 +304,8 @@ contains
                else
                   lmB=lmB+1
                   if ( m1 > 0 ) then
+                     print *, "------------- oriringal LHRS", l1, m1
+                     print *, rhs1(:,lmB,threadid)
                      do n_r_out=1,rscheme_oc%n_max
                         s(lm1,n_r_out)=rhs1(n_r_out,lmB,threadid)
                      end do
@@ -381,7 +383,6 @@ contains
       call omp_set_num_threads(maxThreads)
 #endif
       !PERFOFF
-
    end subroutine updateS
    
 !------------------------------------------------------------------------------
@@ -426,8 +427,9 @@ contains
       !-- Get radial derivatives of s: work_LMloc,dsdtLast used as work arrays
       do r=1,n_r_max
          do i=1,n_mlo_loc
+            lm = map_glbl_st%lm2(map_mlo%i2l(i),map_mlo%i2m(i))
             dsdt(i,r)=orho1(r)*(dsdt(i,r)-or2(r)*work_LMdist(i,r)- &
-            &           dLh(map_mlo%i2ml(i))*or2(r)*       &
+            &           dLh(lm)*or2(r)*       &
             &           dentropy0(r)*w(i,r))
          end do
       end do
@@ -462,6 +464,8 @@ contains
             m = map_mlo%milj2m(mi,lj)
             i = map_mlo%milj2i(mi,lj)
             lm = map_glbl_st%lm2(l,m)
+            
+            print *, "(m,l): ", mi, lj, m, l, i, lm
 
             if ( l == 0 ) then
                rhs(1)=      real(tops(0,0))
@@ -517,6 +521,8 @@ contains
                end do
             else
                if ( m > 0 ) then
+                  print *, "------------- LHRS", l, m
+                  print *, rhs1_new(:,mi)
                   do r=1,rscheme_oc%n_max
                      s(m0lj+mi,r)=rhs1_new(r,mi)
                   end do
@@ -539,7 +545,7 @@ contains
       !-- Calculate explicit time step part:
       do r=n_r_cmb+1,n_r_icb-1
          do i=1, n_mlo_loc
-            lm = map_mlo%i2ml(i)
+            lm = map_glbl_st%lm2(map_mlo%i2l(i),map_mlo%i2m(i))
             dsdtLast(i,r)=                         dsdt(i,r) &
             &                        - coex*opr*hdif_S(lm) * &
             &               kappa(r) * ( work_LMdist(i,r) &

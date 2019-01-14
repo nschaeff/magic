@@ -132,10 +132,10 @@ contains
       allocate( work_LMdist(n_mlo_loc,n_r_max) )
       
       allocate(s_LMdist_container(n_mlo_loc,n_r_max,2) )
-      s_LMdist(1:n_mlo_loc,1:n_r_max)  => s_LMdist_container(:,:,1)
-      ds_LMdist(1:n_mlo_loc,1:n_r_max) => s_LMdist_container(:,:,2)
-!       allocate(s_LMdist(n_mlo_loc,1:n_r_max))
-!       allocate(ds_LMdist(n_mlo_loc,1:n_r_max))
+!       s_LMdist(1:n_mlo_loc,1:n_r_max)  => s_LMdist_container(:,:,1)
+!       ds_LMdist(1:n_mlo_loc,1:n_r_max) => s_LMdist_container(:,:,2)
+      allocate(s_LMdist(n_mlo_loc,1:n_r_max))
+      allocate(ds_LMdist(n_mlo_loc,1:n_r_max))
       
       !!! [END NEW LAYOUT]
       

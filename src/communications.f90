@@ -2011,18 +2011,18 @@ contains
       complex(cp), intent(inout) :: Fmlo_old(llm:ulm,   n_r_max)
       
       complex(cp) :: recvbuff(n_r_max)
-      integer :: irank, ierr, lm, l, m
+      integer :: iroot, ierr, lm, l, m, i
       
       do lm=1,lm_max
          m = map_glbl_st%lm2m(lm)
          l = map_glbl_st%lm2l(lm)
-!          m = lo_map%lm2m(lm)
-!          l = lo_map%lm2l(lm)
-         irank = mlo_tsid(m,l)
-         if (irank==coord_mlo) recvbuff = Fmlo_new(map_mlo%ml2i(m,l),:)
-         call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_mlo, ierr)
-
-         if (lm>=llm .and. lm<=ulm) Fmlo_old(lm,:) = recvbuff
+         iroot = mlo_tsid(m,l)
+         
+         if (iroot==coord_mlo) recvbuff = Fmlo_new(map_mlo%ml2i(m,l),:)
+         call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, iroot, comm_mlo, ierr)
+         
+         i = lo_map%lm2(l,m)
+         if (i>=llm .and. i<=ulm) Fmlo_old(i,:) = recvbuff
       end do
 
    end subroutine transform_new2old
@@ -2038,19 +2038,17 @@ contains
       complex(cp), intent(inout) :: Fmlo_new(n_mlo_loc, n_r_max)
       
       complex(cp) :: recvbuff(n_r_max)
-      integer :: old2coord(l_max, l_max)
-      integer :: irank, ierr, lm, l, m
+      integer :: irank, ierr, i, l, m
       integer :: nLMB_start, nLMB_end
       
-      old2coord = -1
       do irank=0,n_ranks_r-1
          nLMB_start = 1+irank*nLMBs_per_rank
          nLMB_end   = min((irank+1)*nLMBs_per_rank,nLMBs)
-         do lm=lmStartB(nLMB_start),lmStopB(nLMB_end)
-            m = lo_map%lm2m(lm)
-            l = lo_map%lm2l(lm)
+         do i=lmStartB(nLMB_start),lmStopB(nLMB_end)
+            m = lo_map%lm2m(i)
+            l = lo_map%lm2l(i)
             
-            if (irank==coord_r) recvbuff = Fmlo_old(lm,:)
+            if (irank==coord_r) recvbuff = Fmlo_old(i,:)
             call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_r, ierr)
             if (mlo_tsid(m,l)==coord_mlo) Fmlo_new(map_mlo%ml2i(m,l),:) = recvbuff
          end do
