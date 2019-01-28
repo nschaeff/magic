@@ -305,7 +305,7 @@ contains
       
       !-- Finalize distributed grid space
       deallocate(dist_theta)
-      deallocate(dist_r, rB_tsid)
+      deallocate(dist_r)
       
       !-- Finalize distributed lm
       deallocate(dist_m, m_tsid)
@@ -323,7 +323,6 @@ contains
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !   
-      integer :: irank_r
       
       !-- Distribute Grid Space θ
       !
@@ -376,7 +375,7 @@ contains
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !   
-      integer :: m, icoord_m, mi
+      integer :: icoord_m, mi, m
       
       n_m_array = ceiling(real(n_m_max) / real(n_ranks_m))
       allocate(dist_m(0:n_ranks_m-1, 0:n_m_array))
@@ -438,7 +437,7 @@ contains
       !   
       !   coord_m [m in (l,m,r) coordinates] = coord_mo [m in (r,m,l) coordinates]
       !   
-      !   1) Splits n_lm(coord_m=coord_mo) amongst n_ranks_r = n_ranks_lo ranks.
+      !   1) Splits n_lm(coord_m=coord_mo) amongst n_rank_r = n_rank_lo ranks.
       !   
       !   Author: Rafael Lago, MPCDF, June 2018
       !   
@@ -456,7 +455,7 @@ contains
          call distribute_contiguous_last(tmp, dist_n_lm(icoord_mo), n_ranks_lo)
          
          !-- We have split all the n_lm poitns of coord_m=coord_mo into
-         !   n_ranks_lo parts. Now we just need to copy this amount into each
+         !   n_rank_lo parts. Now we just need to copy this amount into each
          !   coord_lo
          do icoord_lo=0,n_ranks_lo-1
             icoord_mlo = mlo2rank(icoord_mo, icoord_lo)
@@ -496,7 +495,7 @@ contains
       n_mlo_loc = dist_n_mlo(coord_mlo)
       mlo_max = lm_max
       
-      !-- Fills the reverse mapping
+       !-- Fills the reverse mapping
       !  
       allocate(mlo_tsid(0:l_max,0:l_max))
       mlo_tsid = -1
@@ -507,7 +506,6 @@ contains
             if(m>=0 .and. l>=0) mlo_tsid(m,l) = icoord_mlo
          end do
       end do
-      
       
    end subroutine distribute_mlo
    

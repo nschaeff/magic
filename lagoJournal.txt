@@ -1,5 +1,10 @@
 TO READ: https://software.intel.com/en-us/articles/introduction-to-the-conditional-numerical-reproducibility-cnr
-
+2019-01-14
+-------------------------------------------------------------------------------
+- Alghouth I implemented the transposition successfully, something that I 
+  changed affected updateS function. It doesn't work anymore. I am reverting
+  back to 6d83b17963c and then re-introducting the transposition function.
+  I hope that this will work...
 
 2018-11-23
 -------------------------------------------------------------------------------

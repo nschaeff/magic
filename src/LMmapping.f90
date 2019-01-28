@@ -31,13 +31,14 @@ module LMmapping
       integer :: n_lm
       integer :: n_lmP
       integer, allocatable :: lm2(:,:),lm2l(:),lm2m(:)
-      integer, allocatable :: lm2mc(:),l2lmAS(:)
-      integer, allocatable :: lm2lmS(:),lm2lmA(:)
-      
-      integer, allocatable :: lmP2(:,:),lmP2l(:),lmP2m(:)
-      integer, allocatable :: lmP2lmPS(:),lmP2lmPA(:)
+      integer, allocatable :: lm2mc(:),l2lmAS(:)      
+      integer, allocatable :: lm2lmS(:),lm2lmA(:)     
                                                      
-      integer, allocatable :: lm2lmP(:),lmP2lm(:)
+      integer, allocatable :: lmP2(:,:),lmP2l(:),lmP2m(:)
+      integer, allocatable :: lmP2lmPS(:),lmP2lmPA(:) 
+                                                     
+      integer, allocatable :: lm2lmP(:),lmP2lm(:)     
+ 
    end type mappings
    
    !
@@ -79,7 +80,7 @@ module LMmapping
    !--------------------------------------------------------------------------
    type, public :: ml_mappings
       integer, allocatable :: i2l(:), i2m(:), i2ml(:)
-      integer, allocatable :: ml2i(:,:)
+      integer, allocatable :: ml2i(:,:), ml2coord(:,:)
       integer, allocatable :: milj2i(:,:), milj2m(:,:)
       integer, allocatable :: n_mi(:), lj2l(:)
       integer :: n_li
@@ -182,7 +183,7 @@ contains
       allocate( self%lm2lmP(n_lm_len),self%lmP2lm(n_lmP_len) )
       bytes_allocated = bytes_allocated + &
                         ((l_max+2)*(l_max+2)+5*n_lmP_len+n_lm_len)*SIZEOF_INTEGER
-                        
+
    end subroutine allocate_mappings
    
    !----------------------------------------------------------------------------
@@ -196,6 +197,8 @@ contains
       !   Author: Rafael Lago, MPCDF, November 2018
       !   
       type(ml_mappings), intent(inout) :: self
+      
+      allocate( self%ml2coord(0:l_max, 0:l_max) )
       
       ! These two will point to their target in set_mlmapping
       allocate( self%i2m(n_mlo_loc) )
@@ -379,7 +382,7 @@ contains
          write(*,"(3(A,I6))") 'Wrong lmP=',lm," != n_lmP_loc = ", map%n_lmP
          call abortRun('Stop run in distribute_theta')
       end if
-      
+
       do lm=1,map%n_lm
          l=map%lm2l(lm) 
          m=map%lm2m(lm)
@@ -416,11 +419,21 @@ contains
       integer :: m, l, mi, lj, i, j, ml, irank, mlo_idx
       integer :: l_counter, m_counter
       
+      map%ml2coord = Invalid_Idx
       map%i2ml     = Invalid_Idx
       map%ml2i     = Invalid_Idx
       map%i2m      = Invalid_Idx
       map%i2l      = Invalid_Idx
 
+      ! Which ranks contain the specified (m,l) tuplet
+      do irank=0,n_ranks_mlo-1
+         do i=1,n_mlo_array
+            m = dist_mlo(irank,i,1)
+            l = dist_mlo(irank,i,2)
+            if(m>=0 .and. l>=0) map%ml2coord(m,l) = irank
+         end do
+      end do
+      
       ! Maps all local m,l tuplets into a global array of size l_max,l_max
       ! The tuples which do not belong to this rank are marked with Invalid_Idx
       do i = 1,n_mlo_loc

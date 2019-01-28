@@ -98,7 +98,6 @@ contains
                rhs(i,j)=cmplx(tmpr(i,j),tmpi(i,j),kind=cp)
             end do
          end do
-         
       ! Hack to get exact match between sequential and distributed 
       ! versions of the code!
       ! This is not optimal and merely meant for debugging. 
@@ -113,11 +112,11 @@ contains
             end do
 
 #if (DEFAULT_PRECISION==sngl)
-            call sgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,1),n,info)
-            call sgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,1),n,info)
+         call sgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,1),n,info)
+         call sgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,1),n,info)
 #elif (DEFAULT_PRECISION==dble)
-            call dgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,1),n,info)
-            call dgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,1),n,info)
+         call dgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpr(1:n,1),n,info)
+         call dgetrs('N',n,1,a(1:n,1:n),n,pivot(1:n),tmpi(1:n,1),n,info)
 #endif
 
             do i=1,n

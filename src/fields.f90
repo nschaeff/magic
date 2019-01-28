@@ -26,7 +26,7 @@ module fields
  
    !-- Entropy:
    complex(cp), public, allocatable, target :: s_LMloc_container(:,:,:), s_LMdist_container(:,:,:)
-   complex(cp), public, allocatable, target :: s_Rdist_container(:,:,:)
+   complex(cp), public, allocatable, target :: s_Rdist_container(:,:,:), s_Rdist_test(:,:,:)
    complex(cp), public, pointer :: s_LMloc(:,:), ds_LMloc(:,:), s_LMdist(:,:), ds_LMdist(:,:)
    complex(cp), public, pointer :: s_Rdist(:,:), ds_Rdist(:,:)
  
@@ -128,14 +128,17 @@ contains
       ds_Rdist(1:n_lm_loc,l_r:u_r)  => s_Rdist_container(:,:,2)
 
       !!! [NEW LAYOUT]
-      allocate(w_LMdist(n_mlo_loc,n_r_max))
-      allocate( work_LMdist(n_mlo_loc,n_r_max) )
+      allocate(w_LMdist(n_mlo_loc,1:n_r_max))
+      allocate(work_LMdist(n_mlo_loc,n_r_max) )
       
-      allocate(s_LMdist_container(n_mlo_loc,n_r_max,2) )
-!       s_LMdist(1:n_mlo_loc,1:n_r_max)  => s_LMdist_container(:,:,1)
-!       ds_LMdist(1:n_mlo_loc,1:n_r_max) => s_LMdist_container(:,:,2)
-      allocate(s_LMdist(n_mlo_loc,1:n_r_max))
-      allocate(ds_LMdist(n_mlo_loc,1:n_r_max))
+      allocate( s_LMdist_container(n_mlo_loc,n_r_max,1:2) )
+      s_LMdist(1:n_mlo_loc,1:n_r_max)  => s_LMdist_container(:,:,1)
+      ds_LMdist(1:n_mlo_loc,1:n_r_max) => s_LMdist_container(:,:,2)
+!       allocate(s_LMdist(n_mlo_loc,1:n_r_max))
+!       allocate(ds_LMdist(n_mlo_loc,1:n_r_max))
+      
+      allocate( s_Rdist_test(n_lm_loc,l_r:u_r,1:2) )
+      
       
       !!! [END NEW LAYOUT]
       

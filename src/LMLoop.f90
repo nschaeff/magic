@@ -12,8 +12,8 @@ module LMLoop_mod
    use parallel_mod
    use mem_alloc, only: memWrite, bytes_allocated
    use geometry, only: l_max, lm_max, n_r_max, n_r_maxMag, n_r_icb,    &
-       &            n_r_cmb, n_mlo_loc, n_lm_loc, l_r, u_r
-   use blocking, only: lmStartB, lmStopB, lo_map, st_map
+       &            n_r_cmb, n_mlo_loc
+!    use blocking, only: lmStartB, lmStopB, lo_map
    use logic, only: l_mag, l_conv, l_anelastic_liquid, lVerbose, l_heat, &
        &            l_single_matrix, l_chemical_conv, l_TP_form,         &
        &            l_save_out
@@ -34,7 +34,8 @@ module LMLoop_mod
    use radial_functions
    
    use radial_der          ! Added by LAGO, remove later
-   use lmmapping, only: map_mlo, map_dist_st, map_glbl_st
+   use lmmapping
+   use blocking  !!! uncomment above
 
    implicit none
 
@@ -158,74 +159,22 @@ contains
       !!!----------------------------------
       !!!! SAME !!!
       
-      complex(cp) :: dVSrLM_new(n_mlo_loc,n_r_max)
-      complex(cp) :: dsdt_new(n_mlo_loc,n_r_max)
+      complex(cp) :: dVSrLM_dist(n_mlo_loc,n_r_max)
+      complex(cp) :: dsdt_dist(n_mlo_loc,n_r_max)
       
+      complex(cp) :: test_old(llm:ulm,n_r_max)
       complex(cp) :: test_new(n_mlo_loc,n_r_max)
-      complex(cp) :: test_old(llm:ulm,  n_r_max)
-      real(cp) :: test_norm, error_threshold
+      real(cp)    :: test_norm, error_threshold, test_normi
       
-      complex(cp) :: test_ml(n_mlo_loc, n_r_max, 2)
-      complex(cp) :: test_r (n_lm_loc, l_r:u_r,  2)
+      integer :: nLMB_start, nLMB_end   
+      integer :: m, lm, i, j, k
 
-      integer :: i,j,k, m
-      
-      s_LMloc = 1.0
-      ds_LMloc = 1.0
-      w_LMloc = 1.0
-      dsdt = 1.0
-      dVSrLM = 1.0
-      dsdtLast_LMloc = 1.0
-      
-      do j=1,n_r_max
-         do i=llm,ulm
-            m = lo_map%lm2m(i)
-            l = lo_map%lm2l(i)
-            s_LMloc(i,j) = cmplx(map_glbl_st%lm2(l,m), j)
-         end do
-      end do
-      
-      ds_LMloc = s_LMloc
-      w_LMloc = s_LMloc
-      dsdt = s_LMloc
-      dVSrLM = s_LMloc
-      dsdtLast_LMloc = s_LMloc
-!       
-!       do j=1, n_r_max
-!          do i=1,n_mlo_loc
-!             s_LMdist(i,j) = cmplx(map_mlo%i2ml(i), j)
-!          end do
-!       end do
-! !       print *, "----------------------Original----------"
-! !       print *, s_LMloc
-! !       print *, "----------------------Expected----------"
-! !       print *, s_LMdist
-!       
-!       
-!       call transform_new2old(s_LMdist, test_old)
-!       call transform_old2new(test_old, test_new)
-! !       print *, "----------------------Obtained----------"
-! !       print *, test_new
-!       
-!       test_norm = ABS(SUM(s_LMdist - test_new))
-!       print *, "|| s_new - s || : ", test_norm
-!       stop
-               
-               
-      call transform_old2new(ds_LMloc, ds_LMdist)
-      call transform_old2new(w_LMloc, w_LMdist)
-      call transform_old2new(dsdt, dsdt_new)
-      call transform_old2new(dVSrLM, dVSrLM_new)
-      call transform_old2new(dsdtLast_LMloc, dsdtLast_LMdist)
-
-!       call transpose_ml_r( test_ml,  test_r, 2)
-!       print *, "Transp done; Printing -------------------------"
-!       print *, "-------------------------"
-!       print *, test_r(:,l_r:u_r,:)
-!       print *, "-------------------------"
-!       stop
-      
-      
+!       call transform_old2new(s_LMloc, s_LMdist)
+!       call transform_old2new(ds_LMloc, ds_LMdist)
+!       call transform_old2new(w_LMloc, w_LMdist)
+!       call transform_old2new(dsdt, dsdt_dist)
+!       call transform_old2new(dVSrLM, dVSrLM_dist)
+!       call transform_old2new(dsdtLast_LMloc, dsdtLast_LMdist)
       
       !!! END New layout  TMP
       !!!----------------------------------
@@ -295,23 +244,66 @@ contains
                     &           dsdtLast_LMloc, w1, coex, dt, nLMB)
             else
 
-               call updateS( s_LMloc, ds_LMloc, w_LMloc, dVSrLM,dsdt, &
-                    &        dsdtLast_LMloc, w1, coex, dt, nLMB )
-!                
-               call updateS_new( s_LMdist, ds_LMdist, w_LMdist, dVSrLM_new, dsdt_new, &
-                    &             dsdtLast_LMdist, w1, coex, dt, nLMB)
+            
+            
+               do k=1,2
+                  do j=1,n_r_max
+                     do i=1,n_mlo_loc
+                        l = map_mlo%i2l(i)
+                        m = map_mlo%i2m(i)
+                        s_LMdist_container(i,j,k) = cmplx(map_glbl_st%lm2(l,m)*1.0,j*1.0+(k-1)*100.0)
+                     end do
+                  end do
+               end do
+               nLMB_start = 1+coord_r*nLMBs_per_rank
+               nLMB_end   = min((coord_r+1)*nLMBs_per_rank,nLMBs)
+               do k=1,2
+                  do j=1,n_r_max
+                     do i=lmStartB(nLMB_start),lmStopB(nLMB_end)
+                        m = lo_map%lm2m(i)
+                        l = lo_map%lm2l(i)
+                        s_LMloc_container(i,j,k) = cmplx(map_glbl_st%lm2(l,m)*1.0,j*1.0+(k-1)*100.0)
+                     end do
+                  end do
+               end do
                
                error_threshold = 0.0
-               error_threshold = EPSILON(1.0_cp)
+               w_LMloc = s_LMloc
+               ds_LMloc = s_LMloc
+               dsdt = s_LMloc
+               dVSrLM = s_LMloc
+               dsdtLast_LMloc = s_LMloc
+               
+               w_LMdist = s_LMdist
+               ds_LMdist = s_LMdist
+               dsdt_dist = s_LMdist
+               dVSrLM_dist = s_LMdist
+               dsdtLast_LMdist = s_LMdist
+
+               call updateS( s_LMloc, ds_LMloc, w_LMloc, dVSrLM,dsdt, &
+                    &        dsdtLast_LMloc, w1, coex, dt, nLMB )
+               
+               call updateS_new( s_LMdist, ds_LMdist, w_LMdist, dVSrLM_dist, dsdt_dist, &
+                    &             dsdtLast_LMdist, w1, coex, dt, nLMB )
+                    
+               
+!             call transform_old2new(s_LMloc, s_LMdist)
+!             call transform_old2new(ds_LMloc, ds_LMdist)
+!             call transform_old2new(w_LMloc, w_LMdist)
+!             call transform_old2new(dsdt, dsdt_dist)
+!             call transform_old2new(dVSrLM, dVSrLM_dist)
+!             call transform_old2new(dsdtLast_LMloc, dsdtLast_LMdist)
+            
+!             call transform_new2old( s_LMdist,s_LMloc)
+!             call transform_new2old( ds_LMdist,ds_LMloc)
+!             call transform_new2old( w_LMdist,w_LMloc)
+!             call transform_new2old( dsdt_dist,dsdt)
+!             call transform_new2old( dVSrLM_dist,dVSrLM)
+!             call transform_new2old( dsdtLast_LMdist,dsdtLast_LMloc)
+               
+!                error_threshold = EPSILON(1.0_cp)
                
                call transform_new2old(s_LMdist, test_old)
-               print *, "----------------- Original: "
-               print *, s_LMloc(llm:llm+5,1:5)
-               print *, "----------------- New: "
-               print *, test_old(llm:llm+5,1:5)
-               
-               stop
-               
                test_norm = ABS(SUM(s_LMloc - test_old))
                IF (test_norm>error_threshold) print *, "|| s_new - s || : ", test_norm
                
@@ -319,38 +311,87 @@ contains
                test_norm = ABS(SUM(ds_LMloc - test_old))
                IF (test_norm>error_threshold) print *, "|| ds_new - ds || : ", test_norm
                
-               call transform_new2old(dsdt_new, test_old)
+               call transform_new2old(w_LMdist, test_old)
+               test_norm = ABS(SUM(w_LMloc - test_old))
+               IF (test_norm>error_threshold) print *, "|| w_new - w || : ", test_norm
+               
+               call transform_new2old(dsdt_dist, test_old)
                test_norm = ABS(SUM(dsdt - test_old))
-               IF (test_norm>error_threshold) print *, "|| dsdt_new - dsdt || : ", test_norm
+               IF (test_norm>error_threshold) print *, "|| dsdt_dist - dsdt || : ", test_norm
                
                call transform_new2old(dsdtLast_LMdist, test_old)
                test_norm = ABS(SUM(dsdtLast_LMloc - test_old))
                IF (test_norm>error_threshold) print *, "|| dtLast_new - dtLast || : ", test_norm
                
-               call transform_new2old(dVSrLM_new, test_old)
+               call transform_new2old(dVSrLM_dist, test_old)
                test_norm = ABS(SUM(dVSrLM - test_old))
-               IF (test_norm>error_threshold) print *, "|| dVSrLM_new - dVSrLM || : ", test_norm
+               IF (test_norm>error_threshold) print *, "|| dVSrLM_dist - dVSrLM || : ", test_norm
                
-               stop 
                
-               call transform_new2old(s_LMdist, s_LMloc)
-               call transform_new2old(ds_LMdist, ds_LMloc)
-               call transform_new2old(w_LMdist, w_LMloc)
-               call transform_new2old(dsdt_new, dsdt)
-               call transform_new2old(dVSrLM_new, dVSrLM)
-               call transform_new2old(dsdtLast_LMdist, dsdtLast_LMloc)
+
+               call transform_old2new(s_LMloc, test_new)
+               test_norm = ABS(SUM(s_LMdist - test_new))
+               IF (test_norm>error_threshold) print *, "|| s_old - s || : ", test_norm
                
+               call transform_old2new(ds_LMloc, test_new)
+               test_norm = ABS(SUM(ds_LMdist - test_new))
+               IF (test_norm>error_threshold) print *, "|| ds_old - ds || : ", test_norm
+               
+               call transform_old2new(w_LMloc, test_new)
+               test_norm = ABS(SUM(w_LMdist - test_new))
+               IF (test_norm>error_threshold) print *, "|| w_old - w || : ", test_norm
+               
+               call transform_old2new(dsdt, test_new)
+               test_norm = ABS(SUM(dsdt_dist - test_new))
+               IF (test_norm>error_threshold) print *, "|| dsdt_old  - dsdt || : ", test_norm
+               
+               call transform_old2new(dsdtLast_LMloc, test_new)
+               test_norm = ABS(SUM(dsdtLast_LMdist - test_new))
+               IF (test_norm>error_threshold) print *, "|| dtLast_old - dtLast || : ", test_norm
+               
+               call transform_old2new(dVSrLM, test_new)
+               test_norm = ABS(SUM(dVSrLM_dist - test_new))
+               IF (test_norm>error_threshold) print *, "|| dVSrLM_old - dVSrLM || : ", test_norm
+
             end if
             PERFOFF
-            ! Here one could start the redistribution of s_LMloc,ds_LMloc etc. with a 
-            ! nonblocking send
-            !PERFON('rdstSst')
-!             call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_Rdist_container)
-!             call lo2r_redist_wait_dist(lo2r_s)
-            call transpose_ml_r( s_LMdist_container,  test_r, 2)
-            test_norm = ABS(SUM(test_r - s_Rdist_container))
-            IF (test_norm>error_threshold) print *, "|| diff  || : ", test_norm
-            print *, "|| diff  || : ", test_norm
+            
+!             Here one could start the redistribution of s_LMloc,ds_LMloc etc. with a 
+!             nonblocking send
+            PERFON('rdstSst')
+            
+            do k=1,2
+               do j=1,n_r_max
+                  do i=1,n_mlo_loc
+                     l = map_mlo%i2l(i)
+                     m = map_mlo%i2m(i)
+                     s_LMdist_container(i,j,k) = cmplx(map_glbl_st%lm2(l,m)*0.1,j*1.0+(k-1)*100.0)
+                  end do
+               end do
+            end do
+            nLMB_start = 1+coord_r*nLMBs_per_rank
+            nLMB_end   = min((coord_r+1)*nLMBs_per_rank,nLMBs)
+            do k=1,2
+               do j=1,n_r_max
+                  do i=lmStartB(nLMB_start),lmStopB(nLMB_end)
+                     m = lo_map%lm2m(i)
+                     l = lo_map%lm2l(i)
+                     s_LMloc_container(i,j,k) = cmplx(map_glbl_st%lm2(l,m)*0.1,j*1.0+(k-1)*100.0)
+                  end do
+               end do
+            end do
+
+            s_Rdist_test = 0.0
+            s_Rdist_container = 0.0
+            
+            call transpose_ml_r(s_LMdist_container, s_Rdist_test, 2)
+            call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_Rdist_container)
+            call lo2r_redist_wait_dist(lo2r_s)
+            test_norm  = SUM(ABS(REAL(s_Rdist_test) - REAL(s_Rdist_container)))
+            test_normi  = SUM(ABS(AIMAG(s_Rdist_test) - AIMAG(s_Rdist_container)))
+            print *, "|| cont || : ", test_norm + test_normi, (test_norm + test_normi)/EPSILON(REAL(1.0,kind=4))
+            
+            print*, s_Rdist_test - s_Rdist_container
             
             stop
             !PERFOFF

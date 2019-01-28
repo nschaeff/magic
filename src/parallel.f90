@@ -183,8 +183,6 @@ contains
       call MPI_Comm_Rank(comm_theta, coord_theta, ierr) 
       call check_MPI_error(ierr)
       
-      
-      
       ! old
       allocate(rank2theta(0:n_ranks-1))
       allocate(rank2r(0:n_ranks-1))
@@ -195,6 +193,7 @@ contains
       
       do i=0,n_ranks-1
          call mpi_cart_coords(comm_gs, i, 2, coords, ierr)
+         
          cart%gsp2rnk(coords(2),coords(1)) = i
          cart%rnk2gsp(i,1) = coords(2)  ! θ/m
          cart%rnk2gsp(i,2) = coords(1)  ! r
@@ -218,14 +217,14 @@ contains
       ! old
       allocate(rank2m(0:n_ranks-1))
       allocate(lm2rank(0:n_ranks_m-1,0:n_ranks_r-1))
-      lm2rank   = gs2rank
-      rank2m    = rank2theta
-      
       ! new
       allocate(cart%rnk2lmr(0:n_ranks-1, 2))
       allocate(cart%lmr2rnk(0:n_ranks_m-1,0:n_ranks_r-1))
       cart%rnk2lmr = cart%rnk2gsp
       cart%lmr2rnk = cart%gsp2rnk
+      
+      lm2rank   = gs2rank
+      rank2m    = rank2theta
       
       !-- ML Space (ML Loop)
       !   
@@ -239,10 +238,10 @@ contains
       
       comm_mlo = MPI_COMM_WORLD
       
-      ! old
       allocate(rank2mo(0:n_ranks-1))
       allocate(rank2lo(0:n_ranks-1))
       allocate(mlo2rank(0:n_ranks_mo-1,0:n_ranks_lo-1))
+      
       rank2lo  = rank2r
       rank2mo  = rank2m
       mlo2rank = gs2rank
@@ -257,6 +256,7 @@ contains
       end do
       cart%mlo2lmr = cart%rnk2gsp
       cart%lmr2mlo = cart%lmr2rnk
+      
       
    end subroutine initialize_mpi_decomposition
    

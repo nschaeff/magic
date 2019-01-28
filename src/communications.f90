@@ -106,7 +106,7 @@ use blocking
    public :: myAllGather, slice_f, slice_Flm, slice_FlmP, gather_f, &
              gather_FlmP, gather_Flm, transpose_m_theta, transpose_theta_m, &
              transform_new2old, transform_old2new, printMatrix, printTriplets,&
-             printMatrixInt, printArray, transpose_ml_r
+             printMatrixInt, printArray
              
 contains
   
@@ -116,7 +116,7 @@ contains
       integer(lip) :: local_bytes_used
 #ifdef WITH_MPI
       integer(kind=MPI_ADDRESS_KIND) :: zerolb, extent, sizeof_double_complex
-      integer(kind=MPI_ADDRESS_KIND) :: lb_marker, myextent, true_lb, true_extent
+!       integer(kind=MPI_ADDRESS_KIND) :: lb_marker, myextent, true_lb, true_extent
       integer :: base_col_type,temptype
       integer :: blocklengths(8),blocklengths_on_last(8),displs(8),displs_on_last(8)
       integer :: i, n_r_on_last_rank, n_r_per_rank
@@ -1734,16 +1734,18 @@ contains
    
    !----------------------------------------------------------------------------
    subroutine transpose_ml_r(container_ml, container_rm, n_fields)
-   !-- TODO: optimize this function to perform only one send to/receive from 
-   !   each rank. It might not be necessary, as this function acts as a 
-   !   fallback function (specially if you are just testing a new data layout)
+   !
+   !-- This is supposed to be a general-purpose transposition. It might be 
+   !   possible to optimize it for further specialized data structures.
+   !   The MPI datatype here is built as indexed->hvector->hvector
+   !   
       integer, intent(in) :: n_fields
-      complex(cp), intent(inout) :: container_ml(n_mlo_loc, n_r_max, n_fields)  ! in only!!!!!!!!!!!!!!!
+      complex(cp), intent(in) :: container_ml(n_mlo_loc, n_r_max, n_fields)  ! in only!!!!!!!!!!!!!!!
       complex(cp), intent(out)   :: container_rm(n_lm_loc, l_r:u_r, n_fields)
       
       integer :: Rq(0:n_ranks_mlo-1,2)
-      integer :: i, j, k, lm_glb, l, m, rq_shift, irank, icoord_m, icoord_mlo, &
-         &       icoord_r, in_r, il_r, iu_r, lm_loc, tag, mi, lj, lm, &
+      integer :: i, j, k, l, m, icoord_m, icoord_mlo, &
+         &       icoord_r, in_r, il_r, lm, &
          &       ierr
       
       integer :: send_col_types(0:n_ranks_mlo-1), send_mtx_types(0:n_ranks_mlo-1), send_vol_types(0:n_ranks_mlo-1)
@@ -1769,16 +1771,6 @@ contains
       recv_counter_i     = 0
       blocklenghts       = 1 ! This is actually fixed to 1!
       Rq = MPI_REQUEST_NULL
-      
-      container_rm = -1.0
-      container_ml = -2.0
-      do k=1,n_fields
-         do i=1,n_mlo_loc
-            do j=1,n_r_max
-               container_ml(i,j,k) = cmplx(map_mlo%i2ml(i)*1.0,j*1.0+(k-1)*100.0)
-            end do
-         end do
-      end do
       
       !-- Loops over each (m,l) tuple to determine which rank in lmr will need it
       !   There is no good way of doing this; I could loop over the *local* tuples,
@@ -1819,14 +1811,14 @@ contains
             in_r = dist_r(icoord_r,0)
             
             call MPI_Type_indexed(inblocks,blocklenghts(1:inblocks),&
-               send_displacements(1:inblocks,icoord_mlo), MPI_DOUBLE_COMPLEX, send_col_types(icoord_mlo), ierr)
+               send_displacements(1:inblocks,icoord_mlo), MPI_DEF_COMPLEX, send_col_types(icoord_mlo), ierr)
             call MPI_Type_commit(send_col_types(icoord_mlo),ierr)
             
-            call MPI_Type_create_hvector(in_r, 1, n_mlo_loc*bytesCMPLX, send_col_types(icoord_mlo), &
+            call MPI_Type_create_hvector(in_r, 1, int(n_mlo_loc*bytesCMPLX,kind=mpi_address_kind), send_col_types(icoord_mlo), &
                send_mtx_types(icoord_mlo), ierr)
             call MPI_Type_commit(send_mtx_types(icoord_mlo),ierr)
             
-            call MPI_Type_create_hvector(n_fields, 1, n_mlo_loc*n_r_max*bytesCMPLX, send_mtx_types(icoord_mlo), &
+            call MPI_Type_create_hvector(n_fields, 1, int(n_mlo_loc*n_r_max*bytesCMPLX,kind=mpi_address_kind), send_mtx_types(icoord_mlo), &
                send_vol_types(icoord_mlo), ierr)
             call MPI_Type_commit(send_vol_types(icoord_mlo),ierr)
          end if
@@ -1846,18 +1838,18 @@ contains
       !-- Build the Recv MPI types; analogous to the building of the Send MPI types
       !
       do icoord_mlo=0,n_ranks_mlo-1
-         
+
          inblocks = recv_counter_i(icoord_mlo)
          if (inblocks>0 .and. icoord_mlo /= coord_mlo) then
             call MPI_Type_indexed(inblocks,blocklenghts(1:inblocks),&
-               recv_displacements(1:inblocks,icoord_mlo), MPI_DOUBLE_COMPLEX, recv_col_types(icoord_mlo), ierr)
+               recv_displacements(1:inblocks,icoord_mlo), MPI_DEF_COMPLEX, recv_col_types(icoord_mlo), ierr)
             call MPI_Type_commit(recv_col_types(icoord_mlo),ierr)
             
-            call MPI_Type_create_hvector(n_r_loc, 1, n_lm_loc*bytesCMPLX, recv_col_types(icoord_mlo), &
+            call MPI_Type_create_hvector(n_r_loc, 1, int(n_lm_loc*bytesCMPLX,kind=mpi_address_kind), recv_col_types(icoord_mlo), &
                recv_mtx_types(icoord_mlo), ierr)
             call MPI_Type_commit(recv_mtx_types(icoord_mlo),ierr)
             
-            call MPI_Type_create_hvector(n_fields, 1, n_lm_loc*n_r_loc*bytesCMPLX, recv_mtx_types(icoord_mlo), &
+            call MPI_Type_create_hvector(n_fields, 1, int(n_lm_loc*n_r_loc*bytesCMPLX,kind=mpi_address_kind), recv_mtx_types(icoord_mlo), &
                recv_vol_types(icoord_mlo), ierr)
             call MPI_Type_commit(recv_vol_types(icoord_mlo),ierr)
          end if
@@ -1871,19 +1863,32 @@ contains
          in_r = dist_r(icoord_r,0)
          il_r = dist_r(icoord_r,1)
          call mpi_isend(container_ml(1,il_r,1), 1, send_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,1), ierr)
-         call mpi_irecv(container_rm(1,l_r,1), 1, recv_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,2), ierr)
+         call mpi_irecv(container_rm, 1, recv_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,2), ierr)
       end do
       
+      print *, "~~~~~~~> okay1...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
       !-- Copies data which is already local
       inblocks = send_counter_i(coord_mlo)
       do i=1,inblocks
          k = send_displacements(i,coord_mlo) + 1
          j = recv_displacements(i,coord_mlo) + 1
-         container_rm(j,l_r:u_r,1) = container_ml(k,l_r:u_r,1)
-         container_rm(j,l_r:u_r,2) = container_ml(k,l_r:u_r,2)
+         container_rm(j,l_r:u_r,1:n_fields) = container_ml(k,l_r:u_r,1:n_fields)
       end do
       
-      call mpi_waitall(2*n_ranks_mlo,Rq,MPI_STATUSES_IGNORE,ierr)
+      print *, "~~~~~~~> okay2...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
+      do icoord_mlo=0,n_ranks_mlo-1
+         if (Rq(icoord_mlo,1)/=MPI_REQUEST_NULL) then
+            call mpi_wait(Rq(icoord_mlo,1),MPI_STATUS_IGNORE,ierr)
+            print *, "~~~~~~~> okays...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
+         end if
+         if (Rq(icoord_mlo,2)/=MPI_REQUEST_NULL) then
+            call mpi_wait(Rq(icoord_mlo,2),MPI_STATUS_IGNORE,ierr)
+            print *, "~~~~~~~> okayr...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
+         end if
+      end do
+!       call mpi_waitall(2*n_ranks_mlo,Rq,MPI_STATUSES_IGNORE,ierr)
+      
+!       print *, "~~~~~~~> okay3...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
       
    end subroutine transpose_ml_r
    
@@ -1896,7 +1901,6 @@ contains
       !   Author: Rafael Lago (MPCDF) August 2017
       !
       !-- TODO this with mpi_type to stride the data
-      !-- TODO pad the data and do it with alltoall instead of alltoallv
       !
       complex(cp), intent(inout) :: f_m_theta(n_m_max, n_theta_loc)
       complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
@@ -1946,7 +1950,6 @@ contains
       !   Author: Rafael Lago (MPCDF) August 2017
       !
       !-- TODO this with mpi_type to stride the data
-      !-- TODO pad the data and do it with alltoall instead of alltoallv
       !
       complex(cp), intent(inout) :: f_theta_m(n_theta_max, n_m_loc)
       complex(cp), intent(inout) :: f_m_theta(n_m_max, n_theta_loc)
@@ -2001,6 +2004,7 @@ contains
          j = j + 1
       end do
    end subroutine transpose_theta_m
+   
 !-------------------------------------------------------------------------------
 !  
 !  LM Loop transposes and Gathers and Etc
@@ -2011,21 +2015,22 @@ contains
       complex(cp), intent(inout) :: Fmlo_old(llm:ulm,   n_r_max)
       
       complex(cp) :: recvbuff(n_r_max)
-      integer :: iroot, ierr, lm, l, m, i
+      integer :: irank, ierr, lm, l, m
       
       do lm=1,lm_max
-         m = map_glbl_st%lm2m(lm)
-         l = map_glbl_st%lm2l(lm)
-         iroot = mlo_tsid(m,l)
-         
-         if (iroot==coord_mlo) recvbuff = Fmlo_new(map_mlo%ml2i(m,l),:)
-         call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, iroot, comm_mlo, ierr)
-         
-         i = lo_map%lm2(l,m)
-         if (i>=llm .and. i<=ulm) Fmlo_old(i,:) = recvbuff
+!          m = map_glbl_st%lm2m(lm)
+!          l = map_glbl_st%lm2l(lm)
+         m = lo_map%lm2m(lm)
+         l = lo_map%lm2l(lm)
+         irank = map_mlo%ml2coord(m,l)
+         if (irank==coord_mlo) recvbuff = Fmlo_new(map_mlo%ml2i(m,l),:)
+         call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_mlo, ierr)
+
+         if (lm>=llm .and. lm<=ulm) Fmlo_old(lm,:) = recvbuff
       end do
 
    end subroutine transform_new2old
+   
 !-------------------------------------------------------------------------------
 !  A funny thing about the function below is that it is not actually necessary
 !  for MagIC itself, but only for the transition. And it is quite the
@@ -2038,23 +2043,26 @@ contains
       complex(cp), intent(inout) :: Fmlo_new(n_mlo_loc, n_r_max)
       
       complex(cp) :: recvbuff(n_r_max)
-      integer :: irank, ierr, i, l, m
+      integer :: old2coord(l_max, l_max)
+      integer :: irank, ierr, lm, l, m
       integer :: nLMB_start, nLMB_end
       
+      old2coord = -1
       do irank=0,n_ranks_r-1
          nLMB_start = 1+irank*nLMBs_per_rank
          nLMB_end   = min((irank+1)*nLMBs_per_rank,nLMBs)
-         do i=lmStartB(nLMB_start),lmStopB(nLMB_end)
-            m = lo_map%lm2m(i)
-            l = lo_map%lm2l(i)
+         do lm=lmStartB(nLMB_start),lmStopB(nLMB_end)
+            m = lo_map%lm2m(lm)
+            l = lo_map%lm2l(lm)
             
-            if (irank==coord_r) recvbuff = Fmlo_old(i,:)
+            if (irank==coord_r) recvbuff = Fmlo_old(lm,:)
             call mpi_bcast(recvbuff, n_r_max, MPI_DOUBLE_COMPLEX, irank, comm_r, ierr)
-            if (mlo_tsid(m,l)==coord_mlo) Fmlo_new(map_mlo%ml2i(m,l),:) = recvbuff
+            if (map_mlo%ml2coord(m,l)==coord_mlo) Fmlo_new(map_mlo%ml2i(m,l),:) = recvbuff
          end do
       end do
       
    end subroutine transform_old2new
+   
 !-------------------------------------------------------------------------------
    subroutine printArray(inMat, o_fmtString)
       complex(cp), intent(in) :: inMat(:)
