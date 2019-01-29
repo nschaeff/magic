@@ -169,12 +169,12 @@ contains
       integer :: nLMB_start, nLMB_end   
       integer :: m, lm, i, j, k
 
-!       call transform_old2new(s_LMloc, s_LMdist)
-!       call transform_old2new(ds_LMloc, ds_LMdist)
-!       call transform_old2new(w_LMloc, w_LMdist)
-!       call transform_old2new(dsdt, dsdt_dist)
-!       call transform_old2new(dVSrLM, dVSrLM_dist)
-!       call transform_old2new(dsdtLast_LMloc, dsdtLast_LMdist)
+      call transform_old2new(s_LMloc, s_LMdist)
+      call transform_old2new(ds_LMloc, ds_LMdist)
+      call transform_old2new(w_LMloc, w_LMdist)
+      call transform_old2new(dsdt, dsdt_dist)
+      call transform_old2new(dVSrLM, dVSrLM_dist)
+      call transform_old2new(dsdtLast_LMloc, dsdtLast_LMdist)
       
       !!! END New layout  TMP
       !!!----------------------------------
@@ -245,41 +245,6 @@ contains
             else
 
             
-            
-               do k=1,2
-                  do j=1,n_r_max
-                     do i=1,n_mlo_loc
-                        l = map_mlo%i2l(i)
-                        m = map_mlo%i2m(i)
-                        s_LMdist_container(i,j,k) = cmplx(map_glbl_st%lm2(l,m)*1.0,j*1.0+(k-1)*100.0)
-                     end do
-                  end do
-               end do
-               nLMB_start = 1+coord_r*nLMBs_per_rank
-               nLMB_end   = min((coord_r+1)*nLMBs_per_rank,nLMBs)
-               do k=1,2
-                  do j=1,n_r_max
-                     do i=lmStartB(nLMB_start),lmStopB(nLMB_end)
-                        m = lo_map%lm2m(i)
-                        l = lo_map%lm2l(i)
-                        s_LMloc_container(i,j,k) = cmplx(map_glbl_st%lm2(l,m)*1.0,j*1.0+(k-1)*100.0)
-                     end do
-                  end do
-               end do
-               
-               error_threshold = 0.0
-               w_LMloc = s_LMloc
-               ds_LMloc = s_LMloc
-               dsdt = s_LMloc
-               dVSrLM = s_LMloc
-               dsdtLast_LMloc = s_LMloc
-               
-               w_LMdist = s_LMdist
-               ds_LMdist = s_LMdist
-               dsdt_dist = s_LMdist
-               dVSrLM_dist = s_LMdist
-               dsdtLast_LMdist = s_LMdist
-
                call updateS( s_LMloc, ds_LMloc, w_LMloc, dVSrLM,dsdt, &
                     &        dsdtLast_LMloc, w1, coex, dt, nLMB )
                
@@ -301,7 +266,8 @@ contains
 !             call transform_new2old( dVSrLM_dist,dVSrLM)
 !             call transform_new2old( dsdtLast_LMdist,dsdtLast_LMloc)
                
-!                error_threshold = EPSILON(1.0_cp)
+               error_threshold = 0.0
+               error_threshold = EPSILON(1.0_cp)
                
                call transform_new2old(s_LMdist, test_old)
                test_norm = ABS(SUM(s_LMloc - test_old))
@@ -360,40 +326,13 @@ contains
 !             nonblocking send
             PERFON('rdstSst')
             
-            do k=1,2
-               do j=1,n_r_max
-                  do i=1,n_mlo_loc
-                     l = map_mlo%i2l(i)
-                     m = map_mlo%i2m(i)
-                     s_LMdist_container(i,j,k) = cmplx(map_glbl_st%lm2(l,m)*0.1,j*1.0+(k-1)*100.0)
-                  end do
-               end do
-            end do
-            nLMB_start = 1+coord_r*nLMBs_per_rank
-            nLMB_end   = min((coord_r+1)*nLMBs_per_rank,nLMBs)
-            do k=1,2
-               do j=1,n_r_max
-                  do i=lmStartB(nLMB_start),lmStopB(nLMB_end)
-                     m = lo_map%lm2m(i)
-                     l = lo_map%lm2l(i)
-                     s_LMloc_container(i,j,k) = cmplx(map_glbl_st%lm2(l,m)*0.1,j*1.0+(k-1)*100.0)
-                  end do
-               end do
-            end do
-
-            s_Rdist_test = 0.0
-            s_Rdist_container = 0.0
-            
             call transpose_ml_r(s_LMdist_container, s_Rdist_test, 2)
             call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_Rdist_container)
             call lo2r_redist_wait_dist(lo2r_s)
             test_norm  = SUM(ABS(REAL(s_Rdist_test) - REAL(s_Rdist_container)))
             test_normi  = SUM(ABS(AIMAG(s_Rdist_test) - AIMAG(s_Rdist_container)))
-            print *, "|| cont || : ", test_norm + test_normi, (test_norm + test_normi)/EPSILON(REAL(1.0,kind=4))
+            IF (test_norm+test_normi>error_threshold) print *, "|| cont || : ", test_norm + test_normi
             
-            print*, s_Rdist_test - s_Rdist_container
-            
-            stop
             !PERFOFF
          end if
 
@@ -435,13 +374,6 @@ contains
          d_omega_ma_dtLast_dist = d_omega_ma_dtLast
          d_omega_ic_dtLast_dist = d_omega_ic_dtLast
          
-!          call updateZ_dist( z_LMloc_dist, dz_LMloc_dist, dzdt, dzdtLast_lo_dist, time, &
-!               &        omega_ma_dist,d_omega_ma_dtLast_dist,            &
-!               &        omega_ic_dist,d_omega_ic_dtLast_dist,            &
-!               &        lorentz_torque_ma,lorentz_torque_maLast,    &
-!               &        lorentz_torque_ic,lorentz_torque_icLast,    &
-!               &        w1,coex,dt,lRmsNext )
-              
          ! dp, dVSrLM, workA used as work arrays
          call updateZ( z_LMloc, dz_LMloc, dzdt, dzdtLast_lo, time, &
               &        omega_ma,d_omega_ma_dtLast,                 &

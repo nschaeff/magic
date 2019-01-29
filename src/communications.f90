@@ -52,6 +52,7 @@ use blocking
       integer, allocatable :: gather_mpi_type(:)
       integer :: dim2
    end type gather_type
+   
  
    ! MPI datatypes for the redistribution of the d?dt arrays
    integer, save, allocatable :: s_transfer_type(:),s_transfer_type_nr_end(:)
@@ -87,6 +88,19 @@ use blocking
    complex(cp), allocatable :: temp_gather_lo(:)
    complex(cp), allocatable :: temp_r2lo(:,:)
    
+   !-- New data layout
+   type, public :: ml2r_request
+      integer, allocatable :: s_request(:), r_request(:)
+      integer, pointer :: s_type(:), r_type(:)
+      integer, pointer :: dests(:), sources(:)
+      integer :: nfields
+   end type ml2r_request
+   
+   integer, allocatable :: ml2r_s_coltype(:), ml2r_r_coltype(:)
+   integer, allocatable :: ml2r_s_mtxtype(:), ml2r_r_mtxtype(:)
+   integer, allocatable :: ml2r_s_voltype(:), ml2r_r_voltype(:)
+   integer, allocatable :: ml2r_dests(:),  ml2r_sources(:)
+   !--
    
    !-- Slice/gather interface
    !   
@@ -109,6 +123,127 @@ use blocking
              printMatrixInt, printArray
              
 contains
+
+   !--
+   !
+   !
+   !
+   subroutine initialize_ml2r_transposition
+      integer, intent(in) :: n_fields
+      complex(cp), intent(in) :: container_ml(n_mlo_loc, n_r_max, n_fields)  ! in only!!!!!!!!!!!!!!!
+      complex(cp), intent(out)   :: container_rm(n_lm_loc, l_r:u_r, n_fields)
+      
+      integer :: Rq(0:n_ranks_mlo-1,2)
+      integer :: i, j, k, l, m, icoord_m, icoord_mlo, icoord_r, in_r, il_r, lm, ierr
+      
+      integer :: send_col_types(0:n_ranks_mlo-1), send_mtx_types(0:n_ranks_mlo-1), send_vol_types(0:n_ranks_mlo-1)
+      integer :: recv_col_types(0:n_ranks_mlo-1), recv_mtx_types(0:n_ranks_mlo-1), recv_vol_types(0:n_ranks_mlo-1)
+      integer :: send_displacements(n_mlo_array, 0:n_ranks_mlo-1)
+      integer :: recv_displacements(n_lm_loc, 0:n_ranks_mlo-1)
+      integer :: send_counter_i(0:n_ranks_mlo-1), recv_counter_i(0:n_ranks_mlo-1), inblocks
+      integer :: blocklenghts(max(n_mlo_array, n_lm_loc))
+      
+      integer (kind=mpi_address_kind) :: lb, bytesCMPLX
+      
+      call mpi_type_get_extent(MPI_DOUBLE_COMPLEX, lb, bytesCMPLX, ierr) 
+      
+      send_col_types = MPI_INTEGER  ! Just to be able to test later, if this was already set!
+      recv_col_types = MPI_INTEGER
+      send_mtx_types = MPI_INTEGER
+      recv_mtx_types = MPI_INTEGER
+      send_vol_types = MPI_INTEGER
+      recv_vol_types = MPI_INTEGER
+      send_displacements = -1
+      recv_displacements = -1
+      send_counter_i     = 0
+      recv_counter_i     = 0
+      blocklenghts       = 1 ! This is actually fixed to 1!
+      Rq = MPI_REQUEST_NULL
+      
+      !-- Loops over each (m,l) tuple to determine which rank in lmr will need it
+      !   There is no good way of doing this; I could loop over the *local* tuples,
+      !   but then I would get displacements in a funny order. The "easiest" 
+      !   solution I see is to simply loop over *all* (m,l) tuples and skip those
+      !   which do not belong here.
+      do lm=1,lm_max
+         l = map_glbl_st%lm2l(lm)
+         m = map_glbl_st%lm2m(lm)
+         i = map_mlo%ml2i(m,l)
+         if (i<1) cycle
+         
+         icoord_m = m_tsid(m)
+         
+         do icoord_r=0, n_ranks_r-1
+            icoord_mlo = cart%lmr2mlo(icoord_m, icoord_r)
+            inblocks = send_counter_i(icoord_mlo) + 1
+            send_counter_i(icoord_mlo) = inblocks
+            send_displacements(inblocks,icoord_mlo) = i-1
+         end do
+      end do
+      
+      !-- Build the Send MPI types:
+      !   First we create indexed type; it is a vector which looks more or less like
+      !      send_buf({i1,i2,i3,...}, j, k)
+      !   Then we create a type vector which will be a matrix-like structure:
+      !      send_buf({i1,i2,i3,...}, l_r:u_r, k)
+      !   Last we create another type vector which will add the number of fields:
+      !      send_buf({i1,i2,i3,...}, l_r:u_r, :)
+      ! 
+      !   The strides must be specified in bytes; therefore, MPI_Type_create_hvector
+      !   must be used.
+      do icoord_mlo=0,n_ranks_mlo-1
+         
+         inblocks = send_counter_i(icoord_mlo)
+         if (inblocks>0 .and. icoord_mlo /= coord_mlo) then
+            icoord_r = cart%mlo2lmr(icoord_mlo,2)
+            in_r = dist_r(icoord_r,0)
+            
+            call MPI_Type_indexed(inblocks,blocklenghts(1:inblocks),&
+               send_displacements(1:inblocks,icoord_mlo), MPI_DOUBLE_COMPLEX, send_col_types(icoord_mlo), ierr)
+            call MPI_Type_commit(send_col_types(icoord_mlo),ierr)
+            
+            call MPI_Type_create_hvector(in_r, 1, int(n_mlo_loc*bytesCMPLX,kind=mpi_address_kind), send_col_types(icoord_mlo), &
+               send_mtx_types(icoord_mlo), ierr)
+            call MPI_Type_commit(send_mtx_types(icoord_mlo),ierr)
+            
+            call MPI_Type_create_hvector(n_fields, 1, int(n_mlo_loc*n_r_max*bytesCMPLX,kind=mpi_address_kind), send_mtx_types(icoord_mlo), &
+               send_vol_types(icoord_mlo), ierr)
+            call MPI_Type_commit(send_vol_types(icoord_mlo),ierr)
+         end if
+      end do
+      
+      !-- Loops over each local (l,m) tuple to figure out which rank will send it to me!
+      do i=1,n_lm_loc
+         m  = map_dist_st%lm2m(i)
+         l  = map_dist_st%lm2l(i)
+         icoord_mlo = mlo_tsid(m,l)
+         
+         inblocks = recv_counter_i(icoord_mlo) + 1
+         recv_counter_i(icoord_mlo) = inblocks
+         recv_displacements(inblocks,icoord_mlo) = i-1
+      end do
+      
+      !-- Build the Recv MPI types; analogous to the building of the Send MPI types
+      !
+      do icoord_mlo=0,n_ranks_mlo-1
+
+         inblocks = recv_counter_i(icoord_mlo)
+         if (inblocks>0 .and. icoord_mlo /= coord_mlo) then
+            call MPI_Type_indexed(inblocks,blocklenghts(1:inblocks),&
+               recv_displacements(1:inblocks,icoord_mlo), MPI_DOUBLE_COMPLEX, recv_col_types(icoord_mlo), ierr)
+            call MPI_Type_commit(recv_col_types(icoord_mlo),ierr)
+            
+            call MPI_Type_create_hvector(n_r_loc, 1, int(n_lm_loc*bytesCMPLX,kind=mpi_address_kind), recv_col_types(icoord_mlo), &
+               recv_mtx_types(icoord_mlo), ierr)
+            call MPI_Type_commit(recv_mtx_types(icoord_mlo),ierr)
+            
+            call MPI_Type_create_hvector(n_fields, 1, int(n_lm_loc*n_r_loc*bytesCMPLX,kind=mpi_address_kind), recv_mtx_types(icoord_mlo), &
+               recv_vol_types(icoord_mlo), ierr)
+            call MPI_Type_commit(recv_vol_types(icoord_mlo),ierr)
+         end if
+      end do
+   end subroutine initialize_ml2r_transposition
+   
   
    subroutine initialize_communications
 
@@ -1811,7 +1946,7 @@ contains
             in_r = dist_r(icoord_r,0)
             
             call MPI_Type_indexed(inblocks,blocklenghts(1:inblocks),&
-               send_displacements(1:inblocks,icoord_mlo), MPI_DEF_COMPLEX, send_col_types(icoord_mlo), ierr)
+               send_displacements(1:inblocks,icoord_mlo), MPI_DOUBLE_COMPLEX, send_col_types(icoord_mlo), ierr)
             call MPI_Type_commit(send_col_types(icoord_mlo),ierr)
             
             call MPI_Type_create_hvector(in_r, 1, int(n_mlo_loc*bytesCMPLX,kind=mpi_address_kind), send_col_types(icoord_mlo), &
@@ -1842,7 +1977,7 @@ contains
          inblocks = recv_counter_i(icoord_mlo)
          if (inblocks>0 .and. icoord_mlo /= coord_mlo) then
             call MPI_Type_indexed(inblocks,blocklenghts(1:inblocks),&
-               recv_displacements(1:inblocks,icoord_mlo), MPI_DEF_COMPLEX, recv_col_types(icoord_mlo), ierr)
+               recv_displacements(1:inblocks,icoord_mlo), MPI_DOUBLE_COMPLEX, recv_col_types(icoord_mlo), ierr)
             call MPI_Type_commit(recv_col_types(icoord_mlo),ierr)
             
             call MPI_Type_create_hvector(n_r_loc, 1, int(n_lm_loc*bytesCMPLX,kind=mpi_address_kind), recv_col_types(icoord_mlo), &
@@ -1856,17 +1991,17 @@ contains
       end do
       
       !-- Starts the send and recv requests
-      !
+      ! I previously initialized all types with MPI_INTEGER. If they a type is *still* MPI_INTEGER, 
+      ! then there is no data to be sent/received to that particular rank
       do icoord_mlo=0,n_ranks_mlo-1
          if (icoord_mlo==coord_mlo) cycle
          icoord_r = cart%mlo2lmr(icoord_mlo,2)
          in_r = dist_r(icoord_r,0)
          il_r = dist_r(icoord_r,1)
-         call mpi_isend(container_ml(1,il_r,1), 1, send_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,1), ierr)
-         call mpi_irecv(container_rm, 1, recv_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,2), ierr)
+         if (send_vol_types(icoord_mlo) /= MPI_INTEGER) call mpi_isend(container_ml(1,il_r,1), 1, send_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,1), ierr)
+         if (recv_vol_types(icoord_mlo) /= MPI_INTEGER) call mpi_irecv(container_rm, 1, recv_vol_types(icoord_mlo), icoord_mlo, 1, comm_mlo, Rq(icoord_mlo,2), ierr)
       end do
       
-      print *, "~~~~~~~> okay1...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
       !-- Copies data which is already local
       inblocks = send_counter_i(coord_mlo)
       do i=1,inblocks
@@ -1875,20 +2010,7 @@ contains
          container_rm(j,l_r:u_r,1:n_fields) = container_ml(k,l_r:u_r,1:n_fields)
       end do
       
-      print *, "~~~~~~~> okay2...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
-      do icoord_mlo=0,n_ranks_mlo-1
-         if (Rq(icoord_mlo,1)/=MPI_REQUEST_NULL) then
-            call mpi_wait(Rq(icoord_mlo,1),MPI_STATUS_IGNORE,ierr)
-            print *, "~~~~~~~> okays...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
-         end if
-         if (Rq(icoord_mlo,2)/=MPI_REQUEST_NULL) then
-            call mpi_wait(Rq(icoord_mlo,2),MPI_STATUS_IGNORE,ierr)
-            print *, "~~~~~~~> okayr...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
-         end if
-      end do
-!       call mpi_waitall(2*n_ranks_mlo,Rq,MPI_STATUSES_IGNORE,ierr)
-      
-!       print *, "~~~~~~~> okay3...", abs(container_rm(1,l_r,1)), abs(container_ml(1,1,1))
+      call mpi_waitall(2*n_ranks_mlo,Rq,MPI_STATUSES_IGNORE,ierr)
       
    end subroutine transpose_ml_r
    
