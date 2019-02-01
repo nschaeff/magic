@@ -23,7 +23,8 @@ module LMLoop_mod
    use debugging,  only: debug_write
    use communications, only: GET_GLOBAL_SUM, lo2r_redist_start, lo2r_xi, &
        &                    lo2r_s, lo2r_flow, lo2r_field,               &
-       &                    lo2r_redist_start_dist, transform_new2old, transform_old2new, transpose_ml_r, lo2r_redist_wait_dist
+       &                    lo2r_redist_start_dist, transform_new2old, transform_old2new, lo2r_redist_wait_dist, &
+       &                    ml2r_s
    use updateS_mod
    use updateZ_mod
    use updateWP_mod
@@ -251,21 +252,6 @@ contains
                call updateS_new( s_LMdist, ds_LMdist, w_LMdist, dVSrLM_dist, dsdt_dist, &
                     &             dsdtLast_LMdist, w1, coex, dt, nLMB )
                     
-               
-!             call transform_old2new(s_LMloc, s_LMdist)
-!             call transform_old2new(ds_LMloc, ds_LMdist)
-!             call transform_old2new(w_LMloc, w_LMdist)
-!             call transform_old2new(dsdt, dsdt_dist)
-!             call transform_old2new(dVSrLM, dVSrLM_dist)
-!             call transform_old2new(dsdtLast_LMloc, dsdtLast_LMdist)
-            
-!             call transform_new2old( s_LMdist,s_LMloc)
-!             call transform_new2old( ds_LMdist,ds_LMloc)
-!             call transform_new2old( w_LMdist,w_LMloc)
-!             call transform_new2old( dsdt_dist,dsdt)
-!             call transform_new2old( dVSrLM_dist,dVSrLM)
-!             call transform_new2old( dsdtLast_LMdist,dsdtLast_LMloc)
-               
                error_threshold = 0.0
                error_threshold = EPSILON(1.0_cp)
                
@@ -326,12 +312,13 @@ contains
 !             nonblocking send
             PERFON('rdstSst')
             
-            call transpose_ml_r(s_LMdist_container, s_Rdist_test, 2)
-            call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_Rdist_container)
-            call lo2r_redist_wait_dist(lo2r_s)
-            test_norm  = SUM(ABS(REAL(s_Rdist_test) - REAL(s_Rdist_container)))
-            test_normi  = SUM(ABS(AIMAG(s_Rdist_test) - AIMAG(s_Rdist_container)))
-            IF (test_norm+test_normi>error_threshold) print *, "|| cont || : ", test_norm + test_normi
+!             call lo2r_redist_start_dist(lo2r_s,s_LMloc_container,s_Rdist_test)
+            call ml2r_s%start(s_LMdist_container, s_Rdist_container, 2)
+!             call ml2r_s%wait()
+!             call lo2r_redist_wait_dist(lo2r_s)
+!             test_norm  = SUM(ABS(REAL(s_Rdist_test) - REAL(s_Rdist_container)))
+!             test_normi  = SUM(ABS(AIMAG(s_Rdist_test) - AIMAG(s_Rdist_container)))
+!             IF (test_norm+test_normi>error_threshold) print *, "|| cont || : ", test_norm + test_normi
             
             !PERFOFF
          end if

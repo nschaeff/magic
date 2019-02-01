@@ -1,4 +1,34 @@
-TO READ: https://software.intel.com/en-us/articles/introduction-to-the-conditional-numerical-reproducibility-cnr
+2019-01-30
+-------------------------------------------------------------------------------
+- Found the bug in the transposition, and it was dumber than I could have 
+  possibly imagined
+- Cleaned the code; added the ml2r_transp object to handle transpositions
+- [FIXED] a bug in geometry.f90:540
+  (n_procs_r=4, n_procs_theta=8)
+  - dynamo_benchmark
+  - varProps
+  - finite_differences
+  - doubleDiffusion
+  - precession
+  - testRestart
+  - testTruncations
+  - testMapping
+  - testRadialOutputs
+  - hydro_bench_anel
+  - isothermal_nrho3
+  - dynamo_benchmark_condICrotIC
+- The following tests are now disabled:
+  ✘ fluxPerturbation: [BUG]; check entry of 2018-11-20 for more details
+  ✘ boussBenchSat: it uses lPowerCalc flag
+  ✘ varCond: it calls movie_gather_frames_to_rank0
+  ✘ couetteAxi: here m=0. It confuses my implementation. I need to 
+                rethink the distribution in this case, or force 
+                n_procs_theta=1.
+  
+  Command:
+  ./magic_wizard.py --use-mpi --use-mkl --use-shtns --mpicmd=srun --extracmd="n_procs_r=4 n_procs_theta=8" --nranks=32 --link --name="dynamo_benchmark, varProps, finite_differences, doubleDiffusion, precession, testRestart, testTruncations, testMapping, hydro_bench_anel, isothermal_nrho3, dynamo_benchmark_condICrotIC"
+  
+
 2019-01-14
 -------------------------------------------------------------------------------
 - Alghouth I implemented the transposition successfully, something that I 

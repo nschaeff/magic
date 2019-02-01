@@ -61,6 +61,7 @@ module step_time_mod
        &                     r2lo_redist_wait, r2lo_flow, r2lo_s, r2lo_xi,  &
        &                     r2lo_b, lo2r_s, get_global_sum_dist,           &
        &                     r2lo_redist_start_dist, lo2r_redist_wait_dist, &
+       &                     ml2r_s, &
        &                     gather_Flm, slice_Flm, gather_FlmP
    use courant_mod, only: dt_courant
    use nonlinear_bcs, only: get_b_nl_bcs
@@ -528,7 +529,8 @@ contains
          ! Waiting for the completion before we continue to the radialLoop
          ! put the waits before signals to avoid cross communication
          PERFON('lo2r_wt')
-         if ( l_heat )                call lo2r_redist_wait_dist(lo2r_s)
+!          if ( l_heat )                call lo2r_redist_wait_dist(lo2r_s)
+         if ( l_heat )                call ml2r_s%wait()
          if ( l_chemical_conv )       call lo2r_redist_wait_dist(lo2r_xi)
          if ( l_conv .or. l_mag_kin ) call lo2r_redist_wait_dist(lo2r_flow)
          if ( l_mag )                 call lo2r_redist_wait_dist(lo2r_field)

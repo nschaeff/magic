@@ -536,7 +536,7 @@ contains
       
       
       taken = -1
-      do m=0,l_max
+      do m=0,m_max
          taken(m,m:l_max) = (/m:l_max/)
       end do
       

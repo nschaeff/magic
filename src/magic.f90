@@ -122,7 +122,7 @@ program magic
    use Namelists
    use step_time_mod, only: initialize_step_time, step_time, finalize_step_time
    use timing, only: writeTime,wallTime
-   use communications, only:initialize_communications, finalize_communications
+   use communications, only:initialize_communications, initialize_communications_new, finalize_communications
    use power, only: initialize_output_power, finalize_output_power
    use outPar_mod, only: initialize_outPar_mod, finalize_outPar_mod
    use out_coeff, only: initialize_coeffs, finalize_coeffs
@@ -247,7 +247,8 @@ program magic
    call memWrite('fields/fieldsLast', local_bytes_used)
 
    call initialize_step_time
-   call initialize_communications
+   call initialize_communications 
+   call initialize_communications_new ! will replace the call above
 
    call initialize_der_arrays(n_r_max,llm,ulm)
 
